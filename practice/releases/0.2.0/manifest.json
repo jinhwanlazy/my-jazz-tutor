@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "sha256": {
+    "review.py": "e6555520e00fab45d07dd6973bab34489833f9350c4d3b60a6de72997f91c9bb",
+    "COACH.md": "f69b38c369f09d487505fa0e46f50a5e049edcff3bee02f4ae3a5fd0e4031c8e",
+    "curriculum.yaml": "fae6469db6d2d0e250f2cb7266b839e96253a0ad2cbe59c078cff499cfeb0a2b",
+    "pyproject.toml": "4f7b0ec752420c30c68e8ea884855d66b2a0fc257e112a22365eef5a1e303f39",
+    "uv.lock": "7a2994a7b346f626490e200c7c7d1a0ad91bb9c5f107e2c909c3272b7ee386a5",
+    "webapp.py": "51b6b58be888996f0a8ed5de9e5392839cceb90d03d00c29b85035e67366a818",
+    "sessions.py": "89e135181811ea6b5b2f185b96b630ae5e5d6445be887972616ea8f6c3e757cc",
+    "webapp.html": "51acbd55721d026c389edff7beb045b4b29451a02a69d4df67bb9f304619ad50",
+    "webapp.css": "1cfe80ab72653f72ddbb5c0dff715794f9c3c77ba12a2ec9a6cf1f7c3a108f50",
+    "webapp.js": "2c32bd35910b96e6b4cc2a8626bf9e3444a949bfe0484c6226cab9453d08b375",
+    "audio.mjs": "1f4bcc29bc5dd6cf5c7c36a13d4223447cc98234177b9e053a40ff2d59d8d4b3",
+    "capture.mjs": "6477c01d2d6e4feac6ed0100b8725affb2cc675c01bb99a141909c722ad3ca9c"
+  }
+}

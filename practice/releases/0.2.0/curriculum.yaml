@@ -1,0 +1,227 @@
+schema_version: 1
+version: "0.2.0"
+title: "재즈 피아노 — 첫 어휘와 양손 연결"
+description: "출발점을 확인할 작은 커리큘럼. 전체 재즈 숙련도를 나타내지 않습니다."
+default_key: C
+allowed_keys: [C, F, Bb]
+default_bpm: 60
+minimum_bpm: 40
+maximum_bpm: 120
+daily_minutes: 30
+retention_days: 2
+maintenance_days: 7
+criteria:
+  id: basic-two-takes-v1
+  min_clean_runs: 2
+  checks: [notes_correct, steady_pulse, no_stops]
+  explanation: "지정 조건에서 음과 박자를 유지하고 멈추지 않은 연주를 연속 2회 했다고 보고. 즉흥 과제의 음 정확성은 지정 음 범위를 지켰다는 뜻."
+materials:
+  four-bar:
+    title: "자체 제작 4마디 — 한 마디에 코드 하나, 4/4"
+    C:
+      chords: "Cmaj7 | Am7 | Dm7 | G7"
+      roots: "C3 | A2 | D3 | G2"
+      melody: "E4 | C4 | F4 | B3 (각 온음표)"
+    F:
+      chords: "Fmaj7 | Dm7 | Gm7 | C7"
+      roots: "F2 | D3 | G2 | C3"
+      melody: "A4 | F4 | Bb4 | E4 (각 온음표)"
+    Bb:
+      chords: "Bbmaj7 | Gm7 | Cm7 | F7"
+      roots: "Bb2 | G2 | C3 | F2"
+      melody: "D4 | Bb3 | Eb4 | A3 (각 온음표)"
+  two-five-one:
+    title: "자체 제작 ii–V–I, 4마디, 4/4"
+    C:
+      chords: "Dm7 | G7 | Cmaj7 | Cmaj7"
+      roots: "D2 | G2 | C3 | C3"
+      guide_tones: "F3+C4 | F3+B3 | E3+B3 | E3+B3"
+    F:
+      chords: "Gm7 | C7 | Fmaj7 | Fmaj7"
+      roots: "G2 | C3 | F2 | F2"
+      guide_tones: "Bb3+F4 | Bb3+E4 | A3+E4 | A3+E4"
+    Bb:
+      chords: "Cm7 | F7 | Bbmaj7 | Bbmaj7"
+      roots: "C3 | F2 | Bb2 | Bb2"
+      guide_tones: "Eb3+Bb3 | Eb3+A3 | D3+A3 | D3+A3"
+  vamp:
+    title: "자체 제작 메이저 코드 반복, 8마디, 4/4"
+    C:
+      chords: "Cmaj7 × 8마디"
+      roots: "C3, 매 마디 첫 박"
+      melody: "E4, G4, A4 세 음만 사용"
+    F:
+      chords: "Fmaj7 × 8마디"
+      roots: "F2, 매 마디 첫 박"
+      melody: "A4, C5, D5 세 음만 사용"
+    Bb:
+      chords: "Bbmaj7 × 8마디"
+      roots: "Bb2, 매 마디 첫 박"
+      melody: "D4, F4, G4 세 음만 사용"
+exercises:
+  - id: E01
+    title: "왼손 루트와 박 유지"
+    phase: "1 · 출발점"
+    domains: [bass, rhythm]
+    prerequisites: []
+    material_id: four-bar
+    bars: 4
+    arrangement: left-bass-only
+    rhythm: whole-notes
+    bass: root-on-beat-1
+    voicing: none
+    melody: none
+    instructions: "메트로놈을 4분음표 한 박에 맞춘다. 1-2-3-4를 세면서 왼손으로 각 마디 루트를 첫 박에 누르고 네 박 유지한다. 오른손은 쉰다."
+  - id: E02
+    title: "오른손 멜로디와 박 유지"
+    phase: "1 · 출발점"
+    domains: [melody, rhythm]
+    prerequisites: []
+    material_id: four-bar
+    bars: 4
+    arrangement: right-melody-only
+    rhythm: whole-notes
+    bass: none
+    voicing: none
+    melody: written-notes
+    instructions: "오른손으로 위에 제시된 멜로디 음을 한 마디에 하나씩 네 박 동안 유지한다. 왼손은 쉰다. 4마디를 연결한다."
+  - id: E03
+    title: "멜로디 + 베이스 연결"
+    phase: "1 · 출발점"
+    domains: [melody, bass, rhythm]
+    prerequisites: [E01, E02]
+    material_id: four-bar
+    bars: 4
+    arrangement: melody-and-bass
+    rhythm: whole-notes
+    bass: root-on-beat-1
+    voicing: none
+    melody: written-notes
+    instructions: "E01의 왼손과 E02의 오른손을 합친다. 두 손이 매 마디 첫 박에 함께 누르고 네 박 유지한다. 처음에는 두 마디씩 해도 되지만 목표 평가는 전체 네 마디다."
+  - id: E04
+    title: "ii–V–I의 루트 + 3도·7도"
+    phase: "2 · 첫 어휘"
+    domains: [voicing, bass]
+    prerequisites: [E03]
+    material_id: two-five-one
+    bars: 4
+    arrangement: left-root-right-guides
+    rhythm: whole-notes
+    bass: root-on-beat-1
+    voicing: third-and-seventh
+    melody: none
+    instructions: "왼손은 제시된 루트 음, 오른손은 제시된 3도·7도 두 음을 함께 연주한다. 매 마디 첫 박에 누르고 네 박 유지한다. 3도와 7도는 코드 성격을 드러내는 음이다."
+  - id: E05
+    title: "Charleston 컴핑 첫 패턴"
+    phase: "2 · 첫 어휘"
+    domains: [rhythm, voicing, bass]
+    prerequisites: [E04]
+    material_id: two-five-one
+    bars: 4
+    arrangement: left-root-right-guides
+    rhythm: charleston-1-and-2and
+    bass: root-on-beat-1
+    voicing: third-and-seventh
+    melody: none
+    instructions: "왼손 루트는 첫 박에 누르고 유지한다. 오른손 3도·7도는 1박과 2박 뒤의 앤드(2&)에 짧게 친다. 먼저 1 & 2 & 3 & 4 &를 말하며 위치를 익힌다. 이 과제는 타격 위치 확인이며 스윙감 숙련을 인증하지 않는다."
+  - id: E06
+    title: "세 음으로 짧게 말하고 쉬기"
+    phase: "2 · 첫 어휘"
+    domains: [melody, rhythm, bass]
+    prerequisites: [E03]
+    material_id: vamp
+    bars: 8
+    arrangement: left-root-right-improv
+    rhythm: quarter-notes-and-rests
+    bass: root-on-beat-1
+    voicing: none
+    melody: three-note-call-and-rest
+    instructions: "왼손 루트는 매 마디 첫 박. 오른손은 지정 세 음으로 1~2마디에 짧은 선율을 만들고 3~4마디 쉰다. 5~8마디에 같은 구조를 반복한다. 처음에는 4분음표와 쉼표만 사용한다. 정답 선율은 없으며 박과 쉼을 유지한다."
+milestones:
+  - {exercise_id: E01, key: C, bpm: 60}
+  - {exercise_id: E02, key: C, bpm: 60}
+  - {exercise_id: E03, key: C, bpm: 60}
+  - {exercise_id: E04, key: C, bpm: 60}
+  - {exercise_id: E05, key: C, bpm: 60}
+  - {exercise_id: E06, key: C, bpm: 60}
+
+# 재생 보조 데이터. 기존 연주 자료·통과 기준과 분리하여 과거 판정을 보존한다.
+playback:
+  four-bar:
+    C:
+      beats_per_bar: 4
+      bars:
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Am7, notes: [45, 48, 52, 55]}
+        - {chord: Dm7, notes: [50, 53, 57, 60]}
+        - {chord: G7, notes: [43, 47, 50, 53]}
+    F:
+      beats_per_bar: 4
+      bars:
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Dm7, notes: [50, 53, 57, 60]}
+        - {chord: Gm7, notes: [55, 58, 62, 65]}
+        - {chord: C7, notes: [48, 52, 55, 58]}
+    Bb:
+      beats_per_bar: 4
+      bars:
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Gm7, notes: [55, 58, 62, 65]}
+        - {chord: Cm7, notes: [48, 51, 55, 58]}
+        - {chord: F7, notes: [53, 57, 60, 63]}
+  two-five-one:
+    C:
+      beats_per_bar: 4
+      bars:
+        - {chord: Dm7, notes: [50, 53, 57, 60]}
+        - {chord: G7, notes: [43, 47, 50, 53]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+    F:
+      beats_per_bar: 4
+      bars:
+        - {chord: Gm7, notes: [55, 58, 62, 65]}
+        - {chord: C7, notes: [48, 52, 55, 58]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+    Bb:
+      beats_per_bar: 4
+      bars:
+        - {chord: Cm7, notes: [48, 51, 55, 58]}
+        - {chord: F7, notes: [53, 57, 60, 63]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+  vamp:
+    C:
+      beats_per_bar: 4
+      bars:
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+    F:
+      beats_per_bar: 4
+      bars:
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+    Bb:
+      beats_per_bar: 4
+      bars:
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
