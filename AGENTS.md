@@ -1,4 +1,4 @@
-# Jazz piano workspace
+# Jazz Piano Coach workspace
 
 This directory is one Git monorepo with two work areas and distinct roles.
 The Git root is this directory; do not initialize nested repositories.

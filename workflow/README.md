@@ -1,6 +1,6 @@
 # 워크플로 편집 프로젝트
 
-이 디렉터리는 `jazz-piano/` monorepo의 워크플로 개발 영역입니다. 여기서 세션을
+이 디렉터리는 `jazz-piano-coach/` monorepo의 워크플로 개발 영역입니다. 여기서 세션을
 열면 코칭 규칙·커리큘럼·프로그램을 편집하는 역할로 시작합니다. 실제 일일 연습은
 `../practice`에서 진행하며 Git 저장소는 루트 하나를 공유합니다.
 
@@ -35,7 +35,7 @@ uv run python publish.py --activate
 `./jazz report`를 실행해 보고서를 갱신합니다.
 
 Python 의존성은 uv.lock으로 고정합니다. 런타임 파일의 해시는 실행 때 확인합니다.
-Git은 상위 `jazz-piano/` 루트에서 관리하며 원격 저장소는 연결하지 않습니다.
+Git은 상위 `jazz-piano-coach/` 루트에서 관리합니다.
 
 ## 과제와 결과 CLI
 
