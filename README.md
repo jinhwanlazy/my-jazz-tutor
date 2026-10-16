@@ -1,11 +1,13 @@
-# Jazz Piano Coach
+# My Jazz Tutor
+
+Your private AI jazz piano tutor, powered by Codex.
 
 이 프로젝트는 배포되는 서비스가 아닙니다. **로컬에서 Codex 구독과 연동해 개인
 피아노 튜터(private piano tutor)를 대신할 존재를 만들어보려는 시도**입니다.
 Codex 대화 세션으로 과제와 연습 맥락을 다루고, 로컬 웹 연습실로 메트로놈·반주·
 기록을 지원합니다. 현재 웹 피드백은 기록과 기준을 비교하는 규칙 기반입니다.
 
-`jazz-piano-coach/` 하나의 Git monorepo에서 연습과 워크플로 개발을 관리합니다.
+`my-jazz-tutor/` 하나의 Git monorepo에서 연습과 워크플로 개발을 관리합니다.
 역할에 맞는 작업 디렉터리를 열어 사용하고, 각 디렉터리의 `AGENTS.md`를 따릅니다.
 아래 경로와 명령은 저장소 루트를 기준으로 합니다.
 

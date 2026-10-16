@@ -1,6 +1,6 @@
 [project]
-name = "jazz-piano-coach-workflow"
-version = "0.2.1"
+name = "my-jazz-tutor-workflow"
+version = "0.2.2"
 description = "Local, versioned jazz practice workflow and evidence log"
 requires-python = ">=3.11"
 dependencies = ["PyYAML>=6.0,<7"]

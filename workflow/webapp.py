@@ -206,7 +206,7 @@ def make_server(root, data, port=8765, source=r.HERE):
 def serve(root, data, port=8765, open_browser=False):
     server = make_server(root, data, port)
     url = f"http://127.0.0.1:{server.server_address[1]}"
-    print(f"Jazz Piano Coach · {url}\n종료: Ctrl+C", flush=True)
+    print(f"My Jazz Tutor · {url}\n종료: Ctrl+C", flush=True)
     if open_browser:
         webbrowser.open(url)
     try:

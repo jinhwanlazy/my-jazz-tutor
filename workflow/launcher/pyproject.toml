@@ -1,7 +1,7 @@
 [project]
-name = "jazz-piano-coach"
-version = "0.1.0"
-description = "uv launcher for the installed Jazz Piano Coach runtime"
+name = "my-jazz-tutor"
+version = "0.1.1"
+description = "uv launcher for the installed My Jazz Tutor runtime"
 requires-python = ">=3.11"
 dependencies = []
 

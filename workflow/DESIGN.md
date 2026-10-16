@@ -14,7 +14,7 @@
 
 ## 초기 범위
 
-`jazz-piano-coach/` 하나의 Git monorepo에 `workflow/`와 `practice/`를 둔다.
+`my-jazz-tutor/` 하나의 Git monorepo에 `workflow/`와 `practice/`를 둔다.
 실제 CSV는 `practice/practice.csv` 하나에만 있다. 디렉터리별 역할과 버전별
 발행본을 유지하며, 편집 중인 소스가 현재 연습 세션에 즉시 섞이지 않는다.
 개인 CSV·프로필·MIDI·개선 메모·보고서·백업은 로컬에 보관하며 Git에서 제외한다.
