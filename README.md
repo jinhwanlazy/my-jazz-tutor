@@ -35,8 +35,8 @@ Git 작업은 루트에서 두 영역을 함께 관리합니다. `workflow/`와 
 편집 중인 소스 변경은 자동으로 연습용에 적용되지 않습니다.
 
 ```sh
-./practice/jazz status
-./practice/jazz report
+uv run --project practice jazz status
+uv run --project practice jazz report
 ```
 
 생성된 `practice/reports/index.html`을 브라우저로 열면 됩니다. 외부 서버,
@@ -48,7 +48,7 @@ Git 작업은 루트에서 두 영역을 함께 관리합니다. `workflow/`와 
 
 ```sh
 cd practice
-./jazz serve --open
+uv run jazz
 ```
 
 과제 제시·연습 기록·규칙 기반 피드백·기록 조회·정정을 한 화면에서 진행합니다.
@@ -56,6 +56,11 @@ cd practice
 제공합니다. MIDI의 음악적 분석은 아직 하지 않습니다. 원본 MIDI는
 `practice/sessions.sqlite3`에 보관합니다. 시작·버전 활성화·개발 미리보기·복구 안내는
 [workflow/README.md](workflow/README.md#웹-연습실)에 있습니다.
+
+`uv run jazz`는 `uv run jazz serve --open`의 단축 실행입니다. 별도의 환경 활성화나
+설치 명령이 필요하지 않습니다. 포트를 바꾸려면 `uv run jazz serve --open --port 8768`을
+사용합니다. 실행기는 `active-version`을 따르며, 미완료 과제를 취소하거나 새 버전을
+자동 활성화하지 않습니다.
 
 역할 분리는 디렉터리별 지침과 발행 버전에 의한 것입니다. OS 파일 권한으로
 다른 디렉터리에 대한 접근을 차단하는 보안 샌드박스는 아닙니다.

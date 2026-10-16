@@ -44,12 +44,13 @@ Git은 상위 `jazz-piano-coach/` 루트에서 관리합니다.
 라이브러리 서버와 브라우저 Web Audio를 사용합니다. 자유 대화형 AI 코칭과 MIDI
 음악 분석은 이번 범위에 포함하지 않습니다.
 
-0.2.0 이상을 활성화한 뒤 연습 디렉터리에서 실행합니다.
+0.2.0 이상을 활성화한 뒤 연습 디렉터리에서 실행합니다. `uv`가 실행 환경을 준비하며,
+인자가 없는 `jazz`는 `serve --open`을 실행합니다.
 
 ```sh
 # 저장소 루트에서
 cd practice
-./jazz serve --open
+uv run jazz
 ```
 
 주소는 `http://127.0.0.1:8765`이며 다른 장치에서 접속할 수 없습니다. 포트를 이미
@@ -101,6 +102,23 @@ uv run python review.py --practice-root build/web-preview serve --open --port 87
 ```
 
 개발 미리보기의 기록은 `build/web-preview/`에만 남고 Git에서 제외됩니다.
+
+### uv 실행기 관리
+
+`launcher/`가 `practice`용 uv 프로젝트와 진입점의 원본입니다. 변경 사항은 workflow에서
+다음 명령으로 적용합니다.
+
+```sh
+uv lock --project launcher
+uv run python install_launcher.py
+```
+
+설치 대상은 `practice/pyproject.toml`, `practice/uv.lock`, `practice/src/jazz_practice/`입니다.
+실행기는 기존 `practice/jazz`로 인자를 전달하므로 활성 버전 선택, 발행본 해시 검증과
+버전별 의존성 환경을 그대로 사용합니다. `uv run jazz status` 등 기존 CLI 명령도 됩니다.
+실행기 버전은 런타임·커리큘럼 버전과 별도로 관리하며 설치 시 실제 기록, `active-version`,
+기존 발행본을 변경하지 않습니다. 프로젝트 스크립트 구성은
+[uv 공식 문서](https://docs.astral.sh/uv/concepts/projects/config/#command-line-interfaces)를 따릅니다.
 
 ## MIDI 저장과 내보내기
 

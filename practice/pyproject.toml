@@ -1,0 +1,16 @@
+[project]
+name = "jazz-piano-coach"
+version = "0.1.0"
+description = "uv launcher for the installed Jazz Piano Coach runtime"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+jazz = "jazz_practice:main"
+
+[build-system]
+requires = ["uv_build==0.9.27"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "jazz_practice"
