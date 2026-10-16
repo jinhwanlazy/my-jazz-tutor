@@ -1,7 +1,10 @@
 // One audio clock drives the click, chord pad, and beat display.
+import {BeatTimeline, audioTimeAt} from './timeline.mjs';
+
 export class Transport {
-  constructor({onBeat = () => {}, onEvent = () => {}, onInterrupt = () => {}} = {}) {
-    Object.assign(this, {onBeat, onEvent, onInterrupt});
+  constructor({onBeat = () => {}, onEvent = () => {}, onInterrupt = () => {},
+               onFrame = () => {}, onStart = () => {}, onPause = () => {}} = {}) {
+    Object.assign(this, {onBeat, onEvent, onInterrupt, onFrame, onStart, onPause});
     this.bpm = this.requestedBpm = 60;
     this.click = true;
     this.padEnabled = false;
@@ -39,11 +42,14 @@ export class Transport {
     this.nextTime = this.context.currentTime + 0.08;
     this.queue = [];
     this.playing = true;
+    this.timeline = new BeatTimeline(this.playback.beats_per_bar, Math.max(1, this.playback.bars.length));
+    this.onStart();
     this.refreshPad = true;
     this.schedule();
     this.interval = setInterval(() => this.schedule(), 25);
     const draw = () => {
       this.flush();
+      this.onFrame(this.position());
       if (this.playing) this.animation = requestAnimationFrame(draw);
     };
     draw();
@@ -69,9 +75,13 @@ export class Transport {
       }
       this.queue.push({time: this.nextTime, bar, beat, bpm: this.bpm, changed,
         chord: this.playback.bars[bar]?.chord || ''});
+      this.timeline.add(this.nextTime, this.beatIndex, this.bpm);
       this.nextTime += 60 / this.bpm;
       this.beatIndex += 1;
     }
+  }
+  position(at = performance.now()) {
+    return this.playing ? this.timeline.position(audioTimeAt(this.context, at)) : null;
   }
   flush() {
     if (!this.context) return;
@@ -140,8 +150,10 @@ export class Transport {
   }
   pause() {
     if (!this.playing) return;
+    const position = this.position();
     this.flush();
     this.playing = false;
+    this.onPause(position);
     clearInterval(this.interval);
     cancelAnimationFrame(this.animation);
     this.queue = [];

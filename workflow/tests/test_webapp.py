@@ -252,7 +252,8 @@ class StoreTests(unittest.TestCase):
         source, revision = git_fixture.copy_source(self.root)
         release = publish.publish(source, self.root)['installed']
         manifest = json.loads((Path(release) / 'manifest.json').read_text())
-        for asset in ['sessions.py', 'webapp.html', 'webapp.js', 'audio.mjs', 'capture.mjs', 'i18n.mjs', 'translations.json']:
+        for asset in ['sessions.py', 'webapp.html', 'webapp.js', 'audio.mjs', 'capture.mjs', 'i18n.mjs', 'translations.json',
+                      'notation.py', 'score.mjs', 'timeline.mjs', 'Bravura.woff2', 'Bravura-LICENSE.txt', 'THIRD_PARTY.md']:
             self.assertIn(asset, manifest['sha256'])
         publish.runtime.activate(self.root, manifest)
         installed = Application(self.root, self.data, source=release)
@@ -291,7 +292,7 @@ class HTTPTests(unittest.TestCase):
             client.close()
 
     def test_load_is_read_only_and_static_paths_are_allowlisted(self):
-        for path in ['/', '/webapp.js', '/audio.mjs', '/api/state', '/i18n.mjs', '/translations.json']:
+        for path in ['/', '/webapp.js', '/audio.mjs', '/api/state', '/i18n.mjs', '/translations.json', '/score.mjs', '/timeline.mjs', '/Bravura.woff2']:
             status, headers, body = self.request('GET', path)
             self.assertEqual(status, 200)
             self.assertIn('Content-Security-Policy', headers)

@@ -1,5 +1,5 @@
 schema_version: 1
-version: "0.2.5"
+version: "0.2.6"
 # Canonical material and criteria strings remain stable for historical comparisons.
 # review.display_builtin supplies English presentation without rewriting evidence.
 title: "재즈 피아노 — 첫 어휘와 양손 연결"

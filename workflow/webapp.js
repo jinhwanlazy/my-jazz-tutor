@@ -1,6 +1,7 @@
 import {tr, locale, setLocale, loadTranslations, translatePage} from './i18n.mjs';
 import {Transport} from './audio.mjs';
 import {Capture, Outbox, uploadPending} from './capture.mjs';
+import {ScoreView} from './score.mjs';
 
 const $ = id => document.getElementById(id);
 const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, correcting: false, ports: new Map()};
@@ -29,7 +30,12 @@ async function api(path, body) {
   return result;
 }
 
+const score = new ScoreView({root: $('score-viewport'), status: $('score-position'),
+  previous: $('score-previous'), next: $('score-next'), follow: $('score-follow')});
 const transport = new Transport({
+  onStart: () => score.begin(),
+  onPause: position => score.pause(position),
+  onFrame: position => score.frame(position),
   onBeat: ({bar, beat}) => {
     ui.beat = {bar, beat};
     [...$('beats').children].forEach((node, i) => node.classList.toggle('active', i === beat));
@@ -106,6 +112,8 @@ function target() {
 }
 function renderLesson(resetTempo = false) {
   const current = pending(), t = target();
+  score.setScore(t.notation);
+  $('score-context').textContent = t.title;
   const lesson = ui.data.exercises.find(x => x.id === (current?.exercise_id || ui.selected.exercise));
   $('lesson-kind').textContent = tr`${current ? tr('Current task') : tr('Next task')} / ${lesson.id}`;
   $('lesson-title').textContent = t.title;
@@ -135,6 +143,7 @@ function renderLesson(resetTempo = false) {
 function setTempo(value) {
   const numeric = Math.min(ui.data.maximum_bpm, Math.max(ui.data.minimum_bpm, Math.round(Number(value) || ui.data.minimum_bpm)));
   $('tempo').value = $('tempo-range').value = numeric;
+  $('score-tempo').textContent = `${numeric} BPM`;
   transport.setTempo(numeric);
 }
 function updateTransport() {
@@ -148,6 +157,9 @@ function updateTransport() {
   $('transport-state').textContent = recording ? transport.playing ? tr('Practicing') : recording.ended ? tr('Waiting to save') : tr('Paused') : tr('Ready');
   $('manual-record-btn').disabled = Boolean(recording) || recovery || ui.busy;
   $('skip-btn').disabled = Boolean(recording) || recovery || ui.busy;
+  for (const [from, to] of [['practice-btn', 'score-play'], ['finish-btn', 'score-finish']]) {
+    $(to).disabled = $(from).disabled; $(to).textContent = $(from).textContent;
+  }
 }
 
 function registerPort(port) {
@@ -174,6 +186,7 @@ function midiBindings() {
       if (ui.capture && !ui.capture.ended) {
         registerPort(port);
         ui.capture.midi(message.data, ui.ports.get(port.id), message.timeStamp);
+        score.midi(message.data, port.id, transport.position(message.timeStamp));
         $('midi-status').textContent = tr`Recording input · ${ui.capture.noteCount} note-ons`;
       }
     };
@@ -428,6 +441,8 @@ $('finish-btn').addEventListener('click', finish);
 $('recover-btn').addEventListener('click', recover);
 $('manual-record-btn').addEventListener('click', () => showRecord(pending()));
 $('record-form').addEventListener('submit', saveReport);
+$('score-play').addEventListener('click', startOrPause);
+$('score-finish').addEventListener('click', finish);
 $('close-record').addEventListener('click', () => $('record-panel').hidden = true);
 $('next-btn').addEventListener('click', () => { $('feedback-panel').hidden = true; window.scrollTo({top: 0, behavior: 'smooth'}); });
 $('tempo').addEventListener('change', event => setTempo(event.target.value));
@@ -450,6 +465,7 @@ $('midi-connect').addEventListener('click', async () => {
     midiAccess ||= await navigator.requestMIDIAccess({sysex: false});
     if (first && ui.capture) ui.capture.event('disconnect', {reason: 'MIDI connected during practice; earlier input was not captured'});
     midiAccess.onstatechange = event => {
+      if (event.port.type === 'input' && event.port.state === 'disconnected') score.disconnect(event.port.id, transport.position());
       if (event.port.type === 'input' && event.port.state === 'disconnected' && (midiSelection === 'all' || midiSelection === event.port.id)) ui.capture?.event('disconnect', {id: event.port.id});
       midiBindings();
     };
@@ -457,6 +473,7 @@ $('midi-connect').addEventListener('click', async () => {
   } catch { ui.midiNotice = 'MIDI access was denied. Check browser permissions. Other practice features are still available.'; $('midi-status').textContent = tr(ui.midiNotice); }
 });
 $('midi-input').addEventListener('change', event => {
+  if (midiSelection !== event.target.value) score.disconnect(undefined, transport.position());
   if (ui.capture && midiSelection !== event.target.value) ui.capture.event('disconnect', {reason: 'Recording input changed'});
   midiSelection = event.target.value; midiBindings();
 });

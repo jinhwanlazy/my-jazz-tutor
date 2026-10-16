@@ -15,7 +15,8 @@ import tomllib
 REQUIRED = ['review.py', 'COACH.md', 'curriculum.yaml', 'pyproject.toml', 'uv.lock']
 WEB = ['webapp.py', 'sessions.py', 'webapp.html', 'webapp.css', 'webapp.js', 'audio.mjs', 'capture.mjs']
 LOCALIZATION = ['i18n.mjs', 'translations.json']
-FILES = REQUIRED + WEB + LOCALIZATION
+NOTATION = ['notation.py', 'score.mjs', 'timeline.mjs', 'Bravura.woff2', 'Bravura-LICENSE.txt', 'THIRD_PARTY.md']
+FILES = REQUIRED + WEB + LOCALIZATION + NOTATION
 PIN = 'runtime.json'
 CACHE = '.runtime'
 
@@ -50,6 +51,8 @@ def snapshot(repo, ref):
     require(not set(WEB).intersection(names) or set(WEB) <= set(names), '웹 실행 파일이 누락되었습니다.')
     require(not set(LOCALIZATION).intersection(names) or set(LOCALIZATION) <= set(names),
             'Runtime localization files are incomplete.')
+    require(not set(NOTATION).intersection(names) or set(NOTATION) <= set(names),
+            'Runtime notation files are incomplete.')
     contents = {name: git(repo, 'show', f'{revision}:workflow/{name}') for name in FILES if name in names}
     version = tomllib.loads(contents['pyproject.toml'].decode())['project']['version']
     manifest = {'revision': revision, 'version': version,

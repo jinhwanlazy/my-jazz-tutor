@@ -12,11 +12,18 @@ from urllib.parse import parse_qs, urlsplit
 import webbrowser
 
 import review as r
+from notation import score_for
 from sessions import SessionStore
 
 ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "text/javascript",
           "audio.mjs": "text/javascript", "capture.mjs": "text/javascript",
-          "i18n.mjs": "text/javascript", "translations.json": "application/json"}
+          "i18n.mjs": "text/javascript", "translations.json": "application/json",
+          "score.mjs": "text/javascript", "timeline.mjs": "text/javascript",
+          "Bravura.woff2": "font/woff2", "Bravura-LICENSE.txt": "text/plain"}
+
+
+def display_target(target, language):
+    return r.display_builtin(target, language) | {"notation": score_for(target)}
 
 
 def feedback(task, language="en"):
@@ -85,20 +92,20 @@ class Application:
                         if all(r.goal_successes(self.data, tasks, parent, key, self.data["default_bpm"])
                                for parent in lesson["prerequisites"])]
             lessons.append({**r.display_builtin(lesson, language), "eligible_keys": eligible,
-                            "targets": {key: r.display_builtin(r.target_for(self.data, lesson["id"], key), language)
+                            "targets": {key: display_target(r.target_for(self.data, lesson["id"], key), language)
                                         for key in self.data["allowed_keys"]}})
         history = []
         for task in reversed(tasks):
             report = task["report"]
             history.append({"id": task["assignment"]["task_id"], "exercise_id": task["assignment"]["exercise_id"],
-                            "assigned_at": task["assignment"]["recorded_at"], "target": r.display_builtin(task["target"], language),
+                            "assigned_at": task["assignment"]["recorded_at"], "target": display_target(task["target"], language),
                             "cancelled": task["cancelled"], "reason": (task["cancellation"] or task["assignment"])["reason"],
                             "report": report, "outcome": r.outcome(task), "feedback": feedback(task, language),
                             "revisions": [e for e in events if e["task_id"] == task["assignment"]["task_id"]
                                           and e["event_type"] in ("reported", "corrected")]})
         status = r.status(self.root, self.data)
         if "target" in status["next"]:
-            status["next"]["target"] = r.display_builtin(status["next"]["target"], language)
+            status["next"]["target"] = display_target(status["next"]["target"], language)
         status["next"]["reason"] = r.web_text(status["next"]["reason"], language)
         status["evidence"] = r.web_text(status["evidence"], language)
         return {"csrf_token": self.token, "preview": self.preview, "language": language,

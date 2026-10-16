@@ -56,11 +56,64 @@ try {
   assert.equal((await state()).history.length,0);
   assert.equal(await page.locator('html').getAttribute('lang'),'en');
   assert.doesNotMatch(await page.locator('body').innerText(),/[가-힣]/);
+  await page.evaluate(() => document.fonts.load('40px Bravura'));
+  assert.ok(await page.evaluate(() => [...document.fonts].some(font => font.family === 'Bravura' && font.status === 'loaded')));
   for (const lesson of (await state()).exercises) {
     await choose(lesson.id);
     assert.doesNotMatch(await page.locator('.lesson-card').innerText(),/[가-힣]/);
+    for (const key of ['C', 'F', 'Bb']) {
+      await page.locator('#key-select').selectOption(key);
+      assert.equal(await page.locator('.practice-score').count(), 1);
+      assert.equal(await page.locator('.score-chord').count(), 4);
+      assert.ok(await page.locator('.score-target-note').count() > 0);
+    }
   }
+  await choose('E05');
+  assert.equal(await page.locator('.score-target[data-hand="right"][data-kind="notes"][data-beat="1.5"]').count(), 4);
+  await page.locator('.score-card').screenshot({path:join(project,'build/browser/score-charleston.png')});
+  await choose('E06');
+  assert.equal(await page.locator('.score-improv').count(), 2);
+  assert.equal(await page.locator('.score-target[data-hand="right"][data-kind="rest"]').count(), 2);
+  await page.locator('#score-next').click();
+  assert.match(await page.locator('#score-position').textContent(), /5–8/);
+  await page.locator('.score-card').screenshot({path:join(project,'build/browser/score-improv.png')});
   await choose('E01');
+  await page.locator('#key-select').selectOption('C');
+  // Exercise the same renderer at deterministic loop/page boundaries, without
+  // waiting through 32 beats or adding practice evidence to the temporary log.
+  const displayChecks = await page.evaluate(async () => {
+    const {ScoreView} = await import('/score.mjs');
+    const data = await (await fetch('/api/state')).json();
+    const host = document.createElement('div'); host.style.width = '300px';
+    const root = document.createElement('div'); root.className = 'score-viewport'; host.append(root);
+    document.body.append(host);
+    const follow = document.createElement('input'); follow.type = 'checkbox'; follow.checked = true;
+    const status = document.createElement('span');
+    const view = new ScoreView({root, status, previous: document.createElement('button'), next: document.createElement('button'), follow});
+    const score = id => data.exercises.find(e => e.id === id).targets.Bb.notation;
+    const at = (absolute, bars) => ({absolute, bar: Math.floor(absolute / 4) % bars, pass: Math.floor(absolute / (bars * 4)), beat: absolute % 4});
+    view.setScore(score('E04')); view.begin(); view.frame(at(8.1, 4));
+    view.midi([0x90, 50, 100], 'test', at(8.1, 4)); // D3 belongs to the right hand here.
+    const low = root.querySelector('.score-live-note[data-midi="50"]');
+    const lowRight = low.dataset.hand === 'right' && Boolean(low.querySelector('.score-input-head')) && !low.querySelector('.score-edge-note');
+    const alignedY = low.querySelector('.score-input-head').getAttribute('cy') === root.querySelector('.score-target[data-bar="2"][data-hand="right"] [data-midi="50"] ellipse').getAttribute('cy');
+    view.setScore(score('E06')); view.begin();
+    view.frame(at(16.2, 8));
+    const secondPage = /5–8/.test(status.textContent);
+    view.midi([0x90, 62, 100], 'test', at(31.8, 8));
+    view.frame(at(32.2, 8)); view.drawNotes();
+    const loop = /Pass 2/.test(status.textContent) && /1–4/.test(status.textContent);
+    const continuedHold = Boolean(root.querySelector('.score-hold')) && !root.querySelector('.score-input-head');
+    view.pause(at(32.4, 8));
+    const interrupted = Boolean(root.querySelector('.score-hold.interrupted'));
+    view.begin();
+    const reset = root.querySelectorAll('.score-live-note').length === 0;
+    view.frame(at(14, 8));
+    const localScroll = root.scrollLeft > 0;
+    host.remove();
+    return {lowRight, alignedY, secondPage, loop, continuedHold, interrupted, reset, localScroll};
+  });
+  assert.ok(Object.values(displayChecks).every(Boolean), JSON.stringify(displayChecks));
   await page.screenshot({path:join(project,'build/browser/desktop.png'),fullPage:true});
   await changeLanguage('ko');
   assert.match(await page.locator('#criterion-text').textContent(), /연속 2회/);
@@ -81,7 +134,7 @@ try {
   await page.locator('#tempo').fill('65');await page.locator('#tempo').press('Tab');
   await page.locator('.switch-label').filter({has:page.locator('#pad-toggle')}).click();
   assert.equal(await page.locator('#pad-toggle').isChecked(),true);
-  await page.locator('#practice-btn').click();
+  await page.locator('#score-play').click();
   await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
   assert.equal(await page.locator('#tempo').inputValue(),'65');
   const activeSession = (await state()).sessions[0].id;
@@ -94,6 +147,17 @@ try {
 
   await page.waitForTimeout(150);
   await page.evaluate(()=>window.sendMidi([0x90,60,100]));
+  await page.waitForFunction(() => document.querySelectorAll('.score-live-note').length === 1);
+  const onset = Number(await page.locator('.score-live-note').getAttribute('data-start'));
+  assert.ok(onset > 0 && onset % 1 !== 0);
+  const cursor = await page.locator('.score-cursor').getAttribute('transform');
+  await page.waitForTimeout(90);
+  assert.notEqual(await page.locator('.score-cursor').getAttribute('transform'), cursor);
+  await changeLanguage('ko');
+  assert.equal(await page.locator('.score-live-note').count(), 1);
+  assert.match(await page.locator('#score-position').textContent(), /번째 반복/);
+  assert.match(await page.locator('.score-hand').first().textContent(), /오른손/);
+  await changeLanguage('en');
   await page.waitForTimeout(180);
   await page.evaluate(()=>{window.sendMidi([0xb0,64,127]);window.sendMidi([0x80,60,0]);});
   await page.locator('#tempo').fill('80');await page.locator('#tempo').press('Tab');
@@ -101,12 +165,20 @@ try {
   await page.evaluate(()=>window.sendMidi([0x90,64,100]));
   await page.waitForTimeout(170);
   await page.evaluate(()=>{window.sendMidi([0x80,64,0]);window.sendMidi([0xb0,64,0]);});
+  assert.equal(await page.locator('.score-live-note').count(), 2);
+  assert.ok(Number(await page.locator('.score-live-note[data-midi="64"]').getAttribute('data-end')) > 0);
+  await page.locator('.score-card').screenshot({path:join(project,'build/browser/score-live.png')});
   const sent=await page.evaluate(()=>window.sent);
   await page.locator('#tempo').fill('100');await page.locator('#tempo').press('Tab');
   await page.waitForTimeout(1000);
   await page.locator('#practice-btn').click();
   await page.waitForTimeout(250);
-  await page.locator('#finish-btn').click();
+  assert.equal(await page.locator('.score-cursor').getAttribute('visibility'), 'hidden');
+  await page.locator('#practice-btn').click();
+  await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
+  assert.equal(await page.locator('.score-live-note').count(), 0);
+  await page.waitForTimeout(150);
+  await page.locator('#score-finish').click();
   await visible('#record-panel');
   assert.equal(await page.locator('#actual-bpm').inputValue(),'80');
   let data=await state();const recording=data.sessions[0], task=data.history[0];
@@ -195,7 +267,7 @@ try {
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
   }
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,checks:['language preference + reload','live language switch preserves capture and draft','missing-evidence explanations','empty read-only state','prerequisites','MIDI permission denial','tempo + pad','raw MIDI + sustain trim','report + feedback','correction history','same-day skip','offline + reload recovery','filters + goals','mobile layout'],screenshots:'workflow/build/browser'}));
+  console.log(JSON.stringify({passed:true,checks:['notation in 18 exercise/key combinations','local music font','Charleston offbeat + improv rests','live MIDI overlay + moving cursor','pause/resume resets display','language preference + reload','live language switch preserves capture, notes and draft','missing-evidence explanations','empty read-only state','prerequisites','MIDI permission denial','tempo + pad','raw MIDI + sustain trim','report + feedback','correction history','same-day skip','offline + reload recovery','filters + goals','mobile layout'],screenshots:'workflow/build/browser'}));
 } finally {
   if(browser) await browser.close();
   const exited=once(server,'exit');server.kill('SIGTERM');await exited;
