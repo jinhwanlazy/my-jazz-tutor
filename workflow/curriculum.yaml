@@ -84,7 +84,7 @@ exercises:
     bass: none
     voicing: none
     melody: written-notes
-    instructions: "오른손으로 material의 멜로디 음을 한 마디에 하나씩 네 박 동안 유지한다. 왼손은 쉰다. 4마디를 연결한다."
+    instructions: "오른손으로 위에 제시된 멜로디 음을 한 마디에 하나씩 네 박 동안 유지한다. 왼손은 쉰다. 4마디를 연결한다."
   - id: E03
     title: "멜로디 + 베이스 연결"
     phase: "1 · 출발점"
@@ -110,7 +110,7 @@ exercises:
     bass: root-on-beat-1
     voicing: third-and-seventh
     melody: none
-    instructions: "왼손은 roots, 오른손은 guide_tones의 두 음을 함께 연주한다. 매 마디 첫 박에 누르고 네 박 유지한다. 3도와 7도는 코드 성격을 드러내는 음이다."
+    instructions: "왼손은 제시된 루트 음, 오른손은 제시된 3도·7도 두 음을 함께 연주한다. 매 마디 첫 박에 누르고 네 박 유지한다. 3도와 7도는 코드 성격을 드러내는 음이다."
   - id: E05
     title: "Charleston 컴핑 첫 패턴"
     phase: "2 · 첫 어휘"
@@ -144,3 +144,84 @@ milestones:
   - {exercise_id: E04, key: C, bpm: 60}
   - {exercise_id: E05, key: C, bpm: 60}
   - {exercise_id: E06, key: C, bpm: 60}
+
+# 재생 보조 데이터. 기존 연주 자료·통과 기준과 분리하여 과거 판정을 보존한다.
+playback:
+  four-bar:
+    C:
+      beats_per_bar: 4
+      bars:
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Am7, notes: [45, 48, 52, 55]}
+        - {chord: Dm7, notes: [50, 53, 57, 60]}
+        - {chord: G7, notes: [43, 47, 50, 53]}
+    F:
+      beats_per_bar: 4
+      bars:
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Dm7, notes: [50, 53, 57, 60]}
+        - {chord: Gm7, notes: [55, 58, 62, 65]}
+        - {chord: C7, notes: [48, 52, 55, 58]}
+    Bb:
+      beats_per_bar: 4
+      bars:
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Gm7, notes: [55, 58, 62, 65]}
+        - {chord: Cm7, notes: [48, 51, 55, 58]}
+        - {chord: F7, notes: [53, 57, 60, 63]}
+  two-five-one:
+    C:
+      beats_per_bar: 4
+      bars:
+        - {chord: Dm7, notes: [50, 53, 57, 60]}
+        - {chord: G7, notes: [43, 47, 50, 53]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+    F:
+      beats_per_bar: 4
+      bars:
+        - {chord: Gm7, notes: [55, 58, 62, 65]}
+        - {chord: C7, notes: [48, 52, 55, 58]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+    Bb:
+      beats_per_bar: 4
+      bars:
+        - {chord: Cm7, notes: [48, 51, 55, 58]}
+        - {chord: F7, notes: [53, 57, 60, 63]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+  vamp:
+    C:
+      beats_per_bar: 4
+      bars:
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+        - {chord: Cmaj7, notes: [48, 52, 55, 59]}
+    F:
+      beats_per_bar: 4
+      bars:
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+        - {chord: Fmaj7, notes: [53, 57, 60, 64]}
+    Bb:
+      beats_per_bar: 4
+      bars:
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}
+        - {chord: Bbmaj7, notes: [58, 62, 65, 69]}

@@ -25,7 +25,8 @@ user requests implementation. Read `DESIGN.md`, `README.md`, `curriculum.yaml`, 
 - A curriculum version has stable IDs, explicit criteria, and a fixed target set.
 - Same-day success, later retention, and transfer are distinct observations.
 - Do not represent coverage as a percentage of total jazz mastery or polygon area.
-- Keep runtime dependencies small; no external LLM API or web server is needed.
+- Keep runtime dependencies small; no external LLM API or hosted service is needed.
+  The optional web UI uses a loopback-only Python standard-library server.
 - If code/curriculum/coach instructions change after release, use a new version.
 
 ## Checks

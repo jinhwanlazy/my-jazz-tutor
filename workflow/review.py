@@ -92,6 +92,16 @@ def curriculum(path=HERE / "curriculum.yaml"):
         require(material.get("title"), "연습 자료 제목이 필요합니다.")
         for key in keys:
             require(isinstance(material.get(key), dict) and material[key].get("chords"), f"{key} 자료가 없습니다.")
+            if "playback" in data:
+                playback = data["playback"][lesson["material_id"]][key]
+                require(type(playback["beats_per_bar"]) is int and 1 <= playback["beats_per_bar"] <= 12,
+                        "재생 박자가 잘못되었습니다.")
+                require(len(playback["bars"]) == lesson["bars"], "반주 마디 수가 과제와 다릅니다.")
+                for bar in playback["bars"]:
+                    require(isinstance(bar.get("chord"), str) and bar["chord"], "반주 코드 이름이 필요합니다.")
+                    require(isinstance(bar.get("notes"), list) and 1 <= len(bar["notes"]) <= 8 and
+                            all(type(note) is int and 0 <= note <= 127 for note in bar["notes"]),
+                            "반주 MIDI 음이 잘못되었습니다.")
         require(all(p in by_id for p in lesson["prerequisites"]), "없는 선행 항목을 참조했습니다.")
     def visit(item, trail):
         require(item not in trail, "선행 조건에 순환이 있습니다.")
@@ -123,6 +133,7 @@ def target_for(data, exercise_id, key=None, bpm=None):
         "material": {"title": material["title"], **material[key]},
         "criteria": data["criteria"], "domains": lesson["domains"],
         "curriculum_version": data["version"], "daily_minutes": data["daily_minutes"],
+        "playback": data.get("playback", {}).get(lesson["material_id"], {}).get(key),
     }
 
 
@@ -567,6 +578,9 @@ def main(argv=None):
         sub.add_parser(command)
     report = sub.add_parser("report")
     report.add_argument("--output", type=Path)
+    web = sub.add_parser("serve", help="로컬 웹 연습 화면")
+    web.add_argument("--port", type=int, default=8765)
+    web.add_argument("--open", action="store_true", help="브라우저도 열기")
     assignment = sub.add_parser("assign")
     assignment.add_argument("exercise_id")
     assignment.add_argument("--key")
@@ -586,11 +600,15 @@ def main(argv=None):
         development_source = (HERE / "publish.py").exists()
         production_root = (HERE.parent / "practice").resolve()
         if development_source and args.practice_root.resolve() == production_root:
-            require(args.command not in ("assign", "record", "correct", "cancel"),
+            require(args.command not in ("assign", "record", "correct", "cancel", "serve"),
                     "개발 소스에서 실제 연습 로그를 쓸 수 없습니다. 연습 프로젝트의 ./jazz를 사용하세요. 테스트는 --practice-root로 임시 디렉터리를 지정하세요.")
             if args.command == "report":
                 require(args.output is not None and not args.output.resolve().is_relative_to(production_root),
                         "개발 미리보기는 --output build/preview.html처럼 연습 프로젝트 밖에 생성하세요.")
+        if args.command == "serve":
+            from webapp import serve
+            serve(args.practice_root, data, args.port, args.open)
+            return 0
         if args.command == "validate-curriculum":
             result = {"valid": True, "version": data["version"], "exercises": len(data["exercises"]), "milestones": len(data["milestones"])}
         elif args.command == "validate":

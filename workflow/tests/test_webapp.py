@@ -1,8 +1,17 @@
 """Synthetic input in temporary workspaces, never production practice evidence."""
 import base64
+import copy
+import http.client
+import json
+from pathlib import Path
+import tempfile
+import threading
 import unittest
 
-from sessions import FRAME, measurements, midi_messages
+import review as r
+import publish
+from sessions import FRAME, SessionStore, measurements, midi_messages
+from webapp import Application, make_server
 
 
 def raw(*messages):
@@ -69,3 +78,178 @@ class MeasurementTests(unittest.TestCase):
         for blob in [b'bad', FRAME.pack(1, 0, 3) + b'\x90', FRAME.pack(float('nan'), 0, 1) + b'\xf8']:
             with self.subTest(blob=blob), self.assertRaises(ValueError):
                 list(midi_messages(blob))
+
+
+class StoreTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.data = r.curriculum()
+        self.app = Application(self.root, self.data)
+        self.store = self.app.store
+        self.task = self.app.post('/api/assign', {'exercise_id': 'E01'})['task_id']
+
+    def start(self):
+        return self.store.start(self.task)['id']
+
+    def test_start_is_idempotent_but_only_one_capture_can_be_open(self):
+        sid = self.start()
+        self.assertEqual(self.store.start(self.task, sid)['id'], sid)
+        with self.assertRaises(ValueError):
+            self.start()
+        self.store.finish(sid, 0)
+        self.assertNotEqual(self.start(), sid)
+
+    def test_retry_packets_and_finished_archive_are_immutable(self):
+        sid = self.start()
+        blob = raw((1000, 2, [0x92, 61, 127]), (2000, 2, [0x82, 61, 0]))
+        packet = chunk(blob, [{'type': 'play', 'at_ms': 0, 'bpm': 70}])
+        self.assertFalse(self.store.append(sid, packet)['duplicate'])
+        self.assertTrue(self.store.append(sid, packet)['duplicate'])
+        with self.assertRaises(ValueError):
+            self.store.append(sid, packet | {'elapsed_ms': 11000})
+        with self.assertRaises(ValueError):
+            self.store.finish(sid, 2)
+        summary = self.store.finish(sid, 1)
+        self.assertEqual(self.store.finish(sid, 1, True), summary)
+        self.assertTrue(self.store.append(sid, packet)['duplicate'])
+        with self.assertRaises(ValueError):
+            self.store.append(sid, chunk(seq=1))
+        exported, metadata = self.store.export(sid)
+        self.assertEqual(exported, b'JPM1' + blob)
+        self.assertEqual(metadata['target']['bpm'], 60)
+        self.assertEqual(metadata['summary']['last_note_bpm'], 70)
+        self.assertEqual(len(r.read_events(self.root)), 1)
+
+    def test_reopening_store_keeps_chunks_without_inventing_a_report(self):
+        sid = self.start()
+        self.store.append(sid, chunk(raw((1200, 0, [0x90, 60, 100]))))
+        reopened = SessionStore(self.root)
+        self.assertEqual(reopened.list()[0]['next_sequence'], 1)
+        result = reopened.finish(sid, 1, True)
+        self.assertEqual(result['status'], 'interrupted')
+        self.assertIsNone(result['summary']['input_span_ms'])
+        self.assertEqual(r.status(self.root, self.data)['reported_attempts'], 0)
+
+    def test_out_of_order_and_future_messages_do_not_mutate_store(self):
+        sid = self.start()
+        for packet in [chunk(seq=1), chunk(raw((20000, 0, [0xf8]))), chunk(elapsed=True)]:
+            with self.subTest(packet=packet), self.assertRaises(ValueError):
+                self.store.append(sid, packet)
+        self.assertEqual(self.store.list()[0]['next_sequence'], 0)
+
+    def test_recording_requires_finish_and_played_capture_cannot_be_cancelled(self):
+        sid = self.start()
+        report = {'task_id': self.task, 'result': {'raw_note': '테스트 노트'}}
+        with self.assertRaises(ValueError):
+            self.app.post('/api/report', report)
+        self.store.append(sid, chunk(events=[{'type': 'play', 'at_ms': 0, 'bpm': 60}]))
+        self.store.finish(sid, 1)
+        with self.assertRaises(ValueError):
+            self.app.post('/api/cancel', {'task_id': self.task, 'reason': '취소 테스트'})
+        result = self.app.post('/api/report', report)
+        self.assertEqual(result['outcome'], 'unknown')
+        self.assertEqual(result['feedback']['evidence'], 'self-report')
+
+    def test_feedback_and_correction_preserve_raw_notes_and_original_recording(self):
+        sid = self.start()
+        self.store.finish(sid, 0)
+        before = self.store.export(sid)
+        note = '테스트 원문, "인용"\n<script>literal</script>'
+        self.app.post('/api/report', {'task_id': self.task, 'result': {'raw_note': note}})
+        result = {'raw_note': '정정 테스트', 'followed_target': True,
+                  'checks': dict.fromkeys(r.CHECKS, True), 'clean_runs': 2, 'actual_minutes': 3}
+        self.app.post('/api/report', {'task_id': self.task, 'result': result, 'correction': True})
+        state = self.app.state()
+        self.assertEqual(state['history'][0]['revisions'][0]['raw_note'], note)
+        self.assertEqual(state['history'][0]['outcome'], 'success')
+        self.assertEqual(state['status']['today']['reported_attempts'], 1)
+        self.assertEqual(self.store.export(sid), before)
+
+    def test_web_prerequisites_and_same_day_skip_use_existing_rules(self):
+        self.app.post('/api/cancel', {'task_id': self.task, 'reason': '테스트: 오늘 보류'})
+        self.assertEqual(self.app.state()['status']['next']['exercise_id'], 'E02')
+        with self.assertRaises(ValueError):
+            self.app.post('/api/assign', {'exercise_id': 'E03'})
+        self.assertEqual(len(r.read_events(self.root)), 2)
+
+    def test_playback_does_not_invalidate_compatible_legacy_success(self):
+        legacy = copy.deepcopy(self.data)
+        legacy.pop('playback')
+        legacy_root = self.root / 'legacy'
+        legacy_root.mkdir()
+        task = r.assign(legacy_root, legacy, 'E01')['task_id']
+        r.record_result(legacy_root, legacy, task, {'raw_note': '테스트', 'followed_target': True,
+                        'checks': dict.fromkeys(r.CHECKS, True), 'clean_runs': 2})
+        self.assertTrue(r.goal_successes(self.data, r.records(r.read_events(legacy_root)), 'E01', 'C', 60))
+
+    def test_production_preview_is_rejected_before_writing(self):
+        for root in [r.HERE.parent / 'practice', r.HERE.parent / 'practice' / 'reports']:
+            with self.assertRaises(ValueError):
+                Application(root, self.data)
+
+    def test_installed_web_assets_are_hashed_and_stale_server_cannot_mutate(self):
+        (self.root / 'AGENTS.md').write_text('temporary test workspace')
+        (self.root / 'profile.json').write_text('{}')
+        release = publish.publish(r.HERE, self.root)['installed']
+        manifest = json.loads((Path(release) / 'manifest.json').read_text())
+        for asset in ['sessions.py', 'webapp.html', 'webapp.js', 'audio.mjs', 'capture.mjs']:
+            self.assertIn(asset, manifest['sha256'])
+        (self.root / 'active-version').write_text(self.data['version'])
+        installed = Application(self.root, self.data, source=release)
+        (self.root / 'active-version').write_text('other-version')
+        before = (self.root / 'practice.csv').read_bytes()
+        with self.assertRaises(ValueError):
+            installed.post('/api/cancel', {'task_id': self.task, 'reason': 'stale tab'})
+        self.assertEqual((self.root / 'practice.csv').read_bytes(), before)
+
+
+class HTTPTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.server = make_server(self.root, r.curriculum(), port=0)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.addCleanup(self.stop)
+        self.port = self.server.server_address[1]
+
+    def stop(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join()
+
+    def request(self, method, path, body=None, headers=None):
+        client = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+        try:
+            client.request(method, path, body, headers or {})
+            response = client.getresponse()
+            return response.status, dict(response.getheaders()), response.read()
+        finally:
+            client.close()
+
+    def test_load_is_read_only_and_static_paths_are_allowlisted(self):
+        for path in ['/', '/webapp.js', '/audio.mjs', '/api/state']:
+            status, headers, body = self.request('GET', path)
+            self.assertEqual(status, 200)
+            self.assertIn('Content-Security-Policy', headers)
+        self.assertFalse((self.root / 'practice.csv').exists())
+        self.assertFalse((self.root / 'sessions.sqlite3').exists())
+        self.assertEqual(self.request('GET', '/../practice.csv')[0], 404)
+
+    def test_origin_host_token_and_nonfinite_json_are_rejected(self):
+        headers = {'Content-Type': 'application/json', 'X-Jazz-Token': self.server.app.token}
+        body = json.dumps({'exercise_id': 'E01'})
+        attempts = [headers | {'Origin': 'https://other.example'},
+                    headers | {'Host': 'other.example'}, headers | {'X-Jazz-Token': ''}]
+        for bad in attempts:
+            self.assertEqual(self.request('POST', '/api/assign', body, bad)[0], 400)
+        self.assertEqual(self.request('POST', '/api/assign', '{"bpm":NaN}', headers)[0], 400)
+        self.assertFalse((self.root / 'practice.csv').exists())
+        self.assertEqual(self.request('POST', '/api/assign', body, headers)[0], 200)
+
+
+if __name__ == '__main__':
+    unittest.main()

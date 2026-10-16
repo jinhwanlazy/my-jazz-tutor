@@ -13,7 +13,8 @@ import tomllib
 from review import atomic_text, curriculum, log_lock, read_events, records, require
 
 SOURCE = Path(__file__).resolve().parent
-FILES = ["review.py", "COACH.md", "curriculum.yaml", "pyproject.toml", "uv.lock"]
+FILES = ["review.py", "COACH.md", "curriculum.yaml", "pyproject.toml", "uv.lock",
+         "webapp.py", "sessions.py", "webapp.html", "webapp.css", "webapp.js", "audio.mjs", "capture.mjs"]
 
 
 def publish(source, practice, activate=False):
