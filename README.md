@@ -51,11 +51,10 @@ uv run --project practice jazz report
 프로젝트별 `uv` 환경에서 관리합니다.
 
 0.2.0부터 로컬 웹 연습실도 제공합니다. 웹을 지원하는 버전이 활성화된 뒤
-`practice` 디렉터리에서 다음 명령 하나로 서버와 브라우저를 실행합니다.
+저장소 루트에서 다음 명령 하나로 서버와 브라우저를 실행합니다.
 
 ```sh
-cd practice
-uv run jazz
+uv run --project practice jazz
 ```
 
 과제 제시·연습 기록·규칙 기반 피드백·기록 조회·정정을 한 화면에서 진행합니다.
@@ -64,8 +63,8 @@ uv run jazz
 `practice/sessions.sqlite3`에 보관합니다. 시작·버전 활성화·개발 미리보기·복구 안내는
 [workflow/README.md](workflow/README.md#웹-연습실)에 있습니다.
 
-`uv run jazz`는 `uv run jazz serve --open`의 단축 실행입니다. 별도의 환경 활성화나
-설치 명령이 필요하지 않습니다. 포트를 바꾸려면 `uv run jazz serve --open --port 8768`을
+인자가 없는 `jazz`는 `serve --open`을 실행합니다. 별도의 환경 활성화나 설치 명령이
+필요하지 않습니다. 포트를 바꾸려면 `uv run --project practice jazz serve --open --port 8768`을
 사용합니다. 실행기는 `active-version`을 따르며, 미완료 과제를 취소하거나 새 버전을
 자동 활성화하지 않습니다.
 
