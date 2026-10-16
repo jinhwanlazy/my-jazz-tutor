@@ -51,17 +51,23 @@ BPM·시간 후보를 확인하고 간단한 결과와 메모를 남깁니다. �
 `sessions.sqlite3`에 남습니다. 브라우저에 미전송 입력이 있다면 같은 주소·포트와
 브라우저로 돌아와 **연습 복구하기**를 사용합니다.
 
+`uv run jazz runtime`으로 현재 버전·Git 커밋·실행 캐시 위치를 확인합니다. 최초 실행은
+`runtime-ref`의 태그를 `runtime.json`의 커밋으로 고정합니다. 이후 소스나 태그가 바뀌어도
+같은 커밋을 실행합니다. `.runtime/` 캐시는 삭제해도 로컬 Git 이력에서 다시 생성됩니다.
+
 미완료 과제 때문에 웹 버전 활성화가 대기 중이라면 기존 버전으로 해당 과제를 마친 뒤
-workflow에서 `uv run python publish.py --activate`를 실행합니다. 실행 명령은 과제 상태나
-활성 버전을 자동 변경하지 않습니다.
+workflow에서 `uv run python publish.py --ref v0.2.3 --activate`를 실행합니다.
+실행 명령은 과제를 취소하거나 기존 고정 커밋을 자동 변경하지 않습니다.
 
 `practice.csv`, `profile.json`, `workflow-feedback.md`, `sessions.sqlite3`와
-`reports/`, `backups/`는 개인 데이터로 Git 추적에서 제외합니다. CSV는 첫 과제 발급 때,
+`runtime.json`, `active-version`, `.runtime/`, `reports/`, `backups/`는 Git 추적에서 제외합니다.
+`active-version`은 구버전 실행 호환용이며 실제 선택 기준은 `runtime.json`입니다. CSV는 첫 과제 발급 때,
 MIDI 저장소는 첫 녹음 때 생성됩니다. 개선 메모는 필요할 때 로컬 파일로 작성합니다.
 파일이 없으면 아직 기록이 없는 상태이며 예시 연습 결과로 채우지 않습니다.
 
 Git은 개인 기록의 백업이 아닙니다. 서버를 종료한 뒤 CSV·SQLite·프로필·개선 메모와
-`active-version`, `releases/`를 함께 개인 백업 위치에 복사하세요. 이 디렉터리 안에
+`runtime.json`을 함께 개인 백업 위치에 복사하세요. 캐시는 Git 커밋에서 재생성하므로
+백업할 필요가 없지만 선택한 커밋이 Git 이력에 보존되어 있어야 합니다. 이 디렉터리 안에
 백업을 둔다면 Git에서 제외한 `backups/`를 사용합니다. 이미 커밋한 파일은 추적에서
 제외해도 과거 이력에 남습니다.
 

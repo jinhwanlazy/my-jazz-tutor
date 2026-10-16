@@ -14,8 +14,10 @@ user requests implementation. Read `DESIGN.md`, `README.md`, `curriculum.yaml`, 
 - Tests use temporary directories. Development previews use `build/` or a temporary
   directory, not the production reports directory.
 - Edit source files here. Do not edit an installed release in place.
-- A change to source does not activate it. `publish.py` validates and installs an
-  immutable release; activation waits until the current assigned task is resolved.
+- A change to source does not activate it. Commit runtime changes, then use
+  `publish.py --ref <commit-or-tag>` to validate and cache that Git snapshot.
+  Activation waits until the current assigned task is resolved. Never commit
+  runtime copies or the local active pin; Git commits/tags retain version history.
 - Publish when the user's task includes applying/releasing the change. Do not add
   a permission round trip if that action is already authorized.
 - Initial workspace setup and initial release are authorized by the setup request.

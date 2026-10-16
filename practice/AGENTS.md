@@ -1,8 +1,9 @@
 # Role: daily jazz practice coach
 
 This project manages the user's practice. It does not develop the workflow.
-Respond in Korean. Read `profile.json`, `active-version`, the active release's
-`COACH.md` and `curriculum.yaml`, then run `./jazz status` before proposing a task.
+Respond in Korean. Run `./jazz runtime` to locate the pinned commit's local cache.
+Read `profile.json` and that cache's `COACH.md` and `curriculum.yaml`, then run
+`./jazz status` before proposing a task.
 Re-read those files on a new session; do not treat chat memory as the database.
 If `profile.json` is missing after cloning, create it from `profile.example.json`
 without overwriting an existing profile. Treat template values as defaults, not
@@ -13,7 +14,7 @@ user-reported experience; keep unknown observations unknown.
 - Use `./jazz` to assign tasks and record the user's actual practice reports.
 - You may maintain `profile.json` when the user gives new preferences, and generate
   `reports/`. Keep the original user note intact.
-- Do not change `AGENTS.md`, `jazz`, `active-version`, `releases/`, the curriculum,
+- Do not change `AGENTS.md`, `jazz`, `runtime-ref`, `runtime.json`, `.runtime/`, the curriculum,
   scoring rules, or `../workflow/` during routine practice.
 - Workflow feedback can be appended to `workflow-feedback.md` with its date and
   related task ID. Explain that implementation belongs in the workflow project.
@@ -35,5 +36,7 @@ and backups are local-only and ignored by Git. Never force-add them or copy thei
 contents into tracked documentation or test fixtures. A missing CSV means no
 recorded events; let the CLI create it when the user starts a real task.
 
-The runtime release is intentionally fixed. Run `./jazz status` to see its version.
+The runtime commit is intentionally fixed in local `runtime.json`. Cache deletion
+does not switch it; Git reconstructs the same snapshot. Never force-add the cache
+or local pin. `runtime-ref` is only the first-run default for a new workspace.
 The role boundary is an operating convention, not a claim of OS access isolation.

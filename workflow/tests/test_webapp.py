@@ -10,6 +10,7 @@ import unittest
 
 import review as r
 import publish
+import git_fixture
 from sessions import FRAME, SessionStore, measurements, midi_messages
 from webapp import Application, make_server
 
@@ -192,13 +193,16 @@ class StoreTests(unittest.TestCase):
     def test_installed_web_assets_are_hashed_and_stale_server_cannot_mutate(self):
         (self.root / 'AGENTS.md').write_text('temporary test workspace')
         (self.root / 'profile.json').write_text('{}')
-        release = publish.publish(r.HERE, self.root)['installed']
+        source, revision = git_fixture.copy_source(self.root)
+        release = publish.publish(source, self.root)['installed']
         manifest = json.loads((Path(release) / 'manifest.json').read_text())
         for asset in ['sessions.py', 'webapp.html', 'webapp.js', 'audio.mjs', 'capture.mjs']:
             self.assertIn(asset, manifest['sha256'])
-        (self.root / 'active-version').write_text(self.data['version'])
+        publish.runtime.activate(self.root, manifest)
         installed = Application(self.root, self.data, source=release)
-        (self.root / 'active-version').write_text('other-version')
+        pin = publish.runtime.read_pin(self.root)
+        pin['revision'] = '0' * 40
+        (self.root / 'runtime.json').write_text(json.dumps(pin))
         before = (self.root / 'practice.csv').read_bytes()
         with self.assertRaises(ValueError):
             installed.post('/api/cancel', {'task_id': self.task, 'reason': 'stale tab'})

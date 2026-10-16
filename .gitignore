@@ -4,6 +4,10 @@ __pycache__/
 *.tmp
 /workflow/build/
 /practice/.practice.lock
+/practice/.runtime/
+/practice/runtime.json
+/practice/active-version
+/practice/releases/
 /practice/practice.csv
 /practice/profile.json
 /practice/workflow-feedback.md

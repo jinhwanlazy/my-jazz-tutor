@@ -12,6 +12,7 @@ import io
 
 import review as r
 import publish as p
+import git_fixture
 
 
 class PracticeTests(unittest.TestCase):
@@ -353,6 +354,7 @@ class ReleaseTests(unittest.TestCase):
         for name in p.FILES:
             shutil.copy2(p.SOURCE / name, self.source / name)
         self.version = r.curriculum(self.source / "curriculum.yaml")["version"]
+        self.revision = git_fixture.initialize(self.source)
 
     def bump_version(self):
         data = r.curriculum(self.source / "curriculum.yaml")
@@ -361,6 +363,9 @@ class ReleaseTests(unittest.TestCase):
         (self.source / "curriculum.yaml").write_text(r.yaml.safe_dump(data, allow_unicode=True))
         project = self.source / "pyproject.toml"
         project.write_text(project.read_text().replace(f'version = "{self.version}"', f'version = "{data["version"]}"'))
+        lock = self.source / "uv.lock"
+        lock.write_text(lock.read_text().replace(self.version, data["version"]))
+        git_fixture.commit(self.source)
         return data
 
     def test_published_copy_is_immutable_and_independent_from_source(self):
@@ -423,6 +428,46 @@ class ReleaseTests(unittest.TestCase):
         before = (self.practice / "practice.csv").read_bytes()
         p.publish(self.source, self.practice, True)
         self.assertEqual(before, (self.practice / "practice.csv").read_bytes())
+
+    def test_explicit_revision_uses_committed_code_despite_dirty_source(self):
+        original = (self.source / 'COACH.md').read_bytes()
+        (self.source / 'COACH.md').write_text('uncommitted development change')
+        result = p.publish(self.source, self.practice, ref=self.revision)
+        self.assertEqual((Path(result['installed']) / 'COACH.md').read_bytes(), original)
+        self.assertFalse((self.practice / 'runtime.json').exists())
+
+    def test_legacy_migration_preserves_pending_task_and_runtime(self):
+        installed = Path(p.publish(self.source, self.practice)['installed'])
+        legacy = self.practice / 'releases' / self.version
+        shutil.copytree(installed, legacy)
+        (self.practice / 'active-version').write_text(self.version + '\n')
+        r.assign(self.practice, r.curriculum(self.source / 'curriculum.yaml'), 'E01')
+        before = (self.practice / 'practice.csv').read_bytes()
+        result = p.publish(self.source, self.practice, True)
+        self.assertEqual(result['active'], self.version)
+        self.assertEqual(p.runtime.read_pin(self.practice)['revision'], self.revision)
+        self.assertEqual((self.practice / 'practice.csv').read_bytes(), before)
+
+    def test_migration_cannot_replace_changed_legacy_runtime_with_pending_task(self):
+        legacy = self.practice / 'releases' / self.version
+        shutil.copytree(self.source, legacy)
+        (legacy / 'COACH.md').write_text('different runtime')
+        (self.practice / 'active-version').write_text(self.version + '\n')
+        r.assign(self.practice, r.curriculum(self.source / 'curriculum.yaml'), 'E01')
+        before = (self.practice / 'practice.csv').read_bytes()
+        with self.assertRaises(ValueError):
+            p.publish(self.source, self.practice, True)
+        self.assertFalse((self.practice / 'runtime.json').exists())
+        self.assertEqual((self.practice / 'practice.csv').read_bytes(), before)
+
+    def test_missing_ref_preserves_active_pin_and_evidence(self):
+        p.publish(self.source, self.practice, True)
+        r.assign(self.practice, r.curriculum(self.source / 'curriculum.yaml'), 'E01')
+        before = {name: (self.practice / name).read_bytes() for name in ['runtime.json', 'practice.csv']}
+        with self.assertRaises(ValueError):
+            p.publish(self.source, self.practice, True, ref='missing-tag')
+        for name, content in before.items():
+            self.assertEqual((self.practice / name).read_bytes(), content)
 
 
 if __name__ == "__main__":

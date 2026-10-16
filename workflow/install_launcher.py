@@ -8,18 +8,19 @@ import sys
 from review import atomic_text, require
 
 SOURCE = Path(__file__).resolve().parent / "launcher"
-FILES = ["pyproject.toml", "uv.lock", "src/jazz_practice/__init__.py"]
+FILES = ["pyproject.toml", "uv.lock", "src/jazz_practice/__init__.py",
+         "src/jazz_practice/runtime.py", "jazz", "runtime-ref"]
 
 
 def install(practice):
     practice = Path(practice).resolve()
-    require(all((practice / name).is_file() for name in ("jazz", "active-version", "profile.json")),
+    require(all((practice / name).is_file() for name in ("AGENTS.md", "profile.json")),
             "기존 practice 디렉터리를 지정하세요.")
     contents = {name: (SOURCE / name).read_text() for name in FILES}
     for name, text in contents.items():
         atomic_text(practice / name, text)
-    return {"installed": str(practice), "command": "uv run jazz",
-            "active": (practice / "active-version").read_text().strip()}
+    (practice / "jazz").chmod(0o755)
+    return {"installed": str(practice), "command": "uv run jazz"}
 
 
 def main():

@@ -1,4 +1,4 @@
-"""Delegate to the existing, manifest-verifying practice launcher."""
+"""Delegate to the practice launcher and its locally pinned Git runtime."""
 import os
 from pathlib import Path
 import runpy
@@ -10,7 +10,7 @@ def main():
     # An isolated uv environment can still resolve it from the working directory.
     candidates = [*Path(__file__).resolve().parents, Path.cwd()]
     root = next((path for path in candidates
-                 if (path / "active-version").is_file() and (path / "jazz").is_file()), None)
+                 if (path / "runtime-ref").is_file() and (path / "jazz").is_file()), None)
     if root is None:
         print("오류: 연습 디렉터리를 찾지 못했습니다. practice 폴더에서 실행하세요.", file=sys.stderr)
         return 2

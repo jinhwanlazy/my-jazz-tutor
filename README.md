@@ -28,7 +28,8 @@ codex -C workflow
 
 Git 작업은 루트에서 두 영역을 함께 관리합니다. `workflow/`와 `practice/`는
 하위 디렉터리이며, 중첩 저장소나 서브모듈을 사용하지 않습니다. 소스·테스트·문서,
-프로필 예제, 활성 버전과 버전별 발행본을 추적합니다. **개인 연습 기록은 로컬에만
+프로필 예제와 최초 실행용 Git ref를 추적합니다. 실행 버전의 이력은 Git 커밋·태그로
+관리합니다. **개인 연습 기록은 로컬에만
 보관합니다.** 원본 CSV·개인 프로필·MIDI 저장소·개선 메모·생성 보고서와 백업은
 루트 `.gitignore`로 제외합니다. 가상 환경·캐시·개발 미리보기도 제외합니다.
 
@@ -38,12 +39,15 @@ Git으로 되돌리거나 새로 clone해도 개인 기록은 복원되지 않�
 
 연습 기록은 `practice/practice.csv` 한 곳에만 있습니다. 편집용 세션은 이를
 읽어서 설계를 개선할 수 있지만, 테스트 결과를 실제 기록에 쓰지 않습니다.
-연습용은 `practice/active-version`이 가리키는 발행본을 사용합니다.
-편집 중인 소스 변경은 자동으로 연습용에 적용되지 않습니다.
+연습용은 로컬 `practice/runtime.json`에 고정한 Git 커밋을 사용합니다.
+실행 파일은 Git에서 제외한 `practice/.runtime/<commit>/`에 필요할 때 생성됩니다.
+캐시를 지워도 같은 커밋에서 복원하며, 편집 중인 소스 변경은 자동으로 반영되지 않습니다.
+새 작업 공간의 첫 실행은 `practice/runtime-ref`의 태그를 사용해 로컬 커밋을 고정합니다.
 
 ```sh
 uv run --project practice jazz status
 uv run --project practice jazz report
+uv run --project practice jazz runtime
 ```
 
 생성된 `practice/reports/index.html`을 브라우저로 열면 됩니다. 외부 서버,
@@ -65,7 +69,7 @@ uv run --project practice jazz
 
 인자가 없는 `jazz`는 `serve --open`을 실행합니다. 별도의 환경 활성화나 설치 명령이
 필요하지 않습니다. 포트를 바꾸려면 `uv run --project practice jazz serve --open --port 8768`을
-사용합니다. 실행기는 `active-version`을 따르며, 미완료 과제를 취소하거나 새 버전을
+사용합니다. 실행기는 로컬에 고정한 커밋을 따르며, 미완료 과제를 취소하거나 새 버전을
 자동 활성화하지 않습니다.
 
 역할 분리는 디렉터리별 지침과 발행 버전에 의한 것입니다. OS 파일 권한으로

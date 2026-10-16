@@ -22,17 +22,30 @@ uv run python review.py report --output build/preview.html
 
 소스 수정은 연습용에 즉시 반영되지 않습니다. 코드, curriculum, COACH 중 하나라도
 발행 후 변경했다면 `curriculum.yaml`의 version과 `pyproject.toml`의 version을
-함께 올리고 테스트합니다. 새 curriculum에서도 과거 과제는 발급 당시 기준으로
+함께 올리고 `uv lock` 후 테스트합니다. 새 curriculum에서도 과거 과제는 발급 당시 기준으로
 평가됩니다. 대표 목표는 현재 기준과 자료/연주 조건이 호환되는 성공만 집계합니다.
 
+검증한 소스를 Git에 커밋하고 버전 태그를 붙인 뒤 설치합니다. 다음은 `0.2.3` 태그가
+가리키는 커밋을 선택하는 예입니다. 이후 버전은 새 태그를 만들고 기존 태그를 이동하지 않습니다.
+
 ```sh
-uv run python publish.py --activate
+uv run python publish.py --ref v0.2.3 --activate
 ```
 
-같은 버전의 다른 내용은 덮어쓰지 않습니다. 발행본은 `../practice/releases/`에
-복사되고 `active-version`으로 선택됩니다. 미완료 과제가 있으면 활성화가 거부됩니다.
-활성화 없이 `publish.py`만 실행하면 설치만 합니다. 발행 후 연습 프로젝트에서
-`./jazz report`를 실행해 보고서를 갱신합니다.
+버전 이력은 Git 커밋·태그에만 보관합니다. 실행 파일은 선택한 커밋의 `workflow/`에서
+읽어 `../practice/.runtime/<commit>/`에 캐시하며 Git에 추가하지 않습니다. `--activate`는
+로컬 `practice/runtime.json`에 전체 커밋 해시를 고정합니다. 미완료 과제가 있으면
+다른 커밋의 활성화를 거부합니다. `--activate`를 생략하면 캐시만 준비합니다.
+
+기본 ref는 `HEAD`이며 실행 소스에 미커밋 변경이 있으면 설치를 거부합니다. 이전 태그를
+명시하면 작업 중인 소스와 독립적으로 그 Git 커밋을 설치할 수 있습니다. 새 작업 공간의
+최초 기본값은 `practice/runtime-ref`입니다. 실행기 설치로 기본값이 바뀌어도 기존의
+로컬 고정 커밋은 바뀌지 않습니다. 캐시를 삭제하면 다음 실행에서 같은 커밋을 복원합니다.
+고정한 커밋을 로컬 Git에서 찾을 수 없으면 실행을 중단하며 개발 소스로 대체하지 않습니다.
+
+기존 `practice/releases/` 복사본은 과거 Git 이력에 보존되어 있습니다. 이전 설치본의
+파일과 일치하는 커밋을 `--ref`로 선택하면 같은 버전을 유지한 채 이관할 수 있습니다.
+`active-version`은 구버전 코드 호환을 위한 로컬 파일이며 새 선택 기준은 `runtime.json`입니다.
 
 Python 의존성은 uv.lock으로 고정합니다. 런타임 파일의 해시는 실행 때 확인합니다.
 Git은 상위 `my-jazz-tutor/` 루트에서 관리합니다.
@@ -58,7 +71,7 @@ uv run --project practice jazz
 주소는 `http://127.0.0.1:8765`이며 다른 장치에서 접속할 수 없습니다. 포트를 이미
 사용 중이면 `--port 8768`처럼 바꿉니다. 종료는 Ctrl+C입니다. 미완료 과제가 있어
 0.2.0 활성화가 보류됐다면 기존 버전에서 해당 과제의 실제 결과를 기록하거나, 사용자가
-연습하지 않았다고 확인한 경우 취소한 뒤 workflow에서 `uv run python publish.py --activate`를
+연습하지 않았다고 확인한 경우 취소한 뒤 workflow에서 `uv run python publish.py --ref v0.2.3 --activate`를
 실행합니다. 새 UI 설치를 위해 과제나 보고를 임의로 만들거나 없애지 않습니다.
 
 - **연습실**: 추천 또는 선택한 과제로 시작합니다. 목표 BPM과 현재 메트로놈 BPM은
@@ -115,11 +128,12 @@ uv lock --project launcher
 uv run python install_launcher.py
 ```
 
-설치 대상은 `practice/pyproject.toml`, `practice/uv.lock`, `practice/src/jazz_practice/`입니다.
-실행기는 기존 `practice/jazz`로 인자를 전달하므로 활성 버전 선택, 발행본 해시 검증과
-버전별 의존성 환경을 그대로 사용합니다. `uv run jazz status` 등 기존 CLI 명령도 됩니다.
-실행기 버전은 런타임·커리큘럼 버전과 별도로 관리하며 설치 시 실제 기록, `active-version`,
-기존 발행본을 변경하지 않습니다. 프로젝트 스크립트 구성은
+설치 대상은 `practice/pyproject.toml`, `practice/uv.lock`, `practice/src/jazz_practice/`,
+`practice/jazz`, `practice/runtime-ref`입니다. 실행기는 고정한 커밋의 캐시를 Git 원본과
+대조하고 해당 의존성 환경으로 실행합니다. `uv run jazz status` 등 기존 CLI 명령도 됩니다.
+`uv run jazz runtime`은 현재 버전·커밋·캐시 위치를 보여줍니다. 실행기 버전은 런타임·
+커리큘럼 버전과 별도로 관리하며 설치 시 실제 기록과 로컬 `runtime.json`을 변경하지 않습니다.
+프로젝트 스크립트 구성은
 [uv 공식 문서](https://docs.astral.sh/uv/concepts/projects/config/#command-line-interfaces)를 따릅니다.
 
 ## MIDI 저장과 내보내기
@@ -127,7 +141,9 @@ uv run python install_launcher.py
 `practice/sessions.sqlite3`는 원본 입력과 재생 이벤트의 저장소입니다. CSV에는 최종
 자기보고만 남고 `task_id`로 세션을 연결합니다. 녹음 종료 자체는 연습 결과 보고가 아닙니다.
 Git은 개인 기록을 보관하지 않습니다. 백업 시 서버를 종료한 뒤 CSV, SQLite, profile,
-workflow-feedback, releases, active-version을 개인 백업 위치에 함께 보관합니다.
+workflow-feedback, runtime.json을 개인 백업 위치에 함께 보관합니다. 캐시는 재생성할 수
+있지만 고정한 커밋은 Git 이력에 보존해야 합니다. 전체 저장소 이력을 백업할 때는
+`git bundle create <개인-백업-경로> --all`을 사용할 수 있습니다.
 저장소 안의 `practice/backups/`도 Git에서 제외되지만 별도 장치의 백업을 대신하지 않습니다.
 
 다운로드하는 `.jpm`은 표준 `.mid` 파일이 아닙니다. 최소 원본 보관 형식입니다.

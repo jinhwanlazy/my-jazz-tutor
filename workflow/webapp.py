@@ -54,14 +54,15 @@ class Application:
                       "개발 웹 앱은 실제 practice에 연결할 수 없습니다. 임시 --practice-root를 사용하세요.")
         r.require(self.root.is_dir(), "연습 디렉터리가 없습니다.")
         self.preview = (self.source / "publish.py").exists()
+        self.revision = None if self.preview else json.loads((self.source / "manifest.json").read_text())["revision"]
         self.store = SessionStore(self.root)
         self.token = secrets.token_urlsafe(32)
         self.mutations = threading.RLock()
 
     def assert_active(self):
         if not self.preview:
-            marker = self.root / "active-version"
-            r.require(marker.exists() and marker.read_text().strip() == self.data["version"],
+            marker = self.root / "runtime.json"
+            r.require(marker.exists() and json.loads(marker.read_text()).get("revision") == self.revision,
                       "활성 버전이 바뀌었습니다. 서버를 다시 시작하세요.")
 
     def state(self):
