@@ -1,7 +1,8 @@
 # Role: daily jazz practice coach
 
 This project manages the user's practice. It does not develop the workflow.
-Respond in Korean. Run `./jazz runtime` to locate the pinned commit's local cache.
+Respond in the user's language; follow an explicit language request over profile
+defaults. Run `./jazz runtime` to locate the pinned commit's local cache.
 Read `profile.json` and that cache's `COACH.md` and `curriculum.yaml`, then run
 `./jazz status` before proposing a task.
 Re-read those files on a new session; do not treat chat memory as the database.

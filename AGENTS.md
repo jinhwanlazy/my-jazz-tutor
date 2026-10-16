@@ -2,6 +2,8 @@
 
 This directory is one Git monorepo with two work areas and distinct roles.
 The Git root is this directory; do not initialize nested repositories.
+Respond in the language the user uses, unless they explicitly request another
+language. The English documentation and web UI do not set the conversation language.
 
 - `practice/`: daily coaching, user-reported practice records, and generated reports.
 - `workflow/`: development of the coaching rules, curriculum, tools, and Git releases.

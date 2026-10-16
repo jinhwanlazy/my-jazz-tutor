@@ -1,75 +1,89 @@
-# 일일 연습 프로젝트
+# Daily practice
 
-이 디렉터리는 `my-jazz-tutor/` monorepo의 일일 연습 영역입니다. 워크플로 개발은
-`../workflow`에서 진행하고, Git 저장소는 상위 루트 하나를 공유합니다.
+[English](README.md) · [Korean original](README.ko.md)
 
-처음 clone한 뒤 이 디렉터리에서 프로필을 준비합니다. 기존 파일은 덮어쓰지 않습니다.
+This is the daily practice area of the `my-jazz-tutor/` monorepo. Workflow
+development belongs in `../workflow`; both areas share the root Git repository.
+The commands below run from the repository root.
 
-```sh
-test -e profile.json || cp profile.example.json profile.json
-```
-
-`profile.json`에 자신의 경험·목표·시간 선호를 적습니다. 예제의 값은 시작용 기본값이며
-사용자의 실제 경험이나 연습 결과가 아닙니다. 아직 정하지 않은 항목은 비워 둡니다.
-
-이 폴더를 작업 디렉터리로 열고 `오늘 연습 시작하자`라고 말하면 됩니다.
-연습 후에는 `70은 어려워서 50 BPM, 오른손만 했어`처럼 자연어로 기록하세요.
-에이전트가 원문을 보존하면서 구조화하고 다음 과제를 제시합니다.
-
-- 기본 하루 예산: **30분**. 듣기·준비 5분, 집중 과제 20분, 녹음/회고/기록 5분.
-  개인 시간 선호는 로컬 `profile.json`에서 변경합니다.
-- 과제는 매번 새로 바뀌지 않습니다. 반복·단순화·확인·확장·복습을 선택합니다.
-- 최초에는 짧은 자체 제작 연습으로 출발점을 확인합니다. 악보 판본이 정해지지
-  않은 곡의 마디나 멜로디를 임의로 만들어내지 않습니다.
-- 수치는 자기보고 기반입니다. 실제 음정·스윙·음색을 자동 분석하지 않습니다.
+After cloning, prepare a local profile without overwriting an existing one:
 
 ```sh
-uv run jazz status
-uv run jazz suggest
-uv run jazz report
+test -e practice/profile.json || cp practice/profile.example.json practice/profile.json
 ```
 
-`reports/index.html`은 읽기 전용 진도표입니다. 보고서가 오래되면 `report`를
-다시 실행합니다. 현재 추천, 미평가/연습/성공/후일 재현 상태와 기록을 보여줍니다.
+Enter your experience, goals, and time preferences in `practice/profile.json`.
+Example values are starting defaults, not evidence about you. Leave unknown
+information unset. The coach follows the language you use, unless you request
+another language; the example profile does not force a language.
 
-0.2.0 이상의 웹 지원 버전이 활성화되어 있으면, 이 디렉터리에서 명령 하나로
-웹 연습실을 열 수 있습니다. `uv`가 환경을 준비하고 브라우저도 엽니다.
+Open this directory as the Codex working directory and say, for example,
+`Let's start today's practice.` After playing, describe what happened naturally:
+`70 BPM was too difficult, so I played the right hand only at 50 BPM.` The agent
+preserves your original note, structures the report, and suggests the next task.
+
+- Default daily budget: **30 minutes** across all tasks, including roughly 5 minutes
+  of listening and preparation, 20 minutes of focused work, and 5 minutes of
+  recording and reflection. Adjust this in your local profile.
+- Tasks may repeat, simplify, check, extend, or review previous work.
+- Short original exercises establish a starting point. The coach does not invent
+  bars or melodies for a song whose score edition has not been selected.
+- Results are based on self-reports. Pitch, swing, and tone are not automatically
+  assessed.
 
 ```sh
-uv run jazz
+uv run --project practice jazz status
+uv run --project practice jazz suggest
+uv run --project practice jazz report
 ```
 
-브라우저에서 과제를 선택하고 메트로놈과 함께 연습합니다. 코드 패드는 선택적으로
-켜고, MIDI 키보드는 연결 권한을 허용한 경우 원본 입력을 저장합니다. 마치면 실제
-BPM·시간 후보를 확인하고 간단한 결과와 메모를 남깁니다. 피드백은 자기보고와
-기준 비교이며 MIDI 음악 분석은 아직 없습니다. 하루에 여러 과제를 이어갈 수 있습니다.
-기록 탭에서 원문·조건·정정 이력과 MIDI 다운로드를 확인할 수 있습니다.
+`practice/reports/index.html` is a read-only progress report. Run `report` again
+when it becomes stale. It shows recommendations, evidence, and the distinct states
+of unassessed, attempted, successful, and retained on a later day.
 
-주소는 `http://127.0.0.1:8765`이며 종료는 Ctrl+C입니다. 포트가 사용 중이면
-`uv run jazz serve --open --port 8768`로 실행합니다. 브라우저를 자동으로 열지 않으려면
-`uv run jazz serve`를 사용합니다. 기존 `./jazz` 실행도 지원합니다. 실제 기록은 기존 CSV와
-`sessions.sqlite3`에 남습니다. 브라우저에 미전송 입력이 있다면 같은 주소·포트와
-브라우저로 돌아와 **연습 복구하기**를 사용합니다.
+With a web-capable runtime (0.2.0 or later) active, one command prepares the
+environment, starts the local server, and opens your browser:
 
-`uv run jazz runtime`으로 현재 버전·Git 커밋·실행 캐시 위치를 확인합니다. 최초 실행은
-`runtime-ref`의 태그를 `runtime.json`의 커밋으로 고정합니다. 이후 소스나 태그가 바뀌어도
-같은 커밋을 실행합니다. `.runtime/` 캐시는 삭제해도 로컬 Git 이력에서 다시 생성됩니다.
+```sh
+uv run --project practice jazz
+```
 
-미완료 과제 때문에 웹 버전 활성화가 대기 중이라면 기존 버전으로 해당 과제를 마친 뒤
-workflow에서 `uv run python publish.py --ref v0.2.3 --activate`를 실행합니다.
-실행 명령은 과제를 취소하거나 기존 고정 커밋을 자동 변경하지 않습니다.
+Choose an exercise and practice with the metronome. Enable the chord pad if you
+want accompaniment. A MIDI keyboard can record raw input after you grant access.
+When finished, review the suggested BPM and duration, then enter a short report
+and note. Feedback compares your report with the criteria; musical MIDI analysis
+is not available yet. You can continue through several tasks in one day. History
+shows original notes, assigned and actual conditions, corrections, and MIDI exports.
 
-`practice.csv`, `profile.json`, `workflow-feedback.md`, `sessions.sqlite3`와
-`runtime.json`, `active-version`, `.runtime/`, `reports/`, `backups/`는 Git 추적에서 제외합니다.
-`active-version`은 구버전 실행 호환용이며 실제 선택 기준은 `runtime.json`입니다. CSV는 첫 과제 발급 때,
-MIDI 저장소는 첫 녹음 때 생성됩니다. 개선 메모는 필요할 때 로컬 파일로 작성합니다.
-파일이 없으면 아직 기록이 없는 상태이며 예시 연습 결과로 채우지 않습니다.
+The address is `http://127.0.0.1:8765`; stop the server with Ctrl+C. If the port is
+busy, use `uv run --project practice jazz serve --open --port 8768`. To start without
+opening a browser, use `uv run --project practice jazz serve`. Running `./jazz`
+inside this directory also remains supported. Records stay in the existing CSV
+and `sessions.sqlite3`. To recover unsent input, return with the same browser,
+address, and port, then choose **Recover practice**.
 
-Git은 개인 기록의 백업이 아닙니다. 서버를 종료한 뒤 CSV·SQLite·프로필·개선 메모와
-`runtime.json`을 함께 개인 백업 위치에 복사하세요. 캐시는 Git 커밋에서 재생성하므로
-백업할 필요가 없지만 선택한 커밋이 Git 이력에 보존되어 있어야 합니다. 이 디렉터리 안에
-백업을 둔다면 Git에서 제외한 `backups/`를 사용합니다. 이미 커밋한 파일은 추적에서
-제외해도 과거 이력에 남습니다.
+`uv run --project practice jazz runtime` shows the active version, Git commit, and
+cache location. First launch resolves `runtime-ref` to a commit in local
+`runtime.json`. Later source or tag changes do not change that pin. Deleting the
+`.runtime/` cache reconstructs the same commit from local Git history.
 
-코칭 규칙이나 프로그램을 바꾸려면 [`../workflow`](../workflow/) 프로젝트에서
-별도 세션을 시작하세요. 기록은 여기 한 곳에 계속 남습니다.
+If an unfinished task blocks activation, resolve it with the current runtime,
+then run `uv run --project workflow python workflow/publish.py --ref v0.2.4 --activate`
+from the repository root. Launching the app does not cancel tasks or replace the
+existing pin.
+
+`practice.csv`, `profile.json`, `workflow-feedback.md`, `sessions.sqlite3`,
+`runtime.json`, `active-version`, `.runtime/`, `reports/`, and `backups/` are ignored
+by Git. `active-version` is for legacy compatibility; `runtime.json` selects the
+active code. The CSV is created when the first task is assigned, and MIDI storage
+when the first recording starts. Add local workflow feedback notes as needed.
+Missing files mean no data has been recorded; do not fill them with sample results.
+
+Git does not back up personal records. Stop the server, then copy the CSV, SQLite
+database, profile, feedback notes, and `runtime.json` to a private backup location.
+The cache can be rebuilt, but its pinned commit must remain available in Git
+history. Use the ignored `backups/` directory for any backups kept here. Removing
+a file from tracking does not erase earlier committed copies from Git history.
+
+To change coaching rules or software, open a separate session in
+[`../workflow`](../workflow/). Practice records remain here in one place.
