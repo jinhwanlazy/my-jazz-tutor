@@ -55,6 +55,15 @@ and note. Feedback compares your report with the criteria; musical MIDI analysis
 is not available yet. You can continue through several tasks in one day. History
 shows original notes, assigned and actual conditions, corrections, and MIDI exports.
 
+Choose **Settings → Display language** to switch between English and Korean.
+The choice is saved in this browser for the same address and port. Active practice
+and unfinished report inputs stay intact when switching languages.
+
+**Assessment pending** means your practice is saved, but some conditions or the
+consecutive successful run count are still unknown. Open a history entry to see
+what is missing. Use **Correct this report** to add only details you remember;
+count complete runs of the assigned section, not individual bars.
+
 The address is `http://127.0.0.1:8765`; stop the server with Ctrl+C. If the port is
 busy, use `uv run --project practice jazz serve --open --port 8768`. To start without
 opening a browser, use `uv run --project practice jazz serve`. Running `./jazz`
@@ -68,7 +77,7 @@ cache location. First launch resolves `runtime-ref` to a commit in local
 `.runtime/` cache reconstructs the same commit from local Git history.
 
 If an unfinished task blocks activation, resolve it with the current runtime,
-then run `uv run --project workflow python workflow/publish.py --ref v0.2.4 --activate`
+then run `uv run --project workflow python workflow/publish.py --ref v0.2.5 --activate`
 from the repository root. Launching the app does not cancel tasks or replace the
 existing pin.
 

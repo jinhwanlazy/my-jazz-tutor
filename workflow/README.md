@@ -31,10 +31,10 @@ against their assigned criteria. Current milestones count only successes with
 compatible criteria, material, and playing conditions.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.2.4`; create a new tag for later releases instead of moving an old tag:
+selects `v0.2.5`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.2.4 --activate
+uv run python publish.py --ref v0.2.5 --activate
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -67,8 +67,17 @@ Runtime 0.2.0 introduced browser-based assignments, practice, result entry,
 rule-based feedback, history, and corrections. It uses a Python standard-library
 server and Web Audio, with no external LLM API key or Node runtime. Conversational
 AI coaching and musical MIDI analysis are outside the web interface's current scope.
-The interface uses English; agents follow the user's language. Original user notes
-and historical evidence retain their original wording.
+The interface defaults to English. **Settings → Display language** switches between
+English and Korean and remembers the choice in this browser at the same address
+and port. Switching preserves active capture and unfinished report inputs. Agents
+follow the user's conversation language independently. Original notes and historical
+evidence retain their original wording.
+
+**Assessment pending** means the report is saved but lacks details needed to assess
+the assigned target. History details list the missing conditions or run count.
+Confirm the assigned conditions only if you followed them, and count consecutive
+complete runs of the assigned section. Unknown values are allowed and do not mean
+failure. Use **Correct this report** to add information you actually remember.
 
 Once a web-capable version is active, run this from the repository root. `uv`
 prepares the environment; `jazz` with no arguments runs `serve --open`:
@@ -81,7 +90,7 @@ The server listens at `http://127.0.0.1:8765` and cannot be reached from other
 devices. Use `--port 8768` if needed, and Ctrl+C to stop. If an unfinished task
 blocks activation, record its actual result with the old runtime, or cancel it
 only when the user confirms they did not practice. Then run
-`uv run python publish.py --ref v0.2.4 --activate` from this directory. Never invent
+`uv run python publish.py --ref v0.2.5 --activate` from this directory. Never invent
 or delete practice evidence just to install the UI.
 
 - **Practice room:** start a suggested or selected task. Target BPM and current
@@ -186,7 +195,7 @@ future analysis; it does not define analysis rules or scores.
 ```sh
 uv run python -m unittest discover -s tests -v
 uv run python review.py validate-curriculum
-node --test tests/capture.test.mjs
+node --test tests/capture.test.mjs tests/i18n.test.mjs
 ```
 
 Optional browser integration checks use Playwright. The script creates and cleans

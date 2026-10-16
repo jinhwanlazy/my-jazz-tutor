@@ -28,7 +28,8 @@ codex -C workflow
 
 Run these in separate sessions. Changing directories alone does not reset a
 session's role. Agents respond in the language you use, unless you request another
-language. Documentation and the web interface use English.
+language. Documentation uses English. The web interface starts in English and
+offers English/Korean switching under **Settings → Display language**.
 
 Git manages both areas from the repository root; there are no nested repositories
 or submodules. It tracks source, tests, documentation, an example profile, and the
