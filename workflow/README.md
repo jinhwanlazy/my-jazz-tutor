@@ -36,6 +36,9 @@ uv run python publish.py --activate
 
 Python 의존성은 uv.lock으로 고정합니다. 런타임 파일의 해시는 실행 때 확인합니다.
 Git은 상위 `jazz-piano-coach/` 루트에서 관리합니다.
+개인 CSV·프로필·MIDI·개선 메모·보고서·백업은 Git에서 제외합니다. 새로 clone했다면
+[practice 초기 설정](../practice/README.md)에 따라 로컬 `profile.json`을 준비한 뒤
+실행기를 설치하거나 버전을 발행합니다. 실제 연습 데이터는 공유용 테스트에 복사하지 않습니다.
 
 ## 웹 연습실
 
@@ -124,7 +127,9 @@ uv run python install_launcher.py
 
 `practice/sessions.sqlite3`는 원본 입력과 재생 이벤트의 저장소입니다. CSV에는 최종
 자기보고만 남고 `task_id`로 세션을 연결합니다. 녹음 종료 자체는 연습 결과 보고가 아닙니다.
-백업 시 서버를 종료한 뒤 CSV, SQLite, profile, releases, active-version을 함께 보관합니다.
+Git은 개인 기록을 보관하지 않습니다. 백업 시 서버를 종료한 뒤 CSV, SQLite, profile,
+workflow-feedback, releases, active-version을 개인 백업 위치에 함께 보관합니다.
+저장소 안의 `practice/backups/`도 Git에서 제외되지만 별도 장치의 백업을 대신하지 않습니다.
 
 다운로드하는 `.jpm`은 표준 `.mid` 파일이 아닙니다. 최소 원본 보관 형식입니다.
 첫 4바이트 `JPM1` 뒤에 다음 프레임을 반복합니다(모두 little-endian).

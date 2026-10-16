@@ -4,7 +4,12 @@ __pycache__/
 *.tmp
 /workflow/build/
 /practice/.practice.lock
+/practice/practice.csv
+/practice/profile.json
+/practice/workflow-feedback.md
+/practice/sessions.sqlite3
 /practice/reports/
+/practice/backups/
 *.sqlite3-journal
 *.sqlite3-wal
 *.sqlite3-shm

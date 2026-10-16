@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "language": "ko",
+  "timezone": "Etc/UTC",
+  "daily_minutes": 30,
+  "piano_experience": null,
+  "jazz_experience": null,
+  "starting_key": "C",
+  "goal": null,
+  "source": {
+    "defaults": "시작용 기본 설정. 사용자가 확인한 경험이나 선호가 아닙니다."
+  },
+  "standard_reference": null
+}

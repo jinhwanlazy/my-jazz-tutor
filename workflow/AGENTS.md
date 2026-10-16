@@ -9,6 +9,8 @@ user requests implementation. Read `DESIGN.md`, `README.md`, `curriculum.yaml`, 
 
 - Production data lives in `../practice/`. Read it when relevant, never fabricate
   reports or run test assignments against it.
+- Personal records, profiles, MIDI sessions, and feedback notes are local-only and
+  ignored by Git. Never force-add them or copy them into tracked docs or fixtures.
 - Tests use temporary directories. Development previews use `build/` or a temporary
   directory, not the production reports directory.
 - Edit source files here. Do not edit an installed release in place.

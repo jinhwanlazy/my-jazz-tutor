@@ -11,5 +11,7 @@ user's intent. A practice discussion must not silently become workflow developme
 An explicit setup or migration request may cover both areas. Do not launch
 additional agents or sessions merely to split these roles.
 
-The user's established profile is: basic piano experience, new to jazz, 30 minutes
-per day, Korean conversation. Do not invent practice history or a mastery deadline.
+Read the user's experience, goals, and preferences from the local
+`practice/profile.json`. The example profile contains defaults, not user evidence.
+Do not invent practice history or a mastery deadline. Personal records, profiles,
+MIDI sessions, and coaching notes stay local and must not be force-added to Git.
