@@ -55,6 +55,17 @@ and note. Feedback compares your report with the criteria; musical MIDI analysis
 is not available yet. You can continue through several tasks in one day. History
 shows original notes, assigned and actual conditions, corrections, and MIDI exports.
 
+The score shows the assigned right- and left-hand parts with chord symbols. During
+playback, a cursor follows the beat and blue marks show MIDI key presses at their
+actual positions. Tails show key holds, excluding pedal sustain. Use the playback
+buttons beside the score or the metronome controls. Eight-bar exercises have page
+arrows; **Follow playback** changes pages and scrolls within the score automatically.
+The live view shows the current pass and resets when playback resumes from bar 1.
+The original MIDI recording continues independently, including input during pauses.
+Input placement does not identify your hands or assess timing accuracy; device
+latency can affect alignment. Improvisation tasks show allowed notes and rest bars,
+without inventing a required melody.
+
 Choose **Settings → Display language** to switch between English and Korean.
 The choice is saved in this browser for the same address and port. Active practice
 and unfinished report inputs stay intact when switching languages.
@@ -77,7 +88,7 @@ cache location. First launch resolves `runtime-ref` to a commit in local
 `.runtime/` cache reconstructs the same commit from local Git history.
 
 If an unfinished task blocks activation, resolve it with the current runtime,
-then run `uv run --project workflow python workflow/publish.py --ref v0.2.5 --activate`
+then run `uv run --project workflow python workflow/publish.py --ref v0.2.6 --activate`
 from the repository root. Launching the app does not cancel tasks or replace the
 existing pin.
 

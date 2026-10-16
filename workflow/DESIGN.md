@@ -110,6 +110,38 @@ Web Audio의 오디오 시계 하나로 메트로놈과 마디별 코드 패드�
 연속 성공 횟수를 자동 채우지 않는다. 재생 정보는 기존 material과 분리해 저장하여
 같은 조건의 과거 성공을 무효화하지 않는다. 새 런타임은 기존 발행·활성화 경계를 따른다.
 
+## Score and live MIDI display — 0.2.6
+
+The score is a display derived from each assignment's own material and conditions.
+It does not use pad voicings, rewrite historical target snapshots, or change scoring.
+The six current exercises in C, F, and Bb have grand-staff notation; unsupported
+conditions show the existing written instructions instead of fabricated notation.
+Whole-note exercises, Charleston attacks on 1 and 2&, and the improvisation/rest
+structure remain distinct. The vamp specifies bass attacks but not their duration,
+so diamonds mark those onsets. Improvisation does not gain a prescribed melody.
+Charleston eighth notes illustrate short attacks; their exact displayed durations
+do not add a requirement beyond the assigned attack positions and short playing.
+
+A bounded beat timeline uses the scheduled audio clock, including tempo changes
+and loop positions. MIDI timestamps are mapped to that timeline using
+`AudioContext.getOutputTimestamp()` when available, with `currentTime` as fallback.
+The cursor and blue key-press marks share this mapping; timing is not quantized or
+scored. Physical device latency can still affect alignment. This is a visualization,
+not a timing-accuracy measurement or a replacement for the original recording.
+
+The live buffer shows the current pass, carries held notes across loop boundaries,
+and resets when playback resumes from bar 1. Pauses and disconnects truncate open
+tails with dashed lines. Tails end at key release, not pedal release. Input during
+pauses stays in raw capture but has no displayed beat position. Hand placement uses
+assigned pitches, then pitch range; it never claims to detect the player's hands.
+The live buffer is bounded and is not a history/replay format. History continues to
+retain the original binary MIDI and session events. Display-language switching keeps
+the active capture, live notes, and draft report intact.
+
+SVG rendering and a bundled, unmodified Bravura font need no external network or
+notation library at runtime. Attribution and source pin are in `THIRD_PARTY.md`.
+The notation assets are part of the immutable Git runtime and its hash manifest.
+
 ## 출처와 구분
 
 - 원영상과 제작자의 설명: https://www.youtube.com/watch?v=RiCQYWPEhjc

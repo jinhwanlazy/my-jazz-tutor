@@ -69,7 +69,9 @@ uv run --project practice jazz
 
 The interface covers assignments, practice reports, rule-based feedback, history,
 and corrections. It includes a metronome, optional chord pad, raw Web MIDI capture,
-and suggested BPM and duration values. Musical MIDI analysis is not implemented.
+and suggested BPM and duration values. A grand staff shows the assigned notes and
+rhythm, with a moving beat cursor and live MIDI marks. Musical MIDI scoring is not
+implemented.
 Raw MIDI is stored in `practice/sessions.sqlite3`. See the
 [workflow README](workflow/README.md#web-practice-room) for startup, activation,
 development previews, and recovery.
