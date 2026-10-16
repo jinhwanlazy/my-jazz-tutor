@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""Run the installed version, independent of the workflow development tree."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import sys
+
+base = Path(__file__).resolve().parent
+try:
+    version = (base / "active-version").read_text().strip()
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise ValueError("잘못된 활성 버전입니다.")
+    release = base / "releases" / version
+    manifest = json.loads((release / "manifest.json").read_text())
+    for name, digest in manifest["sha256"].items():
+        if Path(name).name != name or hashlib.sha256((release / name).read_bytes()).hexdigest() != digest:
+            raise ValueError("발행본이 수정되었습니다. workflow에서 새 버전을 발행하세요.")
+    uv = shutil.which("uv")
+    if not uv:
+        raise ValueError("uv 실행 파일이 필요합니다.")
+    os.execv(uv, [uv, "run", "--quiet", "--frozen", "--project", str(release),
+                    "python", str(release / "review.py"), "--practice-root", str(base), *sys.argv[1:]])
+except (OSError, ValueError, KeyError) as exc:
+    print(f"오류: {exc}", file=sys.stderr)
+    sys.exit(2)

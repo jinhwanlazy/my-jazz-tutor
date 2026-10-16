@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+*.tmp
+/workflow/build/
+/practice/.practice.lock
+/practice/reports/

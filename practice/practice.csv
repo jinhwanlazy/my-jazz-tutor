@@ -1,0 +1,1 @@
+event_id,task_id,event_type,recorded_at,practice_date,release,exercise_id,purpose,target_json,actual_json,checks_json,clean_runs,actual_minutes,difficulty,raw_note,hypothesis,reason,supersedes

@@ -1,0 +1,10 @@
+{
+  "version": "0.1.2",
+  "sha256": {
+    "review.py": "d5e431fef8370b9b9fadc5ce96b6224b40cf75fd8d08aba7f809c22b41ba8881",
+    "COACH.md": "f63f170f4900f6a39e4ac7e24ac97224308938cea72d7ba0ecc7fe12d39ea658",
+    "curriculum.yaml": "951c2d6f935a151566e515b96f68174d4ba5b4c932406dc2a6dce51a4eacd4cc",
+    "pyproject.toml": "5a4db7bedb046c5540b82bdf0d394d19094887bad47a6c27b9d4d6f16212dc35",
+    "uv.lock": "9aab7333ae5a69a84abf9e8a40485039d94b8ac48be7811d61170224ca292d27"
+  }
+}
