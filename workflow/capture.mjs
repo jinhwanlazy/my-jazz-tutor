@@ -5,7 +5,7 @@ export function encodeMidi(messages) {
   let offset = 0;
   for (const m of messages) {
     if (!Number.isFinite(m.at_ms) || m.at_ms < 0 || !Number.isInteger(m.port) || m.port < 0 || m.port > 65535 || !m.data.length || m.data.length > 65535) {
-      throw new Error('MIDI 프레임 값이 잘못되었습니다.');
+      throw new Error('Invalid MIDI frame values.');
     }
     view.setFloat64(offset, m.at_ms, true);
     view.setUint16(offset + 8, m.port, true);
@@ -32,8 +32,8 @@ export class Outbox {
         request.result.createObjectStore('drafts', {keyPath: 'id'});
       };
       request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(new Error('브라우저 임시 저장소를 열지 못했습니다. 저장 공간을 확인해 주세요.'));
-      request.onblocked = () => reject(new Error('다른 연습 탭을 닫고 다시 시도해 주세요.'));
+      request.onerror = () => reject(new Error('Could not open browser storage. Check available storage space.'));
+      request.onblocked = () => reject(new Error('Close other practice tabs and try again.'));
     });
     return this.db;
   }
@@ -43,8 +43,8 @@ export class Outbox {
       const tx = db.transaction(store, mode);
       const request = fn(tx.objectStore(store));
       tx.oncomplete = () => resolve(request?.result);
-      tx.onerror = () => reject(tx.error || new Error('브라우저 저장에 실패했습니다.'));
-      tx.onabort = () => reject(tx.error || new Error('브라우저 저장이 중단됐습니다.'));
+      tx.onerror = () => reject(tx.error || new Error('Could not save to browser storage.'));
+      tx.onabort = () => reject(tx.error || new Error('Saving to browser storage was interrupted.'));
     });
   }
   putDraft(draft) { return this.operation('drafts', 'readwrite', s => s.put(draft)); }
@@ -116,8 +116,8 @@ export class Capture {
   upload() {
     const next = this.uploadChain.then(() => uploadPending(this.outbox, this.session.id, this.api));
     this.uploadChain = next.catch(() => {});
-    return next.then(() => this.onStatus('자동 저장됨', false), error => {
-      this.onStatus('브라우저에 보관 중 · 연결되면 다시 저장합니다', true);
+    return next.then(() => this.onStatus('Autosaved', false), error => {
+      this.onStatus('Saved in browser · will retry when connected', true);
       throw error;
     });
   }

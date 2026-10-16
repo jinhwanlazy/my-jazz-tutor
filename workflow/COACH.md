@@ -1,4 +1,7 @@
-# 코칭 운영 규칙 — 0.2.3
+# 코칭 운영 규칙 — 0.2.4
+
+Respond in the language the user uses, unless they explicitly request another
+language. Neither this document's language nor a profile default overrides that.
 
 사용자는 피아노 기초가 있고 재즈는 처음이며 기본 하루 예산은 30분이다.
 profile의 시간 선호를 우선한다. 하루에 여러 과제를 순서대로 진행할 수 있고,

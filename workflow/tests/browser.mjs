@@ -24,7 +24,7 @@ try {
   browser = await chromium.launch({headless:true, ...(process.env.CHROME_EXECUTABLE ? {executablePath:process.env.CHROME_EXECUTABLE} : {}), args:['--no-sandbox']});
   const context=await browser.newContext({viewport:{width:1440,height:1080}});
   await context.addInitScript(() => {
-    const port={id:'synthetic-test-input',name:'테스트 전용 MIDI',manufacturer:'Browser test',state:'connected',type:'input',onmidimessage:null};
+    const port={id:'synthetic-test-input',name:'Synthetic test MIDI',manufacturer:'Browser test',state:'connected',type:'input',onmidimessage:null};
     const access={inputs:new Map([[port.id,port]]),onstatechange:null};
     window.sent=[];window.denyMidi=true;window.audioStarts=[];
     Object.defineProperty(navigator,'requestMIDIAccess',{configurable:true,value:async()=>{if(window.denyMidi) throw new Error('denied');return access;}});
@@ -44,21 +44,28 @@ try {
   const hidden=selector=>page.locator(selector).waitFor({state:'hidden'});
   const choose=async id=>{await page.locator('#chooser').evaluate(e=>e.open=true);await page.locator('#exercise-select').selectOption(id);};
   await page.goto(url);
-  await page.waitForFunction(()=>document.querySelector('#connection').textContent==='로컬에 연결됨');
+  await page.waitForFunction(()=>document.querySelector('#connection').textContent==='Connected locally');
   assert.equal((await state()).history.length,0);
+  assert.equal(await page.locator('html').getAttribute('lang'),'en');
+  assert.doesNotMatch(await page.locator('body').innerText(),/[가-힣]/);
+  for (const lesson of (await state()).exercises) {
+    await choose(lesson.id);
+    assert.doesNotMatch(await page.locator('.lesson-card').innerText(),/[가-힣]/);
+  }
+  await choose('E01');
   await page.screenshot({path:join(project,'build/browser/desktop.png'),fullPage:true});
   await choose('E03');assert.equal(await page.locator('#practice-btn').isEnabled(),false);
   await choose('E01');
   await page.locator('#midi-connect').click();
-  assert.match(await page.locator('#midi-status').textContent(),/허용되지/);
+  assert.match(await page.locator('#midi-status').textContent(),/denied/);
   await page.evaluate(()=>window.denyMidi=false);
   await page.locator('#midi-connect').click();
-  await page.waitForFunction(()=>document.querySelector('#midi-status').textContent.includes('1개 입력'));
+  await page.waitForFunction(()=>document.querySelector('#midi-status').textContent.includes('1 input(s)'));
   await page.locator('#tempo').fill('65');await page.locator('#tempo').press('Tab');
   await page.locator('.switch-label').filter({has:page.locator('#pad-toggle')}).click();
   assert.equal(await page.locator('#pad-toggle').isChecked(),true);
   await page.locator('#practice-btn').click();
-  await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='일시정지');
+  await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
   assert.equal(await page.locator('#tempo').inputValue(),'65');
   await page.waitForTimeout(150);
   await page.evaluate(()=>window.sendMidi([0x90,60,100]));
@@ -97,7 +104,7 @@ try {
   const original='브라우저 테스트 원문, "따옴표"\n<img src=x onerror=alert(1)> 그대로';
   await page.locator('#raw-note').fill(original);await page.locator('#save-report').click();
   await visible('#feedback-panel');
-  assert.match(await page.locator('#feedback-title').textContent(),/조건을 충족/);
+  assert.match(await page.locator('#feedback-title').textContent(),/met the assigned criteria/);
   data=await state();assert.equal(data.status.today.reported_attempts,1);assert.equal(data.history[0].report.raw_note,original);
   await page.locator('[data-view="history"]').click();
   await page.locator('.history-item').first().click();
@@ -117,7 +124,7 @@ try {
   await choose('E02');
   await page.route('**/api/sessions/chunk',route=>route.abort());
   await page.locator('#practice-btn').click();
-  await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='일시정지');
+  await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
   await page.evaluate(()=>window.sendMidi([0x90,67,100]));
   await page.waitForTimeout(3300);
   await page.unroute('**/api/sessions/chunk');

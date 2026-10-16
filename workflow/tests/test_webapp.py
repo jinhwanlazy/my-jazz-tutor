@@ -94,6 +94,31 @@ class StoreTests(unittest.TestCase):
     def start(self):
         return self.store.start(self.task)['id']
 
+    def test_english_presentation_preserves_snapshots_notes_and_progress(self):
+        canonical = copy.deepcopy(self.data)
+        assignment = r.read_events(self.root)[0]
+        before = (self.root / 'practice.csv').read_bytes()
+        state = self.app.state()
+        self.assertNotRegex(json.dumps(state['exercises'], ensure_ascii=False), r'[가-힣]')
+        self.assertNotRegex(json.dumps(state['history'][0]['target'], ensure_ascii=False), r'[가-힣]')
+        self.assertNotRegex(json.dumps(state['status']['next'], ensure_ascii=False), r'[가-힣]')
+        self.assertEqual((self.root / 'practice.csv').read_bytes(), before)
+        self.assertEqual(self.data, canonical)
+        # A user note that happens to match a built-in label must stay verbatim.
+        note = self.data['exercises'][0]['title']
+        saved = self.app.post('/api/report', {'task_id': self.task, 'result': {
+            'raw_note': note, 'followed_target': True,
+            'checks': dict.fromkeys(r.CHECKS, True), 'clean_runs': 2}})
+        state = self.app.state()
+        self.assertEqual(state['history'][0]['report']['raw_note'], note)
+        self.assertEqual(r.read_events(self.root)[0], assignment)
+        self.assertEqual(saved['outcome'], 'success')
+        self.assertNotRegex(json.dumps(saved['feedback'], ensure_ascii=False), r'[가-힣]')
+        self.assertEqual(state['status']['goals'][0]['state'], 'success')
+        self.assertEqual(len(r.goal_successes(self.data, r.records(r.read_events(self.root)),
+                                             'E01', 'C', 60)), 1)
+        self.assertNotIn('C', state['exercises'][2]['eligible_keys'])
+
     def test_start_is_idempotent_but_only_one_capture_can_be_open(self):
         sid = self.start()
         self.assertEqual(self.store.start(self.task, sid)['id'], sid)
@@ -249,7 +274,9 @@ class HTTPTests(unittest.TestCase):
         attempts = [headers | {'Origin': 'https://other.example'},
                     headers | {'Host': 'other.example'}, headers | {'X-Jazz-Token': ''}]
         for bad in attempts:
-            self.assertEqual(self.request('POST', '/api/assign', body, bad)[0], 400)
+            status, _, response = self.request('POST', '/api/assign', body, bad)
+            self.assertEqual(status, 400)
+            self.assertNotRegex(json.loads(response)['error'], r'[가-힣]')
         self.assertEqual(self.request('POST', '/api/assign', '{"bpm":NaN}', headers)[0], 400)
         self.assertFalse((self.root / 'practice.csv').exists())
         self.assertEqual(self.request('POST', '/api/assign', body, headers)[0], 200)

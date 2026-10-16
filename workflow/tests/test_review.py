@@ -41,7 +41,9 @@ class PracticeTests(unittest.TestCase):
         self.assertEqual(info["reported_attempts"], 0)
         self.assertTrue(all(x["state"] == "unknown" for x in info["goals"]))
         report = Path(r.render_report(self.root, self.data)).read_text()
-        self.assertIn("아직 실제 연습 기록이 없습니다", report)
+        self.assertIn("No practice results have been recorded yet", report)
+        self.assertIn('lang="en"', report)
+        self.assertNotRegex(report, r"[가-힣]")
         self.assertFalse((self.root / "practice.csv").exists())
 
     def test_assignment_is_not_practice_and_pending_is_resumed(self):
@@ -200,7 +202,7 @@ class PracticeTests(unittest.TestCase):
         r.record_result(self.root, self.data, self.task(), {"raw_note": "쉬웠음", "difficulty": "easy"})
         next_task = r.suggestion(self.data, self.history())
         self.assertEqual(next_task["exercise_id"], "E01")
-        self.assertIn("짧게 확인", next_task["reason"])
+        self.assertIn("Briefly check", next_task["reason"])
         self.assertEqual(r.outcome(self.history()[0]), "unknown")
         with self.assertRaises(ValueError):
             self.task("E03")
@@ -245,7 +247,7 @@ class PracticeTests(unittest.TestCase):
         self.assertEqual(info["goals"][0]["state"], "attempted")
         tomorrow = r.suggestion(self.data, self.history(), date.today() + timedelta(days=1))
         self.assertEqual(tomorrow["exercise_id"], "E01")
-        self.assertIn("단순화", tomorrow["reason"])
+        self.assertIn("simplifying", tomorrow["reason"])
 
     def test_voluntary_easier_retry_is_allowed_without_passing_original_goal(self):
         r.record_result(self.root, self.data, self.task(), {"raw_note": "어려웠음", "difficulty": "hard"})
@@ -335,9 +337,9 @@ class PracticeTests(unittest.TestCase):
         r.cancel(self.root, self.data, self.task(), "오늘은 스킵")
         r.cancel(self.root, self.data, self.task("E02"), "이것도 스킵")
         report = Path(r.render_report(self.root, self.data)).read_text()
-        self.assertIn("오늘은 마치거나 조건을 조정하기", report)
-        self.assertNotIn("익힌 내용을 연결해서 연주하기", report)
-        self.assertIn("오늘 결과 0개", report)
+        self.assertIn("Finish today or adjust a condition", report)
+        self.assertNotIn("Connect what you have learned into music", report)
+        self.assertIn("Reports today: 0", report)
         self.assertTrue(all(g["state"] == "unknown" for g in r.status(self.root, self.data)["goals"]))
 
 

@@ -28,15 +28,65 @@ FIELDS = [
 ]
 SPEC = ["key", "bpm", "bars", "arrangement", "rhythm", "bass", "voicing", "melody", "material_id"]
 CHECKS = ["notes_correct", "steady_pulse", "no_stops"]
-STATES = {"unknown": "미평가", "attempted": "연습 기록", "success": "당일 성공", "retained": "후일 재현"}
-RESULTS = {"unknown": "근거 부족", "unmet": "목표 미충족", "success": "조건 충족"}
-DOMAINS = {"melody": "멜로디", "rhythm": "리듬", "bass": "베이스", "voicing": "보이싱"}
+STATES = {"unknown": "Unassessed", "attempted": "Attempted", "success": "Same-day success", "retained": "Later retention"}
+RESULTS = {"unknown": "Insufficient evidence", "unmet": "Target not met", "success": "Criteria met"}
+DOMAINS = {"melody": "Melody", "rhythm": "Rhythm", "bass": "Bass", "voicing": "Voicing"}
 ARRANGEMENTS = {
-    "left-bass-only": "왼손 베이스만", "right-melody-only": "오른손 멜로디만",
-    "melody-and-bass": "오른손 멜로디 + 왼손 베이스",
-    "left-root-right-guides": "왼손 루트 + 오른손 3도·7도",
-    "left-root-right-improv": "왼손 루트 + 오른손 즉흥",
+    "left-bass-only": "Left-hand bass only", "right-melody-only": "Right-hand melody only",
+    "melody-and-bass": "Right-hand melody + left-hand bass",
+    "left-root-right-guides": "Left-hand root + right-hand thirds and sevenths",
+    "left-root-right-improv": "Left-hand root + right-hand improvisation",
 }
+
+
+# English presentation of built-in curriculum text, including historical snapshots.
+# Keep canonical material/criteria unchanged so translation cannot reset progress.
+DISPLAY_TEXT = {
+    '재즈 피아노 — 첫 어휘와 양손 연결': 'Jazz piano — first vocabulary and hand coordination',
+    '출발점을 확인할 작은 커리큘럼. 전체 재즈 숙련도를 나타내지 않습니다.': 'A small curriculum to establish a starting point, not a measure of overall jazz mastery.',
+    '지정 조건에서 음과 박자를 유지하고 멈추지 않은 연주를 연속 2회 했다고 보고. 즉흥 과제의 음 정확성은 지정 음 범위를 지켰다는 뜻.': 'Report two consecutive runs with correct notes, steady pulse, and no stops under the assigned conditions. For improvisation tasks, correct notes means staying within the assigned note set.',
+    '자체 제작 4마디 — 한 마디에 코드 하나, 4/4': 'Original four-bar exercise — one chord per bar, 4/4',
+    'E4 | C4 | F4 | B3 (각 온음표)': 'E4 | C4 | F4 | B3 (whole notes)',
+    'A4 | F4 | Bb4 | E4 (각 온음표)': 'A4 | F4 | Bb4 | E4 (whole notes)',
+    'D4 | Bb3 | Eb4 | A3 (각 온음표)': 'D4 | Bb3 | Eb4 | A3 (whole notes)',
+    '자체 제작 ii–V–I, 4마디, 4/4': 'Original ii–V–I exercise, four bars, 4/4',
+    '자체 제작 메이저 코드 반복, 8마디, 4/4': 'Original major-chord vamp, eight bars, 4/4',
+    'Cmaj7 × 8마디': 'Cmaj7 × 8 bars',
+    'Fmaj7 × 8마디': 'Fmaj7 × 8 bars',
+    'Bbmaj7 × 8마디': 'Bbmaj7 × 8 bars',
+    'C3, 매 마디 첫 박': 'C3 on beat 1 of each bar',
+    'F2, 매 마디 첫 박': 'F2 on beat 1 of each bar',
+    'Bb2, 매 마디 첫 박': 'Bb2 on beat 1 of each bar',
+    'E4, G4, A4 세 음만 사용': 'Use only E4, G4, and A4',
+    'A4, C5, D5 세 음만 사용': 'Use only A4, C5, and D5',
+    'D4, F4, G4 세 음만 사용': 'Use only D4, F4, and G4',
+    '왼손 루트와 박 유지': 'Left-hand roots and steady pulse',
+    '오른손 멜로디와 박 유지': 'Right-hand melody and steady pulse',
+    '멜로디 + 베이스 연결': 'Melody and bass together',
+    'ii–V–I의 루트 + 3도·7도': 'ii–V–I roots, thirds, and sevenths',
+    'Charleston 컴핑 첫 패턴': 'Your first Charleston comping pattern',
+    '세 음으로 짧게 말하고 쉬기': 'Three-note phrases and rests',
+    '1 · 출발점': '1 · Starting point',
+    '2 · 첫 어휘': '2 · First vocabulary',
+    '메트로놈을 4분음표 한 박에 맞춘다. 1-2-3-4를 세면서 왼손으로 각 마디 루트를 첫 박에 누르고 네 박 유지한다. 오른손은 쉰다.': 'Set the metronome to quarter-note beats. Count 1-2-3-4, play each root with your left hand on beat 1, and hold for four beats. Rest your right hand.',
+    '오른손으로 위에 제시된 멜로디 음을 한 마디에 하나씩 네 박 동안 유지한다. 왼손은 쉰다. 4마디를 연결한다.': 'Play one of the melody notes shown above per bar with your right hand, holding each for four beats. Rest your left hand and connect all four bars.',
+    'E01의 왼손과 E02의 오른손을 합친다. 두 손이 매 마디 첫 박에 함께 누르고 네 박 유지한다. 처음에는 두 마디씩 해도 되지만 목표 평가는 전체 네 마디다.': 'Combine the left hand from E01 with the right hand from E02. Play both hands together on beat 1 of each bar and hold for four beats. You can start with two-bar sections, but the target covers all four bars.',
+    '왼손은 제시된 루트 음, 오른손은 제시된 3도·7도 두 음을 함께 연주한다. 매 마디 첫 박에 누르고 네 박 유지한다. 3도와 7도는 코드 성격을 드러내는 음이다.': 'Play the given root with your left hand and the given third and seventh together with your right. Start on beat 1 of each bar and hold for four beats. Thirds and sevenths define the character of a chord.',
+    '왼손 루트는 첫 박에 누르고 유지한다. 오른손 3도·7도는 1박과 2박 뒤의 앤드(2&)에 짧게 친다. 먼저 1 & 2 & 3 & 4 &를 말하며 위치를 익힌다. 이 과제는 타격 위치 확인이며 스윙감 숙련을 인증하지 않는다.': 'Play and hold the left-hand root on beat 1. Play short right-hand thirds and sevenths on beat 1 and the and after beat 2 (2&). First count 1 & 2 & 3 & 4 & aloud. This checks attack placement, not mastery of swing feel.',
+    '왼손 루트는 매 마디 첫 박. 오른손은 지정 세 음으로 1~2마디에 짧은 선율을 만들고 3~4마디 쉰다. 5~8마디에 같은 구조를 반복한다. 처음에는 4분음표와 쉼표만 사용한다. 정답 선율은 없으며 박과 쉼을 유지한다.': 'Play the left-hand root on beat 1 of each bar. Use the three assigned notes for a short right-hand phrase in bars 1–2, then rest in bars 3–4. Repeat that structure in bars 5–8. Start with quarter notes and rests. There is no prescribed melody; keep the pulse and rests.',
+}
+
+
+def display_builtin(value):
+    """Copy curriculum text for display; never apply to user notes or evidence logs."""
+    if isinstance(value, str):
+        return DISPLAY_TEXT.get(value, value)
+    if isinstance(value, dict):
+        return {key: display_builtin(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [display_builtin(item) for item in value]
+    return value
+
 
 
 def require(condition, message):
@@ -45,14 +95,14 @@ def require(condition, message):
 
 
 def number(value, name, low=0, high=10000):
-    require(type(value) in (int, float) and low <= value <= high, f"{name}: {low}~{high} 숫자가 필요합니다.")
+    require(type(value) in (int, float) and low <= value <= high, f"{name}: a number between {low} and {high} is required.")
     return value
 
 
 def iso_day(value):
-    require(isinstance(value, str), "날짜는 YYYY-MM-DD 문자열이어야 합니다.")
+    require(isinstance(value, str), "The date must be a YYYY-MM-DD string.")
     parsed = date.fromisoformat(value)
-    require(parsed.isoformat() == value, "날짜는 YYYY-MM-DD 형식이어야 합니다.")
+    require(parsed.isoformat() == value, "The date must use YYYY-MM-DD format.")
     return parsed
 
 
@@ -62,49 +112,49 @@ def jdump(value):
 
 def curriculum(path=HERE / "curriculum.yaml"):
     data = yaml.safe_load(Path(path).read_text())
-    require(isinstance(data, dict) and data.get("schema_version") == 1, "지원하지 않는 curriculum schema입니다.")
-    require(bool(re.fullmatch(r"\d+\.\d+\.\d+", str(data.get("version", "")))), "version은 x.y.z 형식이어야 합니다.")
+    require(isinstance(data, dict) and data.get("schema_version") == 1, "Unsupported curriculum schema.")
+    require(bool(re.fullmatch(r"\d+\.\d+\.\d+", str(data.get("version", "")))), "The version must use x.y.z format.")
     keys = data["allowed_keys"]
-    require(isinstance(keys, list) and keys and len(keys) == len(set(keys)), "allowed_keys가 잘못되었습니다.")
-    require(data["default_key"] in keys, "default_key가 허용 키에 없습니다.")
+    require(isinstance(keys, list) and keys and len(keys) == len(set(keys)), "Invalid allowed_keys.")
+    require(data["default_key"] in keys, "The default_key is not an allowed key.")
     number(data["default_bpm"], "default_bpm", data["minimum_bpm"], data["maximum_bpm"])
     number(data["daily_minutes"], "daily_minutes", 1, 120)
     number(data["retention_days"], "retention_days", 1, 365)
     number(data["maintenance_days"], "maintenance_days", data["retention_days"], 365)
     criteria = data["criteria"]
-    require(criteria.get("id") and criteria.get("explanation"), "통과 기준 ID와 설명이 필요합니다.")
-    require(criteria.get("checks") == CHECKS, "지원하지 않는 통과 검사입니다.")
+    require(criteria.get("id") and criteria.get("explanation"), "Success criteria need an ID and explanation.")
+    require(criteria.get("checks") == CHECKS, "Unsupported success checks.")
     number(criteria["min_clean_runs"], "min_clean_runs", 1, 20)
-    require(type(criteria["min_clean_runs"]) is int, "연속 성공 횟수는 정수여야 합니다.")
+    require(type(criteria["min_clean_runs"]) is int, "Consecutive successful runs must be an integer.")
     lessons = data["exercises"]
-    require(isinstance(lessons, list) and lessons, "연습 항목이 필요합니다.")
+    require(isinstance(lessons, list) and lessons, "At least one exercise is required.")
     ids = [x["id"] for x in lessons]
-    require(len(ids) == len(set(ids)), "exercise ID가 중복됩니다.")
+    require(len(ids) == len(set(ids)), "Duplicate exercise IDs.")
     by_id = {x["id"]: x for x in lessons}
     for lesson in lessons:
-        require(lesson.get("title") and lesson.get("instructions"), "제목과 구체적 지침이 필요합니다.")
-        require(lesson.get("domains") and set(lesson["domains"]) <= set(DOMAINS), "domain이 잘못되었습니다.")
+        require(lesson.get("title") and lesson.get("instructions"), "A title and specific instructions are required.")
+        require(lesson.get("domains") and set(lesson["domains"]) <= set(DOMAINS), "Invalid domain.")
         number(lesson["bars"], "bars", 1, 128)
-        require(type(lesson["bars"]) is int, "마디 수는 정수여야 합니다.")
+        require(type(lesson["bars"]) is int, "Bar count must be an integer.")
         for field in SPEC[3:]:
-            require(isinstance(lesson.get(field), str) and lesson[field], f"{lesson['id']}: {field} 누락")
+            require(isinstance(lesson.get(field), str) and lesson[field], f"{lesson['id']}: missing {field}")
         material = data["materials"][lesson["material_id"]]
-        require(material.get("title"), "연습 자료 제목이 필요합니다.")
+        require(material.get("title"), "A practice material title is required.")
         for key in keys:
-            require(isinstance(material.get(key), dict) and material[key].get("chords"), f"{key} 자료가 없습니다.")
+            require(isinstance(material.get(key), dict) and material[key].get("chords"), f"Missing material for {key}.")
             if "playback" in data:
                 playback = data["playback"][lesson["material_id"]][key]
                 require(type(playback["beats_per_bar"]) is int and 1 <= playback["beats_per_bar"] <= 12,
-                        "재생 박자가 잘못되었습니다.")
-                require(len(playback["bars"]) == lesson["bars"], "반주 마디 수가 과제와 다릅니다.")
+                        "Invalid playback meter.")
+                require(len(playback["bars"]) == lesson["bars"], "The accompaniment bar count differs from the exercise.")
                 for bar in playback["bars"]:
-                    require(isinstance(bar.get("chord"), str) and bar["chord"], "반주 코드 이름이 필요합니다.")
+                    require(isinstance(bar.get("chord"), str) and bar["chord"], "An accompaniment chord name is required.")
                     require(isinstance(bar.get("notes"), list) and 1 <= len(bar["notes"]) <= 8 and
                             all(type(note) is int and 0 <= note <= 127 for note in bar["notes"]),
-                            "반주 MIDI 음이 잘못되었습니다.")
-        require(all(p in by_id for p in lesson["prerequisites"]), "없는 선행 항목을 참조했습니다.")
+                            "Invalid accompaniment MIDI notes.")
+        require(all(p in by_id for p in lesson["prerequisites"]), "An exercise references a missing prerequisite.")
     def visit(item, trail):
-        require(item not in trail, "선행 조건에 순환이 있습니다.")
+        require(item not in trail, "Prerequisites contain a cycle.")
         for parent in by_id[item]["prerequisites"]:
             visit(parent, trail | {item})
     for item in ids:
@@ -112,19 +162,19 @@ def curriculum(path=HERE / "curriculum.yaml"):
     seen = set()
     for milestone in data["milestones"]:
         token = (milestone["exercise_id"], milestone["key"])
-        require(token not in seen and token[0] in by_id and token[1] in keys, "대표 목표가 중복되거나 잘못되었습니다.")
+        require(token not in seen and token[0] in by_id and token[1] in keys, "Duplicate or invalid milestone.")
         seen.add(token)
         number(milestone["bpm"], "milestone bpm", data["minimum_bpm"], data["maximum_bpm"])
-    require(seen, "고정 대표 목표가 필요합니다.")
+    require(seen, "At least one fixed milestone is required.")
     return data
 
 
 def target_for(data, exercise_id, key=None, bpm=None):
     lesson = next((x for x in data["exercises"] if x["id"] == exercise_id), None)
-    require(lesson is not None, f"없는 exercise ID: {exercise_id}")
+    require(lesson is not None, f"Unknown exercise ID: {exercise_id}")
     key = key or data["default_key"]
     bpm = data["default_bpm"] if bpm is None else bpm
-    require(key in data["allowed_keys"], "허용되지 않은 키입니다.")
+    require(key in data["allowed_keys"], "This key is not allowed.")
     number(bpm, "bpm", data["minimum_bpm"], data["maximum_bpm"])
     material = data["materials"][lesson["material_id"]]
     return {
@@ -143,9 +193,9 @@ def read_events(root):
         return []
     with path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        require(reader.fieldnames == FIELDS, "CSV 헤더가 다릅니다. 임의 수정하지 말고 schema를 확인하세요.")
+        require(reader.fieldnames == FIELDS, "The CSV header does not match. Check the schema before making changes.")
         rows = list(reader)
-    require(all(set(row) == set(FIELDS) and all(v is not None for v in row.values()) for row in rows), "CSV 행이 손상되었습니다.")
+    require(all(set(row) == set(FIELDS) and all(v is not None for v in row.values()) for row in rows), "A CSV row is corrupt.")
     return rows
 
 
@@ -153,40 +203,40 @@ def records(events):
     """Reconstruct attempts while retaining all corrections in the source CSV."""
     tasks, event_ids = {}, set()
     for event in events:
-        require(event["event_id"] and event["event_id"] not in event_ids, "중복/빈 event_id입니다.")
+        require(event["event_id"] and event["event_id"] not in event_ids, "Duplicate or empty event_id.")
         event_ids.add(event["event_id"])
         task_id = event["task_id"]
-        require(task_id, "task_id가 필요합니다.")
+        require(task_id, "A task_id is required.")
         datetime.fromisoformat(event["recorded_at"])
         kind = event["event_type"]
         if kind == "assigned":
-            require(task_id not in tasks, "중복 과제 발급입니다.")
+            require(task_id not in tasks, "Duplicate task assignment.")
             target = json.loads(event["target_json"])
-            require(all(k in target for k in SPEC + ["criteria", "material"]), "과제 조건 스냅샷이 불완전합니다.")
+            require(all(k in target for k in SPEC + ["criteria", "material"]), "The assigned-condition snapshot is incomplete.")
             number(target["bpm"], "target bpm", 1, 400)
             number(target["bars"], "target bars", 1, 1000)
-            require(target["criteria"].get("checks") == CHECKS, "알 수 없는 과제 기준입니다.")
+            require(target["criteria"].get("checks") == CHECKS, "Unknown task criteria.")
             number(target["criteria"]["min_clean_runs"], "min_clean_runs", 1, 20)
             tasks[task_id] = {"assignment": event, "target": target, "report": None,
                               "cancelled": False, "cancellation": None}
             continue
-        require(task_id in tasks, "발급되지 않은 과제의 결과입니다.")
+        require(task_id in tasks, "This result has no matching assignment.")
         task = tasks[task_id]
-        require(event["release"] == task["assignment"]["release"] and event["exercise_id"] == task["assignment"]["exercise_id"], "과제의 버전/항목이 바뀌었습니다.")
+        require(event["release"] == task["assignment"]["release"] and event["exercise_id"] == task["assignment"]["exercise_id"], "The task version or exercise ID has changed.")
         if kind == "cancelled":
-            require(not task["report"] and not task["cancelled"], "종료된 과제를 취소할 수 없습니다.")
+            require(not task["report"] and not task["cancelled"], "A resolved task cannot be cancelled.")
             task["cancelled"] = True
             task["cancellation"] = event
         elif kind in ("reported", "corrected"):
-            require(not task["cancelled"], "취소한 과제의 결과를 기록할 수 없습니다.")
+            require(not task["cancelled"], "A cancelled task cannot receive a report.")
             if kind == "reported":
-                require(task["report"] is None and not event["supersedes"], "중복 결과입니다. 정정은 correct를 사용하세요.")
+                require(task["report"] is None and not event["supersedes"], "A result already exists. Use correct to revise it.")
             else:
-                require(task["report"] and event["supersedes"] == task["report"]["event_id"], "정정 대상이 최신 결과가 아닙니다.")
+                require(task["report"] and event["supersedes"] == task["report"]["event_id"], "The correction does not refer to the latest report.")
             practice_day = iso_day(event["practice_date"])
             assigned_day = datetime.fromisoformat(task["assignment"]["recorded_at"]).date()
-            require(practice_day >= assigned_day, "연습일이 과제 발급일보다 빠릅니다.")
-            require(event["raw_note"].strip(), "사용자 원문 노트가 필요합니다.")
+            require(practice_day >= assigned_day, "The practice date is earlier than the assignment date.")
+            require(event["raw_note"].strip(), "The original user note is required.")
             actual = json.loads(event["actual_json"])
             checks = json.loads(event["checks_json"])
             validate_observations(actual, checks)
@@ -194,26 +244,26 @@ def records(events):
                 if event[field]:
                     number(float(event[field]), field, 0, high)
             if event["clean_runs"]:
-                require(float(event["clean_runs"]).is_integer(), "연속 성공 횟수는 정수여야 합니다.")
+                require(float(event["clean_runs"]).is_integer(), "Consecutive successful runs must be an integer.")
             task["report"] = event
         else:
-            raise ValueError(f"지원하지 않는 event_type: {kind}")
+            raise ValueError(f"Unsupported event_type: {kind}")
     return list(tasks.values())
 
 
 def validate_observations(actual, checks):
-    require(isinstance(actual, dict) and set(actual) <= set(SPEC), "actual에 알 수 없는 항목이 있습니다.")
-    require(isinstance(checks, dict) and set(checks) <= set(CHECKS), "checks에 알 수 없는 항목이 있습니다.")
+    require(isinstance(actual, dict) and set(actual) <= set(SPEC), "The actual conditions contain unknown fields.")
+    require(isinstance(checks, dict) and set(checks) <= set(CHECKS), "The checks contain unknown fields.")
     for key, value in actual.items():
         if value is None:
             continue
         if key in ("bpm", "bars"):
             number(value, key, 1, 1000)
             if key == "bars":
-                require(type(value) is int, "실제 마디 수는 정수여야 합니다.")
+                require(type(value) is int, "The actual bar count must be an integer.")
         else:
-            require(isinstance(value, str) and value.strip(), f"actual.{key}는 문자열이어야 합니다.")
-    require(all(v is None or type(v) is bool for v in checks.values()), "checks는 true/false/null만 허용합니다.")
+            require(isinstance(value, str) and value.strip(), f"actual.{key} must be a string.")
+    require(all(v is None or type(v) is bool for v in checks.values()), "Checks only accept true, false, or null.")
 
 
 def outcome(task):
@@ -297,7 +347,7 @@ def suggestion(data, tasks, today=None):
     pending = [t for t in tasks if not t["report"] and not t["cancelled"]]
     if pending:
         task = pending[0]
-        return {"action": "resume", "task_id": task["assignment"]["task_id"], "target": task["target"], "reason": "미완료 과제가 있습니다. 새로 발급하지 않고 이어갑니다."}
+        return {"action": "resume", "task_id": task["assignment"]["task_id"], "target": task["target"], "reason": "You have an unfinished task. Continue it before starting another."}
     latest = latest_activity(tasks, today)
     deferred = {}
     for token, (day, task) in latest.items():
@@ -319,7 +369,7 @@ def suggestion(data, tasks, today=None):
             latest = max(successes, key=lambda t: t["report"]["practice_date"])
             actual_bpm = json.loads(latest["report"]["actual_json"])["bpm"]
             return {"action": "review", **milestone, "bpm": actual_bpm, **context,
-                    "reason": "이전 성공과 같은 템포로 후일 재현을 확인할 시점입니다."}
+                    "reason": "It is time to check later retention at the tempo of your previous success."}
     by_id = {x["id"]: x for x in data["exercises"]}
     unfinished = False
     for milestone in data["milestones"]:
@@ -333,17 +383,17 @@ def suggestion(data, tasks, today=None):
         if all(goal_successes(data, tasks, parent, milestone["key"], data["default_bpm"]) for parent in lesson["prerequisites"]):
             previous = latest.get(token)
             report = previous[1]["report"] if previous else None
-            reason = "아직 확인하지 못한 대표 목표입니다. 최근 노트에 따라 반복 또는 확인 과제를 선택하세요."
+            reason = "This milestone is not yet confirmed. Use recent notes to choose a repeat or a focused check."
             if report and report["difficulty"] == "easy":
-                reason = "쉬웠다고 보고한 항목입니다. 부족한 통과 근거만 짧게 확인하고, 기준을 충족하면 같은 날 다음 항목으로 갑니다."
+                reason = "You reported this exercise as easy. Briefly check the missing evidence, then continue today if the criteria are met."
             elif report and report["difficulty"] == "hard" and outcome(previous[1]) != "success":
-                reason = "이전 시도가 어려웠던 항목입니다. 원문을 확인하고 템포·구간·손 구성 중 하나를 단순화할지 먼저 검토하세요."
+                reason = "The previous attempt was difficult. Review the original note and consider simplifying tempo, section, or hand arrangement."
             return {"action": "practice", **milestone, **context, "reason": reason}
     if unfinished:
         return {"action": "pause", **context,
-                "reason": "오늘 보류했거나 선행 확인이 필요한 항목이 남아 있습니다. 오늘은 마치거나, 원하면 보류한 과제의 한 조건을 단순화해 다시 시도하세요."}
+                "reason": "The remaining tasks are deferred today or need prerequisites. Finish for today, or simplify one condition of a deferred task and try again."}
     return {"action": "consolidate", **context,
-            "reason": "대표 목표의 당일 성공을 기록했습니다. 연결 연주·듣기·후일 복습을 진행하세요. 새 곡/키는 별도 증거가 필요합니다."}
+            "reason": "Same-day success is recorded for the milestones. Connect exercises into music, listen, and review on later days. New songs and keys need separate evidence."}
 
 
 def practice_totals(reports):
@@ -367,7 +417,7 @@ def daily_summary(data, tasks, profile, today=None):
 @contextmanager
 def log_lock(root):
     root = Path(root)
-    require(root.is_dir(), "practice 디렉터리가 없습니다.")
+    require(root.is_dir(), "The practice directory does not exist.")
     with (root / ".practice.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         yield
@@ -393,16 +443,16 @@ def new_event(kind, task_id, data, exercise_id, purpose="practice"):
 
 
 def assign(root, data, exercise_id, key=None, bpm=None, purpose="practice", reason=""):
-    require(purpose in ("practice", "diagnostic", "review", "transfer"), "purpose 값이 잘못되었습니다.")
+    require(purpose in ("practice", "diagnostic", "review", "transfer"), "Invalid purpose.")
     target = target_for(data, exercise_id, key, bpm)
     with log_lock(root):
         events = read_events(root)
         tasks = records(events)
-        require(not any(not t["report"] and not t["cancelled"] for t in tasks), "미완료 과제를 먼저 기록하거나 취소하세요.")
+        require(not any(not t["report"] and not t["cancelled"] for t in tasks), "Report or cancel the unfinished task first.")
         lesson = next(x for x in data["exercises"] if x["id"] == exercise_id)
         if purpose != "diagnostic":
             for parent in lesson["prerequisites"]:
-                require(goal_successes(data, tasks, parent, target["key"], data["default_bpm"]), f"같은 키의 선행 항목 {parent}를 먼저 확인하세요. 원인 확인 목적이면 diagnostic을 명시하세요.")
+                require(goal_successes(data, tasks, parent, target["key"], data["default_bpm"]), f"First complete prerequisite {parent} in the same key. Use diagnostic explicitly for a diagnostic task.")
         event = new_event("assigned", "T-" + uuid.uuid4().hex[:10], data, exercise_id, purpose)
         event.update(target_json=jdump(target), reason=reason)
         records(events + [event])
@@ -411,31 +461,31 @@ def assign(root, data, exercise_id, key=None, bpm=None, purpose="practice", reas
 
 
 def record_result(root, data, task_id, payload, correction=False):
-    require(isinstance(payload, dict), "결과 JSON은 object여야 합니다.")
+    require(isinstance(payload, dict), "The result must be a JSON object.")
     allowed = {"practice_date", "actual", "checks", "clean_runs", "actual_minutes", "difficulty", "raw_note", "hypothesis", "followed_target"}
-    require(set(payload) <= allowed, "결과 JSON에 알 수 없는 필드가 있습니다.")
-    require(isinstance(payload.get("raw_note"), str) and payload["raw_note"].strip(), "raw_note에 사용자 원문이 필요합니다.")
-    require(type(payload.get("followed_target", False)) is bool, "followed_target은 boolean입니다.")
+    require(set(payload) <= allowed, "The result contains unknown fields.")
+    require(isinstance(payload.get("raw_note"), str) and payload["raw_note"].strip(), "The raw_note field must contain the original user note.")
+    require(type(payload.get("followed_target", False)) is bool, "The followed_target flag must be a boolean.")
     with log_lock(root):
         events = read_events(root)
         task = next((t for t in records(events) if t["assignment"]["task_id"] == task_id), None)
-        require(task is not None and not task["cancelled"], "활성 과제 ID를 찾지 못했습니다.")
-        require(bool(task["report"]) == correction, "이미 결과가 있으면 correct, 최초 결과는 record를 사용하세요.")
+        require(task is not None and not task["cancelled"], "Active task ID not found.")
+        require(bool(task["report"]) == correction, "Use correct for an existing result and record for the first result.")
         actual = {k: task["target"][k] for k in SPEC} if payload.get("followed_target") else {}
-        require(isinstance(payload.get("actual", {}), dict), "actual은 object입니다.")
+        require(isinstance(payload.get("actual", {}), dict), "The actual conditions must be an object.")
         actual.update(payload.get("actual", {}))
         checks = payload.get("checks", {})
         validate_observations(actual, checks)
         practice_day = payload.get("practice_date", date.today().isoformat())
-        require(iso_day(practice_day) <= date.today(), "미래의 연습 결과를 기록할 수 없습니다.")
+        require(iso_day(practice_day) <= date.today(), "Practice results cannot be dated in the future.")
         for field, high in [("clean_runs", 1000), ("actual_minutes", 1440)]:
             if payload.get(field) is not None:
                 number(payload[field], field, 0, high)
         if payload.get("clean_runs") is not None:
-            require(type(payload["clean_runs"]) is int, "연속 성공 횟수는 정수여야 합니다.")
+            require(type(payload["clean_runs"]) is int, "Consecutive successful runs must be an integer.")
         difficulty = payload.get("difficulty", "unknown")
-        require(difficulty in ("easy", "manageable", "hard", "unknown"), "difficulty 값이 잘못되었습니다.")
-        require(isinstance(payload.get("hypothesis", ""), str), "hypothesis는 문자열입니다.")
+        require(difficulty in ("easy", "manageable", "hard", "unknown"), "Invalid difficulty.")
+        require(isinstance(payload.get("hypothesis", ""), str), "The hypothesis must be a string.")
         event = new_event("corrected" if correction else "reported", task_id, data, task["assignment"]["exercise_id"], task["assignment"]["purpose"])
         event.update(release=task["assignment"]["release"], practice_date=practice_day,
                      actual_json=jdump(actual), checks_json=jdump(checks),
@@ -450,11 +500,11 @@ def record_result(root, data, task_id, payload, correction=False):
 
 
 def cancel(root, data, task_id, reason):
-    require(reason.strip(), "취소 이유가 필요합니다.")
+    require(reason.strip(), "A cancellation reason is required.")
     with log_lock(root):
         events = read_events(root)
         task = next((t for t in records(events) if t["assignment"]["task_id"] == task_id), None)
-        require(task is not None, "없는 과제입니다.")
+        require(task is not None, "Task not found.")
         event = new_event("cancelled", task_id, data, task["assignment"]["exercise_id"], task["assignment"]["purpose"])
         event.update(release=task["assignment"]["release"], reason=reason)
         records(events + [event])
@@ -468,7 +518,7 @@ def status(root, data):
     profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
     reported = [t for t in tasks if t["report"]]
     goals = [{**m, **cell(data, tasks, **m)} for m in data["milestones"]]
-    return {"version": data["version"], "profile": profile, "evidence": "자기보고 기반 / 미평가는 실패가 아님",
+    return {"version": data["version"], "profile": profile, "evidence": "Self-reported / unassessed does not mean failed",
             **practice_totals([t["report"] for t in reported]),
             "today": daily_summary(data, tasks, profile),
             "goals": goals, "next": suggestion(data, tasks),
@@ -508,9 +558,9 @@ def render_report(root, data, output=None):
         cells = []
         for key in data["allowed_keys"]:
             metric = cell(data, tasks, lesson["id"], key)
-            tag = "대표 목표" if (lesson["id"], key) in required else "선택 키"
-            cells.append(f'<td class="{metric["state"]}"><b>{STATES[metric["state"]]}</b><small>{tag} · 결과 {metric["attempts"]}회</small></td>')
-        table.append(f'<tr><th>{escape(lesson["id"])} · {escape(lesson["title"])}<small>{escape(lesson["phase"])}</small></th>{"".join(cells)}</tr>')
+            tag = "Milestone" if (lesson["id"], key) in required else "Optional key"
+            cells.append(f'<td class="{metric["state"]}"><b>{STATES[metric["state"]]}</b><small>{tag} · Reports: {metric["attempts"]}</small></td>')
+        table.append(f'<tr><th>{escape(lesson["id"])} · {escape(display_builtin(lesson["title"]))}<small>{escape(display_builtin(lesson["phase"]))}</small></th>{"".join(cells)}</tr>')
     bars = []
     for domain, label in DOMAINS.items():
         domain_ids = {x["id"] for x in data["exercises"] if domain in x["domains"]}
@@ -522,16 +572,17 @@ def render_report(root, data, output=None):
     for task in reversed([t for t in tasks if t["report"]][-20:]):
         r = task["report"]
         actual = json.loads(r["actual_json"])
-        history.append(f'<tr><td>{escape(r["practice_date"])}<small>{escape(r["task_id"])}</small></td><td>{escape(task["target"]["title"])}</td>'
+        history.append(f'<tr><td>{escape(r["practice_date"])}<small>{escape(r["task_id"])}</small></td><td>{escape(display_builtin(task["target"]["title"]))}</td>'
                        f'<td>{escape(task["target"]["key"])} / {task["target"]["bpm"]} BPM<small>{escape(ARRANGEMENTS.get(task["target"]["arrangement"], task["target"]["arrangement"]))}</small></td>'
-                       f'<td>{escape(actual.get("key", "미확인"))} / {escape(actual.get("bpm", "미확인"))}<small>{escape(ARRANGEMENTS.get(actual.get("arrangement"), actual.get("arrangement", "미확인")))}</small></td>'
+                       f'<td>{escape(actual.get("key", "Unknown"))} / {escape(actual.get("bpm", "Unknown"))}<small>{escape(ARRANGEMENTS.get(actual.get("arrangement"), actual.get("arrangement", "Unknown")))}</small></td>'
                        f'<td>{RESULTS[outcome(task)]}</td><td class="note">{escape(r["raw_note"])}</td></tr>')
     next_task = info["next"]
     candidate = next_task.get("target")
     if not candidate and "exercise_id" in next_task:
         candidate = target_for(data, next_task["exercise_id"], next_task["key"], next_task["bpm"])
     if candidate:
-        labels = {"chords": "코드 진행", "roots": "왼손 베이스", "melody": "오른손 멜로디", "guide_tones": "오른손 3도·7도"}
+        candidate = display_builtin(candidate)
+        labels = {"chords": "Chord progression", "roots": "Left-hand bass", "melody": "Right-hand melody", "guide_tones": "Right-hand thirds and sevenths"}
         material_rows = []
         for field, label in labels.items():
             if field not in candidate["material"]:
@@ -539,31 +590,31 @@ def render_report(root, data, output=None):
             if (field == "roots" and candidate["bass"] == "none") or (field == "melody" and candidate["melody"] == "none"):
                 continue
             material_rows.append(f'<p><small>{label}</small>{escape(candidate["material"][field])}</p>')
-        next_text = f'<h3>{escape(candidate["title"])}</h3><p>{escape(candidate["key"])} · {candidate["bpm"]} BPM · {candidate["bars"]}마디</p><p>{escape(candidate["instructions"])}</p>{"".join(material_rows)}<small>C4 = 가운데 도 · 숫자는 옥타브 번호</small>'
+        next_text = f'<h3>{escape(candidate["title"])}</h3><p>{escape(candidate["key"])} · {candidate["bpm"]} BPM · {candidate["bars"]} bars</p><p>{escape(candidate["instructions"])}</p>{"".join(material_rows)}<small>C4 = middle C · numbers indicate octaves</small>'
     elif next_task["action"] == "pause":
-        next_text = '<h3>오늘은 마치거나 조건을 조정하기</h3>'
+        next_text = '<h3>Finish today or adjust a condition</h3>'
     else:
-        next_text = '<h3>익힌 내용을 연결해서 연주하기</h3>'
+        next_text = '<h3>Connect what you have learned into music</h3>'
     daily = info["today"]
     if daily["budget_reached"]:
-        time_note = "오늘의 시간 예산에 도달했습니다. 마무리를 권하며, 원하면 더 연습할 수 있습니다."
+        time_note = "You have reached your daily time budget. Consider finishing, or continue if you want."
     elif daily["remaining_minutes"] is None:
-        time_note = "시간을 모르는 기록이 있어 남은 시간은 미확인입니다."
+        time_note = "Some reports have unknown duration, so the remaining time is unknown."
     else:
-        time_note = f'기록 기준 남은 시간 {daily["remaining_minutes"]:g}분. 준비·듣기·기록 시간도 이 안에서 나눕니다.'
-    daily_text = (f'<p>오늘 결과 {daily["reported_attempts"]}개 · 기록된 시간 {daily["known_minutes"]:g}분'
-                  f' / 하루 예산 {daily["budget_minutes"]:g}분 · 시간 미확인 {daily["minutes_unknown"]}건'
+        time_note = f'Remaining recorded budget: {daily["remaining_minutes"]:g} min, including preparation, listening, and reporting.'
+    daily_text = (f'<p>Reports today: {daily["reported_attempts"]} · recorded time: {daily["known_minutes"]:g} min'
+                  f' / daily budget: {daily["budget_minutes"]:g} min · duration unknown: {daily["minutes_unknown"]}'
                   f'<br>{time_note}</p>')
-    empty = '<tr><td colspan="6" class="empty">아직 실제 연습 기록이 없습니다. 예시 데이터로 진도를 채우지 않았습니다.</td></tr>'
-    page = f'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Jazz Practice · 연습 기록</title><style>
+    empty = '<tr><td colspan="6" class="empty">No practice results have been recorded yet.</td></tr>'
+    page = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jazz Practice · Practice history</title><style>
 :root{{font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;color:#e5eaf2;background:#101923}}*{{box-sizing:border-box}}body{{margin:0}}main{{max-width:1160px;margin:auto;padding:42px 24px}}header{{display:flex;justify-content:space-between;gap:20px;align-items:center}}h1{{font-size:32px;margin:8px 0}}h2{{font-size:21px;margin:0 0 18px}}h3{{margin:0 0 10px}}p{{line-height:1.7;color:#b8c6d6}}.eyebrow{{letter-spacing:3px;color:#e8bd79;font-size:12px}}.badge{{border:1px solid #46515e;padding:8px 14px;border-radius:20px;white-space:nowrap;font-size:13px}}.cards{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:28px 0}}.card,section{{background:#192634;border:1px solid #2b3b4b;border-radius:14px;padding:22px}}.card strong{{display:block;font-size:30px;margin:10px 0}}.card span,small{{color:#a8b9ca;font-size:12px}}small{{display:block;margin-top:7px}}section{{margin:20px 0}}.split{{display:grid;grid-template-columns:1.2fr 1fr;gap:20px}}.split section{{margin:0}}table{{border-collapse:collapse;width:100%;font-size:13px}}th,td{{padding:15px 12px;text-align:left;border-bottom:1px solid #334353;vertical-align:top}}thead th{{color:#a8b9ca;font-weight:500}}td.unknown{{color:#acb5c0}}td.attempted{{background:#273956}}td.success{{background:#304236}}td.retained{{background:#155345}}.scroll{{overflow:auto}}.legend{{font-size:12px;color:#a8b9ca}}.domain{{display:grid;grid-template-columns:65px 1fr 35px;gap:12px;align-items:center;margin:20px 0;font-size:13px}}.track{{height:8px;border-radius:8px;background:#354454;overflow:hidden}}.track div{{height:100%;background:#e8bd79}}pre{{white-space:pre-wrap;font-size:12px;line-height:1.7;color:#cee1ef}}.note{{white-space:pre-wrap;min-width:180px}}.empty{{text-align:center;padding:36px;color:#a8b9ca}}footer{{color:#899bac;font-size:12px;line-height:1.8;margin-top:28px}}@media(max-width:760px){{.cards{{grid-template-columns:repeat(2,1fr)}}.split{{grid-template-columns:1fr}}header{{align-items:flex-start}}main{{padding:24px 14px}}th,td{{min-width:115px}}}}
-</style></head><body><main><header><div><div class="eyebrow">JAZZ PRACTICE</div><h1>오늘의 기록, 다음 연습</h1><p>하루 {daily['budget_minutes']:g}분을 여러 과제에 나누어 연습 · 피아노 기초 있음 · 재즈 입문</p>{daily_text}</div><div class="badge">활성 버전 {escape(data['version'])}</div></header>
-<div class="cards"><div class="card">결과를 남긴 과제<strong>{info['reported_attempts']}</strong><span>과제 발급만으로는 증가하지 않음</span></div><div class="card">기록된 연습 시간<strong>{info['known_minutes']:g}<span> 분</span></strong><span>시간 미확인 {info['minutes_unknown']}건</span></div><div class="card">대표 목표 성공<strong>{passed}<span> / {len(goals)}</span></strong><span>현재 버전의 고정 목표 · 자기보고</span></div><div class="card">후일 같은 조건 재현<strong>{held}<span> / {len(goals)}</span></strong><span>{data['retention_days']}일 이상 간격 · 자기보고</span></div></div>
-<div class="split"><section><h2>{'진행 중인 과제' if next_task['action']=='resume' else '다음 과제 후보 · 아직 발급되지 않음'}</h2>{next_text}<p>{escape(next_task['reason'])}</p></section><section><h2>영역별 대표 목표</h2>{''.join(bars)}<p>각 영역에 해당하는 목표의 성공 수입니다. 영역은 서로 겹칩니다. 전체 재즈 실력이나 독립적인 벡터 점수가 아닙니다.</p></section></div>
-<section><h2>어떤 조건을 확인했나</h2><p class="legend">미평가 → 연습 기록 → 당일 성공 → 후일 재현. 미평가는 실패가 아닙니다. 기본 비교 템포는 {data['default_bpm']} BPM이며 성공은 해당 항목의 손·리듬·음 조건을 모두 충족한 보고만 셉니다.</p><div class="scroll"><table><thead><tr><th>연습 항목</th>{''.join(f'<th>{escape(k)}</th>' for k in data['allowed_keys'])}</tr></thead><tbody>{''.join(table)}</tbody></table></div></section>
-<section><h2>최근 수행 기록</h2><div class="scroll"><table><thead><tr><th>연습일</th><th>과제</th><th>목표</th><th>실제</th><th>판정</th><th>원문 노트</th></tr></thead><tbody>{''.join(history) or empty}</tbody></table></div></section>
-<footer>자기보고 기반 기록입니다. 음정·스윙감·음색을 자동으로 듣고 평가하지 않습니다.<br>생성: {escape(datetime.now(timezone.utc).isoformat(timespec='seconds'))} · 원본: practice.csv · 새 기록 후 ./jazz report 로 갱신</footer></main></body></html>'''
+</style></head><body><main><header><div><div class="eyebrow">JAZZ PRACTICE</div><h1>Your records, your next practice</h1><p>Share a daily budget of {daily['budget_minutes']:g} minutes across tasks</p>{daily_text}</div><div class="badge">Active version {escape(data['version'])}</div></header>
+<div class="cards"><div class="card">Reported tasks<strong>{info['reported_attempts']}</strong><span>Assignments alone do not count</span></div><div class="card">Recorded practice time<strong>{info['known_minutes']:g}<span> min</span></strong><span>Duration unknown: {info['minutes_unknown']}</span></div><div class="card">Milestones met<strong>{passed}<span> / {len(goals)}</span></strong><span>Fixed goals for this version · self-reported</span></div><div class="card">Later retention under the same conditions<strong>{held}<span> / {len(goals)}</span></strong><span>At least {data['retention_days']} days apart · self-reported</span></div></div>
+<div class="split"><section><h2>{'Current task' if next_task['action']=='resume' else 'Suggested next task · not yet assigned'}</h2>{next_text}<p>{escape(next_task['reason'])}</p></section><section><h2>Milestones by domain</h2>{''.join(bars)}<p>Counts show successful milestones in each domain. Domains overlap; these are not overall jazz ability scores or independent skill measures.</p></section></div>
+<section><h2>Conditions you have checked</h2><p class="legend">Unassessed → Attempted → Same-day success → Later retention. Unassessed does not mean failed. The default comparison tempo is {data['default_bpm']} BPM. Only reports meeting all hand, rhythm, and note conditions count as successful.</p><div class="scroll"><table><thead><tr><th>Exercise</th>{''.join(f'<th>{escape(k)}</th>' for k in data['allowed_keys'])}</tr></thead><tbody>{''.join(table)}</tbody></table></div></section>
+<section><h2>Recent practice reports</h2><div class="scroll"><table><thead><tr><th>Practice date</th><th>Task</th><th>Target</th><th>Actual</th><th>Outcome</th><th>Original note</th></tr></thead><tbody>{''.join(history) or empty}</tbody></table></div></section>
+<footer>These records are self-reported. Pitch, swing, and tone are not automatically assessed.<br>Generated: {escape(datetime.now(timezone.utc).isoformat(timespec='seconds'))} · Source: practice.csv · Run ./jazz report after new records to refresh</footer></main></body></html>'''
     destination = Path(output) if output else root / "reports" / "index.html"
     atomic_text(destination, page)
     return str(destination)
@@ -578,9 +629,9 @@ def main(argv=None):
         sub.add_parser(command)
     report = sub.add_parser("report")
     report.add_argument("--output", type=Path)
-    web = sub.add_parser("serve", help="로컬 웹 연습 화면")
+    web = sub.add_parser("serve", help="Local web practice room")
     web.add_argument("--port", type=int, default=8765)
-    web.add_argument("--open", action="store_true", help="브라우저도 열기")
+    web.add_argument("--open", action="store_true", help="Also open the browser")
     assignment = sub.add_parser("assign")
     assignment.add_argument("exercise_id")
     assignment.add_argument("--key")
@@ -601,10 +652,10 @@ def main(argv=None):
         production_root = (HERE.parent / "practice").resolve()
         if development_source and args.practice_root.resolve() == production_root:
             require(args.command not in ("assign", "record", "correct", "cancel", "serve"),
-                    "개발 소스에서 실제 연습 로그를 쓸 수 없습니다. 연습 프로젝트의 ./jazz를 사용하세요. 테스트는 --practice-root로 임시 디렉터리를 지정하세요.")
+                    "Development source cannot write the real practice log. Use ./jazz in the practice project. For tests, set --practice-root to a temporary directory.")
             if args.command == "report":
                 require(args.output is not None and not args.output.resolve().is_relative_to(production_root),
-                        "개발 미리보기는 --output build/preview.html처럼 연습 프로젝트 밖에 생성하세요.")
+                        "Write development previews outside the practice project, for example with --output build/preview.html.")
         if args.command == "serve":
             from webapp import serve
             serve(args.practice_root, data, args.port, args.open)
@@ -630,7 +681,7 @@ def main(argv=None):
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (ValueError, KeyError, OSError, TypeError, yaml.YAMLError) as exc:
-        print(f"오류: {exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr)
         return 2
 
 

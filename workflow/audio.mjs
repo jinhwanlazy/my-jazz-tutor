@@ -15,7 +15,7 @@ export class Transport {
   async unlock() {
     if (!this.context) {
       const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
-      if (!Audio) throw new Error('이 브라우저에서는 Web Audio를 사용할 수 없습니다.');
+      if (!Audio) throw new Error('Web Audio is not available in this browser.');
       this.context = new Audio({latencyHint: 'interactive'});
       this.clickBus = this.context.createGain();
       this.padBus = this.context.createGain();
@@ -24,12 +24,12 @@ export class Transport {
       this.context.onstatechange = () => {
         if (this.playing && this.context.state !== 'running') {
           this.pause();
-          this.onInterrupt('브라우저가 오디오를 중단해 일시정지했습니다.');
+          this.onInterrupt('Playback paused because the browser interrupted audio.');
         }
       };
     }
     await this.context.resume();
-    if (this.context.state !== 'running') throw new Error('오디오를 시작하지 못했습니다. 다시 시작해 주세요.');
+    if (this.context.state !== 'running') throw new Error('Could not start audio. Try starting again.');
   }
   start(playback, bpm) {
     if (this.playing) return;
@@ -53,7 +53,7 @@ export class Transport {
     // A long background stall is a recorded interruption, never a burst of late clicks.
     if (this.nextTime < this.context.currentTime - 0.15) {
       this.pause();
-      this.onInterrupt('재생이 지연되어 일시정지했습니다. 다시 시작해 주세요.');
+      this.onInterrupt('Playback paused after a timing delay. Try starting again.');
       return;
     }
     while (this.nextTime < this.context.currentTime + 0.1) {

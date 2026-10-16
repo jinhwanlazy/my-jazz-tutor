@@ -22,11 +22,11 @@ EVENTS = {"play", "pause", "tempo", "pad", "click", "device", "disconnect",
 def midi_messages(blob):
     offset = 0
     while offset < len(blob):
-        r.require(len(blob) - offset >= FRAME.size, "MIDI 프레임이 잘렸습니다.")
+        r.require(len(blob) - offset >= FRAME.size, "The MIDI frame is truncated.")
         at, port, size = FRAME.unpack_from(blob, offset)
         offset += FRAME.size
-        r.require(math.isfinite(at) and 0 <= at <= MAX_MS, "MIDI 시각이 잘못되었습니다.")
-        r.require(0 < size <= 65535 and offset + size <= len(blob), "MIDI 메시지가 잘렸습니다.")
+        r.require(math.isfinite(at) and 0 <= at <= MAX_MS, "Invalid MIDI timestamp.")
+        r.require(0 < size <= 65535 and offset + size <= len(blob), "The MIDI message is truncated.")
         yield at, port, blob[offset:offset + size]
         offset += size
 
@@ -126,7 +126,7 @@ class SessionStore:
         connection.row_factory = sqlite3.Row
         try:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            r.require(version in (0, 1), "지원하지 않는 세션 저장소 버전입니다.")
+            r.require(version in (0, 1), "Unsupported session database version.")
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY, task_id TEXT NOT NULL, release TEXT NOT NULL,
@@ -151,17 +151,17 @@ class SessionStore:
         # A client-chosen ID makes a lost start response safe to retry.
         session_id = session_id or "S-" + uuid.uuid4().hex
         r.require(isinstance(session_id, str) and r.re.fullmatch(r"S-[a-f0-9]{32}", session_id),
-                  "세션 ID가 잘못되었습니다.")
+                  "Invalid session ID.")
         with r.log_lock(self.root), self.database() as db:
             existing = db.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
             if existing:
-                r.require(existing["task_id"] == task_id, "다른 과제의 세션 ID입니다.")
+                r.require(existing["task_id"] == task_id, "This session ID belongs to another task.")
                 return self.public(existing)
             task = next((t for t in r.records(r.read_events(self.root))
                          if t["assignment"]["task_id"] == task_id), None)
-            r.require(task is not None and not task["report"] and not task["cancelled"], "진행 중인 과제가 필요합니다.")
+            r.require(task is not None and not task["report"] and not task["cancelled"], "An active task is required.")
             r.require(not db.execute("SELECT 1 FROM sessions WHERE task_id=? AND status='recording'",
-                                     (task_id,)).fetchone(), "이 과제의 연습이 이미 열려 있습니다. 먼저 저장된 연습을 복구하세요.")
+                                     (task_id,)).fetchone(), "This task already has an open session. Recover the saved practice first.")
             db.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?,NULL)",
                        (session_id, task_id, task["assignment"]["release"], r.jdump(task["target"]),
                         datetime.now(timezone.utc).isoformat(), "recording"))
@@ -192,38 +192,38 @@ class SessionStore:
 
     def append(self, session_id, packet):
         r.require(isinstance(packet, dict) and set(packet) == {"sequence", "midi", "events", "elapsed_ms"},
-                  "녹음 패킷 형식이 잘못되었습니다.")
+                  "Invalid recording packet format.")
         seq, elapsed, events = packet["sequence"], packet["elapsed_ms"], packet["events"]
-        r.require(type(seq) is int and 0 <= seq < 100000, "패킷 번호가 잘못되었습니다.")
+        r.require(type(seq) is int and 0 <= seq < 100000, "Invalid packet sequence number.")
         r.number(elapsed, "elapsed_ms", 0, MAX_MS)
-        r.require(isinstance(packet["midi"], str) and len(packet["midi"]) <= 3_000_000, "MIDI 패킷이 너무 큽니다.")
+        r.require(isinstance(packet["midi"], str) and len(packet["midi"]) <= 3_000_000, "The MIDI packet is too large.")
         try:
             blob = base64.b64decode(packet["midi"], validate=True)
         except (ValueError, base64.binascii.Error) as exc:
-            raise ValueError("MIDI 인코딩이 잘못되었습니다.") from exc
+            raise ValueError("Invalid MIDI encoding.") from exc
         for at, _, _ in midi_messages(blob):
-            r.require(at <= elapsed, "MIDI 시각이 세션 범위를 벗어났습니다.")
-        r.require(isinstance(events, list) and len(events) <= 10000, "이벤트 목록이 잘못되었습니다.")
+            r.require(at <= elapsed, "The MIDI timestamp is outside the session duration.")
+        r.require(isinstance(events, list) and len(events) <= 10000, "Invalid event list.")
         for event in events:
-            r.require(isinstance(event, dict) and event.get("type") in EVENTS, "알 수 없는 세션 이벤트입니다.")
+            r.require(isinstance(event, dict) and event.get("type") in EVENTS, "Unknown session event.")
             r.number(event.get("at_ms"), "event.at_ms", 0, elapsed)
             if event["type"] in ("play", "tempo"):
                 r.number(event.get("bpm"), "event.bpm", 1, 400)
             if event["type"] in ("pad", "click"):
-                r.require(type(event.get("enabled")) is bool, "enabled 값이 잘못되었습니다.")
+                r.require(type(event.get("enabled")) is bool, "The enabled flag must be a boolean.")
         event_text = r.jdump(events)
-        r.require(len(event_text) <= 500_000, "이벤트 정보가 너무 큽니다.")
+        r.require(len(event_text) <= 500_000, "The event data is too large.")
         with r.log_lock(self.root), self.database() as db:
             row = db.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
-            r.require(row is not None, "없는 세션입니다.")
+            r.require(row is not None, "Session not found.")
             previous = db.execute("SELECT * FROM chunks WHERE session_id=? AND sequence=?", (session_id, seq)).fetchone()
             if previous:
                 r.require(previous["midi"] == blob and previous["events"] == event_text and previous["elapsed_ms"] == elapsed,
-                          "이미 저장된 패킷을 다른 내용으로 덮어쓸 수 없습니다.")
+                          "A saved packet cannot be overwritten with different content.")
                 return {"saved_sequence": seq, "duplicate": True}
-            r.require(row["status"] == "recording", "종료된 세션에는 입력을 추가할 수 없습니다.")
+            r.require(row["status"] == "recording", "Input cannot be added to a finished session.")
             count, last = db.execute("SELECT COUNT(*),MAX(elapsed_ms) FROM chunks WHERE session_id=?", (session_id,)).fetchone()
-            r.require(seq == count and elapsed >= (last or 0), "저장 순서가 맞지 않습니다. 이전 패킷부터 다시 전송하세요.")
+            r.require(seq == count and elapsed >= (last or 0), "Packets are out of order. Resend the earlier packets first.")
             db.execute("INSERT INTO chunks VALUES (?,?,?,?,?)", (session_id, seq, blob, event_text, elapsed))
         return {"saved_sequence": seq, "duplicate": False}
 
@@ -233,13 +233,13 @@ class SessionStore:
                 for row in db.execute("SELECT * FROM chunks WHERE session_id=? ORDER BY sequence", (session_id,))]
 
     def finish(self, session_id, expected_chunks, interrupted=False):
-        r.require(type(expected_chunks) is int and expected_chunks >= 0, "패킷 개수가 잘못되었습니다.")
-        r.require(type(interrupted) is bool, "중단 여부가 잘못되었습니다.")
+        r.require(type(expected_chunks) is int and expected_chunks >= 0, "Invalid packet count.")
+        r.require(type(interrupted) is bool, "The interrupted flag must be a boolean.")
         with r.log_lock(self.root), self.database() as db:
             row = db.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
-            r.require(row is not None, "없는 세션입니다.")
+            r.require(row is not None, "Session not found.")
             chunks = self.chunks(db, session_id)
-            r.require(len(chunks) == expected_chunks, "아직 서버에 도착하지 않은 녹음이 있습니다.")
+            r.require(len(chunks) == expected_chunks, "Some recorded input has not reached the server yet.")
             if row["status"] == "recording":
                 summary = measurements(chunks, interrupted)
                 db.execute("UPDATE sessions SET status=?,summary=? WHERE id=?",
@@ -247,10 +247,10 @@ class SessionStore:
             return self.public(db.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone())
 
     def export(self, session_id):
-        r.require(self.path.exists(), "없는 세션입니다.")
+        r.require(self.path.exists(), "Session not found.")
         with self.database() as db:
             row = db.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
-            r.require(row is not None, "없는 세션입니다.")
+            r.require(row is not None, "Session not found.")
             chunks = self.chunks(db, session_id)
             metadata = self.public(row) | {"format": "jazz-midi-1", "target": json.loads(row["target"]),
                                           "events": [e for c in chunks for e in c["events"]]}

@@ -4,8 +4,8 @@ import {Capture, Outbox, uploadPending} from './capture.mjs';
 const $ = id => document.getElementById(id);
 const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, correcting: false, ports: new Map()};
 let outbox, midiAccess, midiSelection = 'all', timer, detailTask;
-const labels = {success: '조건 충족', unmet: '목표 미충족', unknown: '근거 부족'};
-const states = {unknown: '미평가', attempted: '연습 기록', success: '당일 성공', retained: '후일 재현'};
+const labels = {success: 'Criteria met', unmet: 'Target not met', unknown: 'Insufficient evidence'};
+const states = {unknown: 'Unassessed', attempted: 'Attempted', success: 'Same-day success', retained: 'Later retention'};
 function el(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 function option(value, text, disabled = false) { const node = el('option', text); node.value = value; node.disabled = disabled; return node; }
 function clock(ms) { const s = Math.max(0, Math.floor((ms || 0) / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
@@ -22,9 +22,9 @@ async function api(path, body) {
     response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
       headers: body === undefined ? {} : {'Content-Type': 'application/json', 'X-Jazz-Token': ui.data.csrf_token},
       body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(12000)});
-  } catch { throw new Error('서버에 연결하지 못했습니다. 연습 서버가 실행 중인지 확인하고 다시 시도해 주세요.'); }
+  } catch { throw new Error('Could not connect. Check that the practice server is running and try again.'); }
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || '요청을 처리하지 못했습니다.');
+  if (!response.ok) throw new Error(result.error || 'Could not process the request.');
   return result;
 }
 
@@ -32,7 +32,7 @@ const transport = new Transport({
   onBeat: ({bar, beat}) => {
     [...$('beats').children].forEach((node, i) => node.classList.toggle('active', i === beat));
     [...$('chords').children].forEach((node, i) => node.classList.toggle('current', i === bar));
-    $('bar-position').textContent = `${bar + 1}마디 · ${beat + 1}박`;
+    $('bar-position').textContent = `Bar ${bar + 1} · beat ${beat + 1}`;
   },
   onEvent: (type, values, at) => ui.capture?.event(type, values, at),
   onInterrupt: message => {
@@ -53,14 +53,14 @@ async function refresh(keep = false) {
     const lesson = ui.data.exercises.find(x => x.id === (current?.exercise_id || next.exercise_id)) || ui.data.exercises[0];
     ui.selected = {exercise: lesson.id, key: current?.target.key || next.key || ui.data.keys[0], bpm: current?.target.bpm || next.bpm || lesson.targets[ui.data.keys[0]].bpm};
   }
-  $('connection').textContent = '로컬에 연결됨';
+  $('connection').textContent = 'Connected locally';
   $('preview-badge').hidden = !ui.data.preview;
   $('version').textContent = `VERSION ${ui.data.status.version}`;
   $('today-date').textContent = `${ui.data.status.today.date.replaceAll('-', '. ')} / DAILY PRACTICE`;
   const daily = ui.data.status.today;
-  $('daily-time').replaceChildren(document.createTextNode(Number(daily.known_minutes.toFixed(1)).toString()), el('span', ` / ${daily.budget_minutes}분`));
-  $('daily-count').textContent = `${daily.reported_attempts}개 기록${daily.minutes_unknown ? ` · 시간 미확인 ${daily.minutes_unknown}건` : daily.budget_reached ? ' · 오늘도 수고했어요' : ''}`;
-  $('suggestion-note').textContent = daily.budget_reached ? '오늘의 시간 예산을 채웠어요. 마무리해도 좋고, 원하면 더 연습할 수 있습니다.' : next.reason;
+  $('daily-time').replaceChildren(document.createTextNode(Number(daily.known_minutes.toFixed(1)).toString()), el('span', ` / ${daily.budget_minutes} min`));
+  $('daily-count').textContent = `${daily.reported_attempts} reports${daily.minutes_unknown ? ` · duration unknown: ${daily.minutes_unknown}` : daily.budget_reached ? ' · good work today' : ''}`;
+  $('suggestion-note').textContent = daily.budget_reached ? 'You have reached your daily time budget. You can finish here or keep practicing if you like.' : next.reason;
   renderChoices();
   renderLesson(!keep || previous !== current?.id);
   renderHistory();
@@ -79,15 +79,15 @@ function renderChoices() {
   for (const id of ['goal-bpm', 'tempo', 'tempo-range']) { $(id).min = ui.data.minimum_bpm; $(id).max = ui.data.maximum_bpm; }
   ['exercise-select', 'key-select', 'goal-bpm'].forEach(id => $(id).disabled = lock);
   const lesson = ui.data.exercises.find(x => x.id === ui.selected.exercise);
-  $('eligibility').textContent = lock ? '진행 중인 과제의 목표는 보존됩니다. 다음 과제에서 조건을 바꿀 수 있어요.' : lesson.eligible_keys.includes(ui.selected.key) ? '시작 버튼을 누르면 이 조건으로 과제가 발급됩니다.' : `같은 키의 선행 과제 ${lesson.prerequisites.join(', ')}를 먼저 확인해 주세요.`;
+  $('eligibility').textContent = lock ? 'The assigned conditions stay fixed. You can change them for the next task.' : lesson.eligible_keys.includes(ui.selected.key) ? 'Starting practice assigns this task with the selected conditions.' : `First complete the prerequisites in this key: ${lesson.prerequisites.join(', ')}.`;
   const actualKey = $('actual-key').value, actualArrangement = $('actual-arrangement').value;
-  $('actual-key').replaceChildren(option('', '미확인'), ...ui.data.keys.map(key => option(key, key)));
-  $('actual-arrangement').replaceChildren(option('', '미확인'), ...Object.entries(ui.data.arrangements).map(([value, title]) => option(value, title)));
+  $('actual-key').replaceChildren(option('', 'Unknown'), ...ui.data.keys.map(key => option(key, key)));
+  $('actual-arrangement').replaceChildren(option('', 'Unknown'), ...Object.entries(ui.data.arrangements).map(([value, title]) => option(value, title)));
   $('actual-key').value = actualKey;
   $('actual-arrangement').value = actualArrangement;
   const exerciseFilter = $('filter-exercise').value, keyFilter = $('filter-key').value;
-  $('filter-exercise').replaceChildren(option('', '전체 과제'), ...ui.data.exercises.map(x => option(x.id, `${x.id} · ${x.title}`)));
-  $('filter-key').replaceChildren(option('', '모든 키'), ...ui.data.keys.map(k => option(k, k)));
+  $('filter-exercise').replaceChildren(option('', 'All exercises'), ...ui.data.exercises.map(x => option(x.id, `${x.id} · ${x.title}`)));
+  $('filter-key').replaceChildren(option('', 'All keys'), ...ui.data.keys.map(k => option(k, k)));
   $('filter-exercise').value = exerciseFilter;
   $('filter-key').value = keyFilter;
 }
@@ -101,24 +101,24 @@ function target() {
 function renderLesson(resetTempo = false) {
   const current = pending(), t = target();
   const lesson = ui.data.exercises.find(x => x.id === (current?.exercise_id || ui.selected.exercise));
-  $('lesson-kind').textContent = `${current ? '진행 중인 과제' : '다음 과제'} / ${lesson.id}`;
+  $('lesson-kind').textContent = `${current ? 'Current task' : 'Next task'} / ${lesson.id}`;
   $('lesson-title').textContent = t.title;
   $('lesson-phase').textContent = lesson.phase;
   $('lesson-purpose').textContent = t.material.title;
-  $('target-meta').replaceChildren(...[`${t.key} 키`, `목표 ${t.bpm} BPM`, `${t.bars}마디`, '4/4'].map(s => el('span', s)));
+  $('target-meta').replaceChildren(...[`Key ${t.key}`, `Target ${t.bpm} BPM`, `${t.bars} bars`, '4/4'].map(s => el('span', s)));
   let chords = t.playback?.bars.map(b => b.chord);
   if (!chords) chords = t.material.chords.split('|').map(s => s.trim());
   $('chords').replaceChildren(...chords.map((chord, index) => { const box = el('div', undefined, 'chord-box'); box.append(el('small', `${String(index + 1).padStart(2, '0')}`), el('strong', chord)); return box; }));
   $('hand-notes').replaceChildren();
   const rows = [];
-  if (t.bass !== 'none' && t.material.roots) rows.push(['왼손', t.material.roots]);
-  if (t.melody !== 'none' && t.material.melody) rows.push(['오른손', t.material.melody]);
-  if (t.voicing !== 'none' && t.material.guide_tones) rows.push(['오른손', t.material.guide_tones]);
-  if (t.arrangement === 'left-bass-only') rows.push(['오른손', '편안하게 쉬어요']);
-  if (t.arrangement === 'right-melody-only') rows.push(['왼손', '편안하게 쉬어요']);
+  if (t.bass !== 'none' && t.material.roots) rows.push(['Left hand', t.material.roots]);
+  if (t.melody !== 'none' && t.material.melody) rows.push(['Right hand', t.material.melody]);
+  if (t.voicing !== 'none' && t.material.guide_tones) rows.push(['Right hand', t.material.guide_tones]);
+  if (t.arrangement === 'left-bass-only') rows.push(['Right hand', 'Rest comfortably']);
+  if (t.arrangement === 'right-melody-only') rows.push(['Left hand', 'Rest comfortably']);
   for (const [label, text] of rows) { const row = el('div', undefined, 'hand-row'); row.append(el('span', label), el('strong', text)); $('hand-notes').append(row); }
-  $('lesson-instructions').textContent = `${t.instructions} C4는 가운데 도입니다.`;
-  $('criterion-text').textContent = `지정 조건에서 음과 박을 지키며, 멈추지 않고 연속 ${t.criteria.min_clean_runs}회.`;
+  $('lesson-instructions').textContent = `${t.instructions} C4 is middle C.`;
+  $('criterion-text').textContent = `Play ${t.criteria.min_clean_runs} consecutive runs with correct notes, a steady pulse, and no stops under the assigned conditions.`;
   $('skip-btn').hidden = current ? taskSessions(current.id).some(s => s.status === 'recording' || s.summary?.active_ms > 0 || s.summary?.note_ons > 0) : !lesson.eligible_keys.includes(ui.selected.key);
   $('manual-record-btn').hidden = !current;
   $('pad-toggle').disabled = !t.playback;
@@ -135,10 +135,10 @@ function updateTransport() {
   const recording = ui.capture, recovery = openSessions().length > 0;
   const eligible = pending() || ui.data.exercises.find(x => x.id === ui.selected.exercise).eligible_keys.includes(ui.selected.key);
   $('practice-btn').disabled = ui.busy || recovery || !eligible || Boolean(recording?.ended);
-  $('practice-btn').textContent = recording ? transport.playing ? '일시정지' : recording.ended ? '저장 대기' : '이어하기' : '연습 시작';
+  $('practice-btn').textContent = recording ? transport.playing ? 'Pause' : recording.ended ? 'Waiting to save' : 'Resume' : 'Start practice';
   $('finish-btn').disabled = ui.busy || !recording;
-  $('finish-btn').textContent = recording?.ended ? '저장 재시도' : '마치기';
-  $('transport-state').textContent = recording ? transport.playing ? '연습 중' : recording.ended ? '저장 대기' : '잠시 쉬는 중' : '준비';
+  $('finish-btn').textContent = recording?.ended ? 'Retry save' : 'Finish';
+  $('transport-state').textContent = recording ? transport.playing ? 'Practicing' : recording.ended ? 'Waiting to save' : 'Paused' : 'Ready';
   $('manual-record-btn').disabled = Boolean(recording) || recovery || ui.busy;
   $('skip-btn').disabled = Boolean(recording) || recovery || ui.busy;
 }
@@ -147,15 +147,15 @@ function registerPort(port) {
   if (!ui.capture || ui.ports.has(port.id)) return;
   const index = ui.ports.size;
   ui.ports.set(port.id, index);
-  ui.capture.event('device', {index, name: port.name || '이름 없는 입력', manufacturer: port.manufacturer || '', id: port.id});
+  ui.capture.event('device', {index, name: port.name || 'Unnamed input', manufacturer: port.manufacturer || '', id: port.id});
 }
 function selectedPorts() { return midiAccess ? [...midiAccess.inputs.values()].filter(p => p.state === 'connected' && (midiSelection === 'all' || midiSelection === p.id)) : []; }
 function midiBindings() {
   if (!midiAccess) return;
   const available = [...midiAccess.inputs.values()].filter(p => p.state === 'connected');
   $('midi-input').hidden = false;
-  $('midi-input').replaceChildren(option('all', '연결된 모든 입력 기록'), option('none', 'MIDI 기록 끄기'), ...available.map(p => option(p.id, p.name || 'MIDI 입력')));
-  if (![...$('midi-input').options].some(o => o.value === midiSelection)) $('midi-input').append(option(midiSelection, '선택한 장치 · 연결 끊김'));
+  $('midi-input').replaceChildren(option('all', 'Record all connected inputs'), option('none', 'Turn MIDI recording off'), ...available.map(p => option(p.id, p.name || 'MIDI input')));
+  if (![...$('midi-input').options].some(o => o.value === midiSelection)) $('midi-input').append(option(midiSelection, 'Selected device · disconnected'));
   $('midi-input').value = midiSelection;
   for (const port of midiAccess.inputs.values()) {
     if (selectedPorts().includes(port)) registerPort(port);
@@ -167,13 +167,13 @@ function midiBindings() {
       if (ui.capture && !ui.capture.ended) {
         registerPort(port);
         ui.capture.midi(message.data, ui.ports.get(port.id), message.timeStamp);
-        $('midi-status').textContent = `입력 기록 중 · 건반 ${ui.capture.noteCount}회`;
+        $('midi-status').textContent = `Recording input · ${ui.capture.noteCount} note-ons`;
       }
     };
   }
   $('midi-light').classList.toggle('connected', selectedPorts().length > 0);
-  $('midi-status').textContent = selectedPorts().length ? `${selectedPorts().length}개 입력 준비 · 연습 중 원본을 기록합니다.` : '연결된 입력이 없습니다. 메트로놈은 계속 사용할 수 있어요.';
-  $('midi-connect').textContent = '다시 검색';
+  $('midi-status').textContent = selectedPorts().length ? `${selectedPorts().length} input(s) ready · raw input is recorded during practice.` : 'No inputs connected. The metronome is still available.';
+  $('midi-connect').textContent = 'Refresh';
 }
 
 async function startOrPause() {
@@ -211,7 +211,7 @@ async function startOrPause() {
     transport.setPad($('pad-toggle').checked);
     ui.capture.event('play', {bpm: Number($('tempo').value)});
     transport.start(target().playback, Number($('tempo').value));
-    $('save-status').textContent = '기록 중 · 3초마다 자동 저장';
+    $('save-status').textContent = 'Recording · autosaving every 3 seconds';
   } catch (error) {
     fail(error);
     if (!ui.capture) { try { await refresh(true); } catch {} }
@@ -226,7 +226,7 @@ async function finish() {
     if (transport.playing) { transport.pause(); ui.capture.event('pause'); }
     await ui.capture.stop();
     ui.capture = null; clearInterval(timer);
-    $('save-status').textContent = '연습 저장 완료';
+    $('save-status').textContent = 'Practice saved';
     await refresh(true);
     showRecord(ui.data.history.find(t => t.id === id));
   } catch (error) { fail(error); }
@@ -256,8 +256,8 @@ function showRecord(task, correcting = false) {
   ui.recordTask = task; ui.correcting = correcting;
   $('record-form').reset();
   for (const id of ['actual-key', 'actual-arrangement', 'actual-bars']) $(id).disabled = false;
-  $('record-title').textContent = correcting ? `${task.exercise_id} 기록을 정정합니다` : '오늘의 연주를 남겨볼까요?';
-  $('save-report').textContent = correcting ? '정정 내용 저장' : '기록 저장 · 피드백 보기';
+  $('record-title').textContent = correcting ? `Correct the report for ${task.exercise_id}` : 'How did your practice go?';
+  $('save-report').textContent = correcting ? 'Save correction' : 'Save report · view feedback';
   $('record-panel').hidden = false;
   $('feedback-panel').hidden = true;
   $('measurements').replaceChildren();
@@ -268,16 +268,16 @@ function showRecord(task, correcting = false) {
   if (summaries.length) {
     const elapsed = summaries.reduce((n, s) => n + s.elapsed_ms, 0);
     const completeSpans = summaries.filter(s => s.input_span_ms !== null);
-    $('measurements').append(el('span', `세션 경과 ${clock(elapsed)}`), el('span', `저장된 연습 ${summaries.length}회`));
-    if (completeSpans.length) $('measurements').append(el('span', `측정 가능한 MIDI 구간 ${clock(completeSpans.reduce((n, s) => n + s.input_span_ms, 0))}`));
-    if (summaries.some(s => s.capture_warnings.length)) $('measurements').append(el('span', '입력 누락·중단 표시 있음'));
+    $('measurements').append(el('span', `Elapsed ${clock(elapsed)}`), el('span', `${summaries.length} saved session(s)`));
+    if (completeSpans.length) $('measurements').append(el('span', `Measured MIDI span ${clock(completeSpans.reduce((n, s) => n + s.input_span_ms, 0))}`));
+    if (summaries.some(s => s.capture_warnings.length)) $('measurements').append(el('span', 'Missing input or interruptions detected'));
     const last = [...summaries].reverse().find(s => s.last_note_bpm !== null || s.last_setting_bpm !== null);
     if (last) $('actual-bpm').value = last.last_note_bpm ?? last.last_setting_bpm;
     if (sessions.every(s => s.status === 'finished')) {
       $('actual-minutes').value = (summaries.reduce((n, s) => n + (s.input_span_ms ?? s.active_ms), 0) / 60000).toFixed(3);
     }
-    $('prefill-note').textContent = 'BPM은 마지막 연주 시점의 메트로놈 설정값입니다. 시간은 앞뒤를 뺀 MIDI 구간을 우선하며, 측정할 수 없으면 일시정지를 뺀 세션 시간을 제안합니다. 의도적인 쉼과 실제 수행 조건을 확인해 주세요. 수집이 중단된 세션의 시간은 직접 입력합니다.';
-  } else $('prefill-note').textContent = '자동 측정된 연습이 없습니다. 기억나는 실제 조건만 입력하고, 모르는 항목은 미확인으로 두세요.';
+    $('prefill-note').textContent = 'BPM is the metronome setting at the last note, or the last playback setting without MIDI. Duration uses the MIDI span with leading and trailing inactivity removed, or playback time excluding pauses when that span is unknown. Check rests and actual conditions. Enter duration manually for interrupted sessions.';
+  } else $('prefill-note').textContent = 'No measured sessions are available. Enter only the actual conditions you remember and leave unknown values unset.';
   if (correcting) {
     const report = task.report, actual = JSON.parse(report.actual_json), checks = JSON.parse(report.checks_json);
     $('practice-date').value = report.practice_date;
@@ -292,7 +292,7 @@ function showRecord(task, correcting = false) {
     $('clean-runs').value = report.clean_runs;
     $('difficulty').value = report.difficulty || 'unknown';
     $('raw-note').value = report.raw_note;
-    $('prefill-note').textContent = '이전 실제 조건과 원문을 불러왔습니다. 수정 전 기록도 보존됩니다.';
+    $('prefill-note').textContent = 'The previous conditions and original note are loaded. Earlier reports will be preserved.';
   }
   $('record-panel').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
@@ -338,12 +338,12 @@ function renderHistory() {
     return (!exercise || task.exercise_id === exercise) && (!key || actualKey === key) && (!from || day >= from) && (!to || day <= to);
   });
   $('history-list').replaceChildren();
-  if (!tasks.length) { const empty = el('div', undefined, 'empty-state'); empty.append(el('h3', '아직 이곳은 빈 악보예요.'), el('p', '연습을 시작하면 조건과 메모가 차곡차곡 쌓입니다.')); $('history-list').append(empty); }
+  if (!tasks.length) { const empty = el('div', undefined, 'empty-state'); empty.append(el('h3', 'A fresh page in your journal.'), el('p', 'Your practice conditions and notes will appear here.')); $('history-list').append(empty); }
   for (const task of tasks) {
     const button = el('button', undefined, 'history-item'), left = el('div');
     const day = task.report?.practice_date || task.assigned_at.slice(0, 10);
-    left.append(el('small', `${day} / ${task.exercise_id}`), el('h3', task.target.title), el('p', `${task.target.key} · 목표 ${task.target.bpm} BPM${task.report?.actual_minutes ? ` · ${Number(Number(task.report.actual_minutes).toFixed(2))}분` : ''}`));
-    button.append(left, el('span', task.cancelled ? '건너뜀' : task.report ? labels[task.outcome] : '진행 중', `tag ${task.outcome}`));
+    left.append(el('small', `${day} / ${task.exercise_id}`), el('h3', task.target.title), el('p', `${task.target.key} · Target ${task.target.bpm} BPM${task.report?.actual_minutes ? ` · ${Number(Number(task.report.actual_minutes).toFixed(2))} min` : ''}`));
+    button.append(left, el('span', task.cancelled ? 'Skipped' : task.report ? labels[task.outcome] : 'In progress', `tag ${task.outcome}`));
     button.addEventListener('click', () => showDetail(task));
     $('history-list').append(button);
   }
@@ -352,7 +352,7 @@ function renderGoals() {
   $('goals').replaceChildren(...ui.data.status.goals.map(goal => {
     const lesson = ui.data.exercises.find(x => x.id === goal.exercise_id), card = el('div', undefined, 'card goal-card');
     const top = el('div', undefined, 'section-top'); top.append(el('span', goal.exercise_id, 'eyebrow'), el('span', states[goal.state], `tag ${['success','retained'].includes(goal.state) ? 'success' : 'unknown'}`));
-    card.append(top, el('h3', lesson.title), el('p', `${goal.key} · ${goal.bpm} BPM · ${goal.attempts}회 기록${goal.last_success ? ` · 마지막 성공 ${goal.last_success}` : ''}`));
+    card.append(top, el('h3', lesson.title), el('p', `${goal.key} · ${goal.bpm} BPM · ${goal.attempts} reports${goal.last_success ? ` · last success ${goal.last_success}` : ''}`));
     return card;
   }));
 }
@@ -360,27 +360,27 @@ function showDetail(task) {
   detailTask = task;
   const box = $('history-detail'); box.replaceChildren(el('h2', task.target.title), el('p', `${task.exercise_id} · ${task.report?.practice_date || task.assigned_at.slice(0, 10)}`, 'subtle'));
   const grid = el('div', undefined, 'detail-grid');
-  const intended = el('div'); intended.append(el('h3', '발급 조건'), el('div', `${task.target.key} · ${task.target.bpm} BPM · ${task.target.bars}마디`), el('div', ui.data.arrangements[task.target.arrangement] || task.target.arrangement));
-  const actualBox = el('div'); actualBox.append(el('h3', '실제 보고'));
+  const intended = el('div'); intended.append(el('h3', 'Assigned conditions'), el('div', `${task.target.key} · ${task.target.bpm} BPM · ${task.target.bars} bars`), el('div', ui.data.arrangements[task.target.arrangement] || task.target.arrangement));
+  const actualBox = el('div'); actualBox.append(el('h3', 'Reported performance'));
   if (task.report) {
     const a = JSON.parse(task.report.actual_json);
-    actualBox.append(el('div', `${a.key || '키 미확인'} · ${a.bpm ?? '미확인'} BPM · ${a.bars ?? '미확인'}마디`), el('div', ui.data.arrangements[a.arrangement] || '손 구성 미확인'), el('div', `${labels[task.outcome]} · 연속 성공 ${task.report.clean_runs || '미확인'}회`));
-  } else actualBox.append(el('div', task.cancelled ? '연습 전 취소' : '아직 결과를 기록하지 않았어요'));
+    actualBox.append(el('div', `${a.key || 'Key unknown'} · ${a.bpm ?? 'Unknown'} BPM · ${a.bars ?? 'Unknown'} bars`), el('div', ui.data.arrangements[a.arrangement] || 'Hand arrangement unknown'), el('div', `${labels[task.outcome]} · Consecutive successful runs: ${task.report.clean_runs || 'Unknown'}`));
+  } else actualBox.append(el('div', task.cancelled ? 'Cancelled before practice' : 'No result reported yet'));
   grid.append(intended, actualBox); box.append(grid);
   box.append(el('p', task.report?.raw_note || task.reason, 'raw-note'));
   for (const session of taskSessions(task.id)) {
     const row = el('div', undefined, 'session-row');
-    row.append(el('div', `연습 ${session.created_at.slice(0, 16).replace('T', ' ')} · ${session.status === 'recording' ? '저장 중' : session.status === 'interrupted' ? '중단됨' : '저장 완료'}`));
+    row.append(el('div', `Practice ${session.created_at.slice(0, 16).replace('T', ' ')} · ${session.status === 'recording' ? 'Saving' : session.status === 'interrupted' ? 'Interrupted' : 'Saved'}`));
     if (session.summary) {
       const s = session.summary;
-      row.append(el('div', `세션 ${clock(s.elapsed_ms)} · MIDI 구간 ${s.input_span_ms === null ? '미확인' : clock(s.input_span_ms)} · 마지막 설정 ${s.last_note_bpm ?? s.last_setting_bpm ?? '미확인'} BPM`));
+      row.append(el('div', `Session ${clock(s.elapsed_ms)} · MIDI span ${s.input_span_ms === null ? 'Unknown' : clock(s.input_span_ms)} · Last setting ${s.last_note_bpm ?? s.last_setting_bpm ?? 'Unknown'} BPM`));
     }
-    for (const [suffix, text] of [['midi', 'MIDI 원본 받기 (.jpm)'], ['metadata', '세션 정보 받기 (.json)']]) { const a = el('a', text); a.href = `/api/recordings/${session.id}/${suffix}`; a.download = ''; row.append(a); }
+    for (const [suffix, text] of [['midi', 'Download raw MIDI (.jpm)'], ['metadata', 'Download session info (.json)']]) { const a = el('a', text); a.href = `/api/recordings/${session.id}/${suffix}`; a.download = ''; row.append(a); }
     box.append(row);
   }
   if (task.revisions.length > 1) {
-    const details = el('details', undefined, 'revision'); details.append(el('summary', `원본과 정정 이력 ${task.revisions.length}건`));
-    for (const revision of task.revisions) { details.append(el('small', `${revision.recorded_at.slice(0, 16).replace('T', ' ')} · ${revision.event_type === 'reported' ? '최초 기록' : '정정'}`), el('p', revision.raw_note)); }
+    const details = el('details', undefined, 'revision'); details.append(el('summary', `Original and corrections: ${task.revisions.length} reports`));
+    for (const revision of task.revisions) { details.append(el('small', `${revision.recorded_at.slice(0, 16).replace('T', ' ')} · ${revision.event_type === 'reported' ? 'Original report' : 'Correction'}`), el('p', revision.raw_note)); }
     box.append(details);
   }
   $('correct-btn').hidden = !task.report;
@@ -409,20 +409,20 @@ for (const id of ['exercise-select', 'key-select', 'goal-bpm']) $(id).addEventLi
 });
 $('midi-connect').addEventListener('click', async () => {
   clearError();
-  if (!navigator.requestMIDIAccess) { $('midi-status').textContent = 'Web MIDI를 지원하지 않는 브라우저입니다. MIDI 없이 연습하거나 지원 브라우저에서 연결해 주세요.'; return; }
+  if (!navigator.requestMIDIAccess) { $('midi-status').textContent = 'This browser does not support Web MIDI. Practice without MIDI or connect using a supported browser.'; return; }
   try {
     const first = !midiAccess;
     midiAccess ||= await navigator.requestMIDIAccess({sysex: false});
-    if (first && ui.capture) ui.capture.event('disconnect', {reason: '연습 도중 MIDI 연결 · 이전 구간은 미수집'});
+    if (first && ui.capture) ui.capture.event('disconnect', {reason: 'MIDI connected during practice; earlier input was not captured'});
     midiAccess.onstatechange = event => {
       if (event.port.type === 'input' && event.port.state === 'disconnected' && (midiSelection === 'all' || midiSelection === event.port.id)) ui.capture?.event('disconnect', {id: event.port.id});
       midiBindings();
     };
     midiBindings();
-  } catch { $('midi-status').textContent = 'MIDI 접근이 허용되지 않았습니다. 브라우저 권한을 확인해 주세요. 나머지 연습 기능은 사용할 수 있습니다.'; }
+  } catch { $('midi-status').textContent = 'MIDI access was denied. Check browser permissions. Other practice features are still available.'; }
 });
 $('midi-input').addEventListener('change', event => {
-  if (ui.capture && midiSelection !== event.target.value) ui.capture.event('disconnect', {reason: '기록 입력 변경'});
+  if (ui.capture && midiSelection !== event.target.value) ui.capture.event('disconnect', {reason: 'Recording input changed'});
   midiSelection = event.target.value; midiBindings();
 });
 $('skip-btn').addEventListener('click', () => { $('skip-reason').value = ''; $('skip-dialog').showModal(); });
@@ -454,4 +454,4 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('beforeunload', event => { if (ui.capture) { event.preventDefault(); event.returnValue = ''; } });
 window.addEventListener('pagehide', () => { if (ui.capture && !ui.capture.ended) ui.capture.checkpoint().catch(() => {}); transport.pause(); });
-refresh().catch(error => { $('connection').textContent = '연결 확인 필요'; fail(error); });
+refresh().catch(error => { $('connection').textContent = 'Check connection'; fail(error); });
