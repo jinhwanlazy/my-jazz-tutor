@@ -43,6 +43,14 @@ try {
   const visible=selector=>page.locator(selector).waitFor({state:'visible'});
   const hidden=selector=>page.locator(selector).waitFor({state:'hidden'});
   const choose=async id=>{await page.locator('#chooser').evaluate(e=>e.open=true);await page.locator('#exercise-select').selectOption(id);};
+  const changeLanguage = async language => {
+    await page.locator('[data-view="settings"]').click();
+    await page.locator('#language-select').selectOption(language);
+    await page.waitForFunction(language => document.documentElement.lang === language &&
+      document.querySelector('#connection').textContent === (language === 'ko' ? '로컬에 연결됨' : 'Connected locally'), language);
+    await page.locator('[data-view="practice"]').click();
+    await page.waitForFunction(language => /[가-힣]/.test(document.querySelector('#lesson-title').textContent) === (language === 'ko'), language);
+  };
   await page.goto(url);
   await page.waitForFunction(()=>document.querySelector('#connection').textContent==='Connected locally');
   assert.equal((await state()).history.length,0);
@@ -54,6 +62,15 @@ try {
   }
   await choose('E01');
   await page.screenshot({path:join(project,'build/browser/desktop.png'),fullPage:true});
+  await changeLanguage('ko');
+  assert.match(await page.locator('#criterion-text').textContent(), /연속 2회/);
+  assert.equal((await state()).history.length, 0);
+  await page.reload();
+  await page.waitForFunction(()=>document.documentElement.lang==='ko' && document.querySelector('#connection').textContent==='로컬에 연결됨');
+  assert.match(await page.locator('#lesson-title').textContent(), /왼손/);
+  await page.screenshot({path:join(project,'build/browser/korean.png'),fullPage:true});
+  await changeLanguage('en');
+
   await choose('E03');assert.equal(await page.locator('#practice-btn').isEnabled(),false);
   await choose('E01');
   await page.locator('#midi-connect').click();
@@ -67,6 +84,14 @@ try {
   await page.locator('#practice-btn').click();
   await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
   assert.equal(await page.locator('#tempo').inputValue(),'65');
+  const activeSession = (await state()).sessions[0].id;
+  await changeLanguage('ko');
+  assert.equal(await page.locator('#practice-btn').textContent(), '일시정지');
+  assert.equal((await state()).sessions.length, 1);
+  assert.equal((await state()).sessions[0].id, activeSession);
+  assert.equal(await page.locator('#tempo').inputValue(), '65');
+  await changeLanguage('en');
+
   await page.waitForTimeout(150);
   await page.evaluate(()=>window.sendMidi([0x90,60,100]));
   await page.waitForTimeout(180);
@@ -102,7 +127,15 @@ try {
   for(const id of ['notes-correct','steady-pulse','no-stops']) await page.locator('#'+id).selectOption('true');
   await page.locator('#clean-runs').fill('2');await page.locator('#difficulty').selectOption('easy');
   const original='브라우저 테스트 원문, "따옴표"\n<img src=x onerror=alert(1)> 그대로';
-  await page.locator('#raw-note').fill(original);await page.locator('#save-report').click();
+  await page.locator('#raw-note').fill(original);
+  await changeLanguage('ko');
+  assert.equal(await page.locator('#raw-note').inputValue(), original);
+  assert.equal(await page.locator('#clean-runs').inputValue(), '2');
+  assert.equal(await page.locator('#followed-target').isChecked(), true);
+  assert.equal(await page.locator('#notes-correct').inputValue(), 'true');
+  assert.match(await page.locator('#assessment-help').textContent(), /구간 전체/);
+  await changeLanguage('en');
+  await page.locator('#save-report').click();
   await visible('#feedback-panel');
   assert.match(await page.locator('#feedback-title').textContent(),/met the assigned criteria/);
   data=await state();assert.equal(data.status.today.reported_attempts,1);assert.equal(data.history[0].report.raw_note,original);
@@ -122,12 +155,12 @@ try {
   data=await state();assert.equal(data.history[0].cancelled,true);assert.equal(data.status.today.reported_attempts,1);
   // An unavailable server leaves MIDI in IndexedDB; reload sends it once and marks interruption.
   await choose('E02');
-  await page.route('**/api/sessions/chunk',route=>route.abort());
+  await page.route('**/api/sessions/chunk*',route=>route.abort());
   await page.locator('#practice-btn').click();
   await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
   await page.evaluate(()=>window.sendMidi([0x90,67,100]));
   await page.waitForTimeout(3300);
-  await page.unroute('**/api/sessions/chunk');
+  await page.unroute('**/api/sessions/chunk*');
   await page.reload();await visible('#recovery');
   await page.locator('#recover-btn').click();await hidden('#recovery');await visible('#record-panel');
   assert.equal(await page.locator('#actual-minutes').inputValue(),'');
@@ -138,6 +171,17 @@ try {
   await page.locator('#raw-note').fill('테스트: 복구된 중단 연습');await page.locator('#save-report').click();
   await visible('#feedback-panel');
   assert.equal((await state()).status.today.reported_attempts,2);
+  assert.equal((await state()).history[0].outcome, 'unknown');
+  await changeLanguage('ko');
+  assert.match(await page.locator('#feedback-title').textContent(), /판정 보류/);
+  await page.locator('[data-view="history"]').click();
+  await page.locator('.history-item').first().click();
+  assert.match(await page.locator('.assessment-details').textContent(), /연속 성공 횟수/);
+  assert.match(await page.locator('.assessment-details').textContent(), /손 구성/);
+  assert.equal(await page.locator('#history-detail .raw-note').textContent(), '테스트: 복구된 중단 연습');
+  await page.locator('#dialog-close').click();
+  await changeLanguage('en');
+
   await page.locator('[data-view="history"]').click();
   await page.locator('#filter-key').selectOption('F');assert.equal(await page.locator('.history-item').count(),0);
   await page.locator('#filter-key').selectOption('');assert.equal(await page.locator('.history-item').count(),3);
@@ -145,10 +189,13 @@ try {
   await page.locator('[data-view="progress"]').click();assert.equal(await page.locator('.goal-card').count(),6);
   await page.locator('[data-view="practice"]').click();
   await page.setViewportSize({width:390,height:844});
-  await page.screenshot({path:join(project,'build/browser/mobile.png'),fullPage:true});
-  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+  for (const language of ['en', 'ko']) {
+    await changeLanguage(language);
+    await page.screenshot({path:join(project,`build/browser/mobile-${language}.png`),fullPage:true});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+  }
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,checks:['empty read-only state','prerequisites','MIDI permission denial','tempo + pad','raw MIDI + sustain trim','report + feedback','correction history','same-day skip','offline + reload recovery','filters + goals','mobile layout'],screenshots:'workflow/build/browser'}));
+  console.log(JSON.stringify({passed:true,checks:['language preference + reload','live language switch preserves capture and draft','missing-evidence explanations','empty read-only state','prerequisites','MIDI permission denial','tempo + pad','raw MIDI + sustain trim','report + feedback','correction history','same-day skip','offline + reload recovery','filters + goals','mobile layout'],screenshots:'workflow/build/browser'}));
 } finally {
   if(browser) await browser.close();
   const exited=once(server,'exit');server.kill('SIGTERM');await exited;

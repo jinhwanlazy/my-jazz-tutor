@@ -94,6 +94,37 @@ class StoreTests(unittest.TestCase):
     def start(self):
         return self.store.start(self.task)['id']
 
+    def test_language_switch_preserves_reports_and_names_missing_conditions(self):
+        note = 'Original user wording: 한국어 and English.'
+        self.app.post('/api/report', {'task_id': self.task, 'result': {
+            'raw_note': note, 'actual': {'bpm': 72},
+            'checks': dict.fromkeys(r.CHECKS, True)}})
+        before = (self.root / 'practice.csv').read_bytes()
+        english, korean = self.app.state('en'), self.app.state('ko')
+        for state in (english, korean):
+            self.assertEqual(state['history'][0]['report']['raw_note'], note)
+            self.assertEqual(state['history'][0]['outcome'], 'unknown')
+            self.assertEqual(state['status']['reported_attempts'], 1)
+            self.assertEqual(state['status']['goals'][0]['state'], 'attempted')
+        self.assertEqual(english['history'][0]['feedback']['title'], 'Practice saved · assessment pending')
+        self.assertIn('연속 성공 횟수', ' '.join(korean['history'][0]['feedback']['details']))
+        self.assertIn('손 구성', ' '.join(korean['history'][0]['feedback']['details']))
+        self.assertIn('Bar count', ' '.join(english['history'][0]['feedback']['details']))
+        self.assertEqual(korean['exercises'][0]['title'], self.data['exercises'][0]['title'])
+        self.assertEqual(english['status']['goals'], korean['status']['goals'])
+        self.assertEqual((self.root / 'practice.csv').read_bytes(), before)
+
+    def test_missing_run_count_is_not_a_failure_or_an_inferred_success(self):
+        saved = self.app.post('/api/report', {'task_id': self.task, 'result': {
+            'raw_note': 'Synthetic check', 'followed_target': True,
+            'checks': dict.fromkeys(r.CHECKS, True)}}, 'ko')
+        self.assertEqual(saved['outcome'], 'unknown')
+        details = ' '.join(saved['feedback']['details'])
+        self.assertIn('연속 성공 횟수', details)
+        self.assertNotIn('아직 확인되지 않은 조건', details)
+        self.assertIn('판정 보류', saved['feedback']['title'])
+        self.assertEqual(r.read_events(self.root)[-1]['clean_runs'], '')
+
     def test_english_presentation_preserves_snapshots_notes_and_progress(self):
         canonical = copy.deepcopy(self.data)
         assignment = r.read_events(self.root)[0]
@@ -221,7 +252,7 @@ class StoreTests(unittest.TestCase):
         source, revision = git_fixture.copy_source(self.root)
         release = publish.publish(source, self.root)['installed']
         manifest = json.loads((Path(release) / 'manifest.json').read_text())
-        for asset in ['sessions.py', 'webapp.html', 'webapp.js', 'audio.mjs', 'capture.mjs']:
+        for asset in ['sessions.py', 'webapp.html', 'webapp.js', 'audio.mjs', 'capture.mjs', 'i18n.mjs', 'translations.json']:
             self.assertIn(asset, manifest['sha256'])
         publish.runtime.activate(self.root, manifest)
         installed = Application(self.root, self.data, source=release)
@@ -260,13 +291,27 @@ class HTTPTests(unittest.TestCase):
             client.close()
 
     def test_load_is_read_only_and_static_paths_are_allowlisted(self):
-        for path in ['/', '/webapp.js', '/audio.mjs', '/api/state']:
+        for path in ['/', '/webapp.js', '/audio.mjs', '/api/state', '/i18n.mjs', '/translations.json']:
             status, headers, body = self.request('GET', path)
             self.assertEqual(status, 200)
             self.assertIn('Content-Security-Policy', headers)
         self.assertFalse((self.root / 'practice.csv').exists())
         self.assertFalse((self.root / 'sessions.sqlite3').exists())
         self.assertEqual(self.request('GET', '/../practice.csv')[0], 404)
+
+    def test_language_queries_localize_builtins_without_creating_evidence(self):
+        for language in ['en', 'ko', 'invalid']:
+            status, _, body = self.request('GET', '/api/state?lang=' + language)
+            self.assertEqual(status, 200)
+            state = json.loads(body)
+            self.assertEqual(state['language'], 'ko' if language == 'ko' else 'en')
+            if language == 'ko':
+                self.assertRegex(state['exercises'][0]['title'], r'[가-힣]')
+                self.assertRegex(state['status']['next']['reason'], r'[가-힣]')
+            else:
+                self.assertNotRegex(json.dumps(state['exercises'], ensure_ascii=False), r'[가-힣]')
+        self.assertFalse((self.root / 'practice.csv').exists())
+        self.assertFalse((self.root / 'sessions.sqlite3').exists())
 
     def test_origin_host_token_and_nonfinite_json_are_rejected(self):
         headers = {'Content-Type': 'application/json', 'X-Jazz-Token': self.server.app.token}

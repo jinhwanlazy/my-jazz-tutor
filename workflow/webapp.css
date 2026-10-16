@@ -29,7 +29,7 @@ select{cursor:pointer}
 .brand small{display:block;font-size:10px;letter-spacing:0;color:var(--muted);font-weight:400;margin-top:5px}
 .sidebar nav{display:grid;gap:9px;margin-top:55px}
 .nav-button{display:flex;gap:13px;border:0;background:transparent;text-align:left;padding:14px 16px;border-radius:10px;font-size:14px;color:#6f776a}
-.nav-button span{font-size:17px;line-height:19px;width:18px;text-align:center}
+.nav-button>span[aria-hidden]{font-size:17px;line-height:19px;width:18px;text-align:center}
 .nav-button.active{background:#dfe6d9;color:#2a503d;font-weight:650}
 .nav-button:hover{background:#e4e8de}
 .sidebar-bottom{margin-top:auto;padding:20px 14px 0;color:#8a8c7d;font-size:12px;line-height:1.9}
@@ -215,7 +215,7 @@ h1{font-size:30px}
 .brand small{display:none}
 .sidebar nav{display:flex;gap:3px;margin:0}
 .nav-button{padding:9px 10px;font-size:11px;border-radius:7px}
-.nav-button span{display:none}
+.nav-button>span[aria-hidden]{display:none}
 .sidebar-bottom{display:none}
 main{margin-left:0;padding:0 17px}
 .topbar{height:58px}
@@ -270,3 +270,10 @@ dialog{padding:23px 20px}
 .save-warning{color:#f0c88a!important}
 .switch-label input:disabled+.switch{opacity:.4;cursor:not-allowed}
 
+
+.settings-card{max-width:560px}
+.settings-card .field-note{margin-bottom:0}
+.assessment-details{font-size:13px;line-height:1.8;padding:16px 0;border-top:1px solid var(--border)}
+.assessment-details h3{font-size:14px;margin-bottom:8px}
+.assessment-details p{margin-bottom:8px}
+@media(max-width:580px){.sidebar{flex-wrap:wrap;gap:10px}.sidebar nav{flex:1;justify-content:flex-end}.nav-button{padding:8px 7px;font-size:10px}}

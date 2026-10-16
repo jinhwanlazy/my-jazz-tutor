@@ -8,41 +8,52 @@ import secrets
 import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 import webbrowser
 
 import review as r
 from sessions import SessionStore
 
 ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "text/javascript",
-          "audio.mjs": "text/javascript", "capture.mjs": "text/javascript"}
+          "audio.mjs": "text/javascript", "capture.mjs": "text/javascript",
+          "i18n.mjs": "text/javascript", "translations.json": "application/json"}
 
 
-def feedback(task):
+def feedback(task, language="en"):
+    text = lambda message, **values: r.web_text(message, language, **values)
     result = r.outcome(task)
     report, target = task["report"], task["target"]
     if report is None:
-        return {"title": "No result reported yet.", "details": []}
+        return {"title": text("No result reported yet."), "details": []}
     actual, checks = json.loads(report["actual_json"]), json.loads(report["checks_json"])
     details = []
     labels = {"notes_correct": "Notes", "steady_pulse": "Steady pulse", "no_stops": "No stops"}
     for key, label in labels.items():
         if checks.get(key) is not True:
-            details.append(f"{label}: {'Reported as unmet' if checks.get(key) is False else 'Not yet confirmed'}")
+            details.append(text("{label}: {state}", label=text(label),
+                                state=text("Reported as unmet" if checks.get(key) is False else "Not yet confirmed")))
     if not report["clean_runs"]:
-        details.append("The number of consecutive successful runs is still unknown.")
+        details.append(text("The number of consecutive successful runs is still unknown."))
     elif float(report["clean_runs"]) < target["criteria"]["min_clean_runs"]:
-        details.append(f"The requirement of {target['criteria']['min_clean_runs']} consecutive successful runs has not been met yet.")
-    if any(actual.get(k) is None for k in r.SPEC):
-        details.append("Some actual practice conditions are still unconfirmed.")
+        details.append(text("The requirement of {runs} consecutive successful runs has not been met yet.",
+                            runs=target['criteria']['min_clean_runs']))
+    fields = {"key": "Key", "bpm": "Tempo", "bars": "Bar count", "arrangement": "Hand arrangement",
+              "rhythm": "Rhythm", "bass": "Bass", "voicing": "Voicing", "melody": "Melody",
+              "material_id": "Practice material"}
+    missing = [text(fields[key]) for key in r.SPEC if actual.get(key) is None]
+    if missing:
+        details.append(text("Unconfirmed conditions: {fields}.", fields=", ".join(missing)))
+        details.append(text("If you followed the assigned conditions, confirm that in the report form."))
     if any(actual.get(k) is not None and
            (actual[k] < target[k] if k == "bpm" else actual[k] != target[k]) for k in r.SPEC):
-        details.append("Actual conditions differ from the assignment. Your reported practice has been preserved.")
+        details.append(text("Actual conditions differ from the assignment. Your reported practice has been preserved."))
     if result == "success":
-        details = ["Your self-report meets the assigned criteria. You can continue to another exercise today.",
-                   "Later retention and MIDI performance verification are separate observations."]
-    return {"title": {"success": "You met the assigned criteria", "unmet": "Adjust your next attempt",
-                       "unknown": "The confirmed details are recorded"}[result],
+        details = [text("Your self-report meets the assigned criteria. You can continue to another exercise today."),
+                   text("Later retention and MIDI performance verification are separate observations.")]
+    if result == "unknown":
+        details.insert(0, text("This practice is recorded. Add any missing details you remember to assess the target."))
+    return {"title": text({"success": "You met the assigned criteria", "unmet": "Adjust your next attempt",
+                          "unknown": "Practice saved · assessment pending"}[result]),
             "details": details, "evidence": "self-report"}
 
 
@@ -65,7 +76,7 @@ class Application:
             r.require(marker.exists() and json.loads(marker.read_text()).get("revision") == self.revision,
                       "The active runtime has changed. Restart the server.")
 
-    def state(self):
+    def state(self, language="en"):
         events = r.read_events(self.root)
         tasks = r.records(events)
         lessons = []
@@ -73,29 +84,31 @@ class Application:
             eligible = [key for key in self.data["allowed_keys"]
                         if all(r.goal_successes(self.data, tasks, parent, key, self.data["default_bpm"])
                                for parent in lesson["prerequisites"])]
-            lessons.append({**r.display_builtin(lesson), "eligible_keys": eligible,
-                            "targets": {key: r.display_builtin(r.target_for(self.data, lesson["id"], key))
+            lessons.append({**r.display_builtin(lesson, language), "eligible_keys": eligible,
+                            "targets": {key: r.display_builtin(r.target_for(self.data, lesson["id"], key), language)
                                         for key in self.data["allowed_keys"]}})
         history = []
         for task in reversed(tasks):
             report = task["report"]
             history.append({"id": task["assignment"]["task_id"], "exercise_id": task["assignment"]["exercise_id"],
-                            "assigned_at": task["assignment"]["recorded_at"], "target": r.display_builtin(task["target"]),
+                            "assigned_at": task["assignment"]["recorded_at"], "target": r.display_builtin(task["target"], language),
                             "cancelled": task["cancelled"], "reason": (task["cancellation"] or task["assignment"])["reason"],
-                            "report": report, "outcome": r.outcome(task), "feedback": feedback(task),
+                            "report": report, "outcome": r.outcome(task), "feedback": feedback(task, language),
                             "revisions": [e for e in events if e["task_id"] == task["assignment"]["task_id"]
                                           and e["event_type"] in ("reported", "corrected")]})
         status = r.status(self.root, self.data)
         if "target" in status["next"]:
-            status["next"]["target"] = r.display_builtin(status["next"]["target"])
-        return {"csrf_token": self.token, "preview": self.preview,
+            status["next"]["target"] = r.display_builtin(status["next"]["target"], language)
+        status["next"]["reason"] = r.web_text(status["next"]["reason"], language)
+        status["evidence"] = r.web_text(status["evidence"], language)
+        return {"csrf_token": self.token, "preview": self.preview, "language": language,
                 "workspace_id": hashlib.sha256(str(self.root).encode()).hexdigest()[:16],
                 "status": status, "exercises": lessons,
                 "keys": self.data["allowed_keys"], "minimum_bpm": self.data["minimum_bpm"],
-                "maximum_bpm": self.data["maximum_bpm"], "arrangements": r.ARRANGEMENTS,
+                "maximum_bpm": self.data["maximum_bpm"], "arrangements": r.display_builtin(r.ARRANGEMENTS, language),
                 "history": history, "sessions": self.store.list()}
 
-    def post(self, path, payload):
+    def post(self, path, payload, language="en"):
         r.require(isinstance(payload, dict), "The request must be a JSON object.")
         with self.mutations:
             self.assert_active()
@@ -114,7 +127,7 @@ class Application:
                 r.require(type(correction) is bool, "The correction flag must be a boolean.")
                 result = r.record_result(self.root, self.data, task_id, payload["result"], correction)
                 task = next(t for t in r.records(r.read_events(self.root)) if t["assignment"]["task_id"] == task_id)
-                return result | {"feedback": feedback(task)}
+                return result | {"feedback": feedback(task, language)}
             if path == "/api/sessions/start":
                 return self.store.start(payload["task_id"], payload["session_id"])
             if path == "/api/sessions/chunk":
@@ -129,6 +142,10 @@ def make_server(root, data, port=8765, source=r.HERE):
     app = Application(root, data, source)
 
     class Handler(BaseHTTPRequestHandler):
+        def language(self):
+            requested = parse_qs(urlsplit(self.path).query).get("lang", ["en"])[0]
+            return requested if requested in ("en", "ko") else "en"
+
         def log_message(self, *_):
             pass
 
@@ -164,7 +181,7 @@ def make_server(root, data, port=8765, source=r.HERE):
                 self.permitted()
                 path = urlsplit(self.path).path
                 if path == "/api/state":
-                    self.respond(200, app.state())
+                    self.respond(200, app.state(self.language()))
                 elif path.startswith("/api/recordings/"):
                     parts = path.split("/")
                     r.require(len(parts) == 5 and r.re.fullmatch(r"S-[a-f0-9]{32}", parts[3]), "Recording not found.")
@@ -180,7 +197,10 @@ def make_server(root, data, port=8765, source=r.HERE):
                     if name not in ASSETS:
                         self.respond(404, {"error": "Page not found."})
                         return
-                    self.respond(200, (app.source / name).read_bytes(), ASSETS[name])
+                    content = (app.source / name).read_bytes()
+                    if ASSETS[name] == "application/json":
+                        content = json.loads(content)
+                    self.respond(200, content, ASSETS[name])
             except (ValueError, KeyError, TypeError) as exc:
                 self.respond(400, {"error": str(exc)})
             except (OSError, sqlite3.Error):
@@ -195,7 +215,7 @@ def make_server(root, data, port=8765, source=r.HERE):
                 body = self.rfile.read(length)
                 r.require(len(body) == length, "The request was interrupted.")
                 payload = json.loads(body, parse_constant=lambda x: (_ for _ in ()).throw(ValueError("Invalid number.")))
-                self.respond(200, app.post(urlsplit(self.path).path, payload))
+                self.respond(200, app.post(urlsplit(self.path).path, payload, self.language()))
             except (ValueError, KeyError, TypeError, OverflowError) as exc:
                 self.respond(400, {"error": str(exc)})
             except (OSError, sqlite3.Error):

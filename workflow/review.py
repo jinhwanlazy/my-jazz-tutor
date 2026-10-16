@@ -15,6 +15,7 @@ import tempfile
 import uuid
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -29,7 +30,7 @@ FIELDS = [
 SPEC = ["key", "bpm", "bars", "arrangement", "rhythm", "bass", "voicing", "melody", "material_id"]
 CHECKS = ["notes_correct", "steady_pulse", "no_stops"]
 STATES = {"unknown": "Unassessed", "attempted": "Attempted", "success": "Same-day success", "retained": "Later retention"}
-RESULTS = {"unknown": "Insufficient evidence", "unmet": "Target not met", "success": "Criteria met"}
+RESULTS = {"unknown": "Assessment pending", "unmet": "Target not met", "success": "Criteria met"}
 DOMAINS = {"melody": "Melody", "rhythm": "Rhythm", "bass": "Bass", "voicing": "Voicing"}
 ARRANGEMENTS = {
     "left-bass-only": "Left-hand bass only", "right-melody-only": "Right-hand melody only",
@@ -77,14 +78,24 @@ DISPLAY_TEXT = {
 }
 
 
-def display_builtin(value):
+@lru_cache(maxsize=1)
+def translations():
+    return json.loads((HERE / "translations.json").read_text())["ko"]
+
+
+def web_text(message, language="en", **values):
+    template = translations().get(message, message) if language == "ko" else message
+    return template.format_map(values) if values else template
+
+
+def display_builtin(value, language="en"):
     """Copy curriculum text for display; never apply to user notes or evidence logs."""
     if isinstance(value, str):
-        return DISPLAY_TEXT.get(value, value)
+        return web_text(DISPLAY_TEXT.get(value, value), language)
     if isinstance(value, dict):
-        return {key: display_builtin(item) for key, item in value.items()}
+        return {key: display_builtin(item, language) for key, item in value.items()}
     if isinstance(value, list):
-        return [display_builtin(item) for item in value]
+        return [display_builtin(item, language) for item in value]
     return value
 
 
