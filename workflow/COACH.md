@@ -1,4 +1,4 @@
-# 코칭 운영 규칙 — 0.2.6
+# 코칭 운영 규칙 — 0.2.7
 
 Respond in the language the user uses, unless they explicitly request another
 language. Neither this document's language nor a profile default overrides that.

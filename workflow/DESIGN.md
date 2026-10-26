@@ -142,6 +142,27 @@ SVG rendering and a bundled, unmodified Bravura font need no external network or
 notation library at runtime. Attribution and source pin are in `THIRD_PARTY.md`.
 The notation assets are part of the immutable Git runtime and its hash manifest.
 
+## Continuous score and unified practice controls — 0.2.7
+
+Task instructions, assigned conditions, and success criteria precede the practice
+area. Written pitches and the chord progression are expandable; unsupported
+notation opens them automatically. Score, playback, and tempo controls share one
+card with a single start/pause/resume button and finish button. Sound and MIDI
+settings are expandable. Assigned target BPM remains separate from playback BPM.
+
+Every bar is rendered on one horizontal staff, with one linear beat-to-position
+mapping for targets, the cursor, and live input. Bar margins no longer create gaps
+in that mapping, and held-note tails remain continuous across bar boundaries.
+Four-bar page replacement is removed. Following computes a clamped scroll offset
+on each audio-driven animation frame: a fitting score stays fixed, while a wider
+score follows continuously until its end. Only a loop returns to the beginning.
+Following can be disabled for manual scrolling. Live buffers retain the existing
+loop, pause, disconnect, and language-switch semantics.
+
+The staff omits bar numbers and hand labels. Whole-note interiors are transparent
+so staff and ledger lines remain visible. These presentation changes do not change
+assigned material, success criteria, raw MIDI capture, or historical evidence.
+
 ## 출처와 구분
 
 - 원영상과 제작자의 설명: https://www.youtube.com/watch?v=RiCQYWPEhjc

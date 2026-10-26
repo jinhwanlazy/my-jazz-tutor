@@ -56,6 +56,12 @@ try {
   assert.equal((await state()).history.length,0);
   assert.equal(await page.locator('html').getAttribute('lang'),'en');
   assert.doesNotMatch(await page.locator('body').innerText(),/[가-힣]/);
+  assert.equal(await page.getByRole('button', {name: 'Start practice', exact: true}).count(), 1);
+  assert.equal(await page.getByRole('button', {name: 'Finish', exact: true}).count(), 1);
+  assert.ok(await page.evaluate(() => document.querySelector('.lesson-card').getBoundingClientRect().bottom <=
+    document.querySelector('.score-card').getBoundingClientRect().top));
+  assert.equal(await page.locator('.score-hand, .score-bar-number').count(), 0);
+  assert.equal(await page.locator('.score-whole').first().evaluate(node => getComputedStyle(node).fill), 'none');
   await page.evaluate(() => document.fonts.load('40px Bravura'));
   assert.ok(await page.evaluate(() => [...document.fonts].some(font => font.family === 'Bravura' && font.status === 'loaded')));
   for (const lesson of (await state()).exercises) {
@@ -64,7 +70,7 @@ try {
     for (const key of ['C', 'F', 'Bb']) {
       await page.locator('#key-select').selectOption(key);
       assert.equal(await page.locator('.practice-score').count(), 1);
-      assert.equal(await page.locator('.score-chord').count(), 4);
+      assert.equal(await page.locator('.score-chord').count(), lesson.targets[key].notation.bars.length);
       assert.ok(await page.locator('.score-target-note').count() > 0);
     }
   }
@@ -72,14 +78,13 @@ try {
   assert.equal(await page.locator('.score-target[data-hand="right"][data-kind="notes"][data-beat="1.5"]').count(), 4);
   await page.locator('.score-card').screenshot({path:join(project,'build/browser/score-charleston.png')});
   await choose('E06');
-  assert.equal(await page.locator('.score-improv').count(), 2);
-  assert.equal(await page.locator('.score-target[data-hand="right"][data-kind="rest"]').count(), 2);
-  await page.locator('#score-next').click();
-  assert.match(await page.locator('#score-position').textContent(), /5–8/);
+  assert.equal(await page.locator('.score-improv').count(), 4);
+  assert.equal(await page.locator('.score-target[data-hand="right"][data-kind="rest"]').count(), 4);
+  assert.equal(await page.locator('.score-target[data-bar="7"]').count(), 2);
   await page.locator('.score-card').screenshot({path:join(project,'build/browser/score-improv.png')});
   await choose('E01');
   await page.locator('#key-select').selectOption('C');
-  // Exercise the same renderer at deterministic loop/page boundaries, without
+  // Exercise the same renderer at deterministic bar and loop boundaries, without
   // waiting through 32 beats or adding practice evidence to the temporary log.
   const displayChecks = await page.evaluate(async () => {
     const {ScoreView} = await import('/score.mjs');
@@ -89,7 +94,7 @@ try {
     document.body.append(host);
     const follow = document.createElement('input'); follow.type = 'checkbox'; follow.checked = true;
     const status = document.createElement('span');
-    const view = new ScoreView({root, status, previous: document.createElement('button'), next: document.createElement('button'), follow});
+    const view = new ScoreView({root, status, follow});
     const score = id => data.exercises.find(e => e.id === id).targets.Bb.notation;
     const at = (absolute, bars) => ({absolute, bar: Math.floor(absolute / 4) % bars, pass: Math.floor(absolute / (bars * 4)), beat: absolute % 4});
     view.setScore(score('E04')); view.begin(); view.frame(at(8.1, 4));
@@ -98,11 +103,34 @@ try {
     const lowRight = low.dataset.hand === 'right' && Boolean(low.querySelector('.score-input-head')) && !low.querySelector('.score-edge-note');
     const alignedY = low.querySelector('.score-input-head').getAttribute('cy') === root.querySelector('.score-target[data-bar="2"][data-hand="right"] [data-midi="50"] ellipse').getAttribute('cy');
     view.setScore(score('E06')); view.begin();
-    view.frame(at(16.2, 8));
-    const secondPage = /5–8/.test(status.textContent);
+    const canvas = root.querySelector('svg');
+    const cursorX = () => view.cursor.transform.baseVal.consolidate().matrix.e;
+    const positions = [];
+    for (let beat = 0; beat <= 31.9; beat += .1) {
+      view.frame(at(beat, 8)); positions.push({x: cursorX(), scroll: root.scrollLeft});
+    }
+    const continuous = positions.every((value, i) => !i ||
+      (Math.abs(value.x - positions[i - 1].x - 5.2) < .001 &&
+       value.scroll >= positions[i - 1].scroll && value.scroll - positions[i - 1].scroll <= 5));
+    const oneCanvas = canvas === root.querySelector('svg') && root.querySelectorAll('.score-chord').length === 8;
+    view.frame(at(15.8, 8));
+    const tailStart = cursorX();
+    view.midi([0x90, 62, 100], 'test', at(15.8, 8));
+    view.frame(at(16.2, 8)); view.midi([0x80, 62, 0], 'test', at(16.2, 8));
+    const tail = root.querySelector('.score-hold');
+    const joinedTail = root.querySelectorAll('.score-hold').length === 1 &&
+      Math.abs(Number(tail.getAttribute('x1')) - tailStart) < .001 &&
+      Math.abs(Number(tail.getAttribute('x2')) - cursorX()) < .001;
+    view.frame(at(20, 8));
+    const followingScroll = root.scrollLeft;
+    follow.checked = false; root.scrollLeft = 90;
+    view.frame(at(22, 8));
+    const manualScroll = root.scrollLeft === 90 && followingScroll > 90;
+    follow.checked = true;
+    view.frame(at(31.8, 8));
     view.midi([0x90, 62, 100], 'test', at(31.8, 8));
     view.frame(at(32.2, 8)); view.drawNotes();
-    const loop = /Pass 2/.test(status.textContent) && /1–4/.test(status.textContent);
+    const loop = /Pass 2/.test(status.textContent) && root.scrollLeft === 0;
     const continuedHold = Boolean(root.querySelector('.score-hold')) && !root.querySelector('.score-input-head');
     view.pause(at(32.4, 8));
     const interrupted = Boolean(root.querySelector('.score-hold.interrupted'));
@@ -110,8 +138,12 @@ try {
     const reset = root.querySelectorAll('.score-live-note').length === 0;
     view.frame(at(14, 8));
     const localScroll = root.scrollLeft > 0;
+    host.style.width = '1200px'; view.setScore(score('E04')); view.begin(); view.frame(at(14, 4));
+    const fittingScore = root.scrollLeft === 0 && root.scrollWidth === root.clientWidth;
+    view.setScore(null); view.frame(at(15, 4));
+    const fallback = !root.querySelector('svg') && root.textContent.includes('not available');
     host.remove();
-    return {lowRight, alignedY, secondPage, loop, continuedHold, interrupted, reset, localScroll};
+    return {lowRight, alignedY, continuous, oneCanvas, joinedTail, manualScroll, loop, continuedHold, interrupted, reset, localScroll, fittingScore, fallback};
   });
   assert.ok(Object.values(displayChecks).every(Boolean), JSON.stringify(displayChecks));
   await page.screenshot({path:join(project,'build/browser/desktop.png'),fullPage:true});
@@ -126,6 +158,7 @@ try {
 
   await choose('E03');assert.equal(await page.locator('#practice-btn').isEnabled(),false);
   await choose('E01');
+  await page.locator('#playback-settings > summary').click();
   await page.locator('#midi-connect').click();
   assert.match(await page.locator('#midi-status').textContent(),/denied/);
   await page.evaluate(()=>window.denyMidi=false);
@@ -134,7 +167,7 @@ try {
   await page.locator('#tempo').fill('65');await page.locator('#tempo').press('Tab');
   await page.locator('.switch-label').filter({has:page.locator('#pad-toggle')}).click();
   assert.equal(await page.locator('#pad-toggle').isChecked(),true);
-  await page.locator('#score-play').click();
+  await page.locator('#practice-btn').click();
   await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
   assert.equal(await page.locator('#tempo').inputValue(),'65');
   const activeSession = (await state()).sessions[0].id;
@@ -156,7 +189,7 @@ try {
   await changeLanguage('ko');
   assert.equal(await page.locator('.score-live-note').count(), 1);
   assert.match(await page.locator('#score-position').textContent(), /번째 반복/);
-  assert.match(await page.locator('.score-hand').first().textContent(), /오른손/);
+  assert.equal(await page.locator('.score-hand').count(), 0);
   await changeLanguage('en');
   await page.waitForTimeout(180);
   await page.evaluate(()=>{window.sendMidi([0xb0,64,127]);window.sendMidi([0x80,60,0]);});
@@ -178,7 +211,7 @@ try {
   await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
   assert.equal(await page.locator('.score-live-note').count(), 0);
   await page.waitForTimeout(150);
-  await page.locator('#score-finish').click();
+  await page.locator('#finish-btn').click();
   await visible('#record-panel');
   assert.equal(await page.locator('#actual-bpm').inputValue(),'80');
   let data=await state();const recording=data.sessions[0], task=data.history[0];

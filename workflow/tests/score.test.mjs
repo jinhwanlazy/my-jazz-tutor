@@ -1,11 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {BeatTimeline, audioTimeAt} from '../timeline.mjs';
-import {LiveInput, noteY, spell} from '../score.mjs';
+import {LiveInput, noteY, scoreX, spell} from '../score.mjs';
 
 const event = pitches => ({pitches: pitches.map(midi => spell(midi))});
 const score = {bars: Array.from({length: 4}, () => ({left: [event([38])], right: [event([53, 60])]})), allowed_pitches: []};
 const at = absolute => ({absolute, bar: Math.floor(absolute / 4) % 4, pass: Math.floor(absolute / 16), beat: absolute % 4});
+
+test('score spacing stays continuous at every bar, including the former page boundary', () => {
+  const step = scoreX(.01) - scoreX(0);
+  for (const boundary of [4, 8, 12, 16, 20, 24, 28, 32]) {
+    assert.ok(Math.abs(scoreX(boundary) - scoreX(boundary - .01) - step) < 1e-9);
+    assert.ok(Math.abs(scoreX(boundary + .01) - scoreX(boundary) - step) < 1e-9);
+  }
+  assert.ok(scoreX(32) > scoreX(16));
+});
 
 test('beat position uses applied tempo, including offbeats and loop boundaries', () => {
   const clock = new BeatTimeline(4, 4);

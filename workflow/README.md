@@ -31,10 +31,10 @@ against their assigned criteria. Current milestones count only successes with
 compatible criteria, material, and playing conditions.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.2.6`; create a new tag for later releases instead of moving an old tag:
+selects `v0.2.7`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.2.6 --activate
+uv run python publish.py --ref v0.2.7 --activate
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -90,20 +90,26 @@ The server listens at `http://127.0.0.1:8765` and cannot be reached from other
 devices. Use `--port 8768` if needed, and Ctrl+C to stop. If an unfinished task
 blocks activation, record its actual result with the old runtime, or cancel it
 only when the user confirms they did not practice. Then run
-`uv run python publish.py --ref v0.2.6 --activate` from this directory. Never invent
+`uv run python publish.py --ref v0.2.7 --activate` from this directory. Never invent
 or delete practice evidence just to install the UI.
 
-- **Practice room:** start a suggested or selected task. Target BPM and current
-  metronome BPM are separate. Adjust tempo and volume, and optionally enable the
-  chord pad. Both share the same beat clock. Resuming starts from the first bar;
-  switching away from the tab pauses playback.
+- **Practice room:** read the task instructions, target conditions, and success
+  criteria first, then use the score and its single set of playback controls.
+  **Notes and chord progression** expands the written parts. Target BPM and current
+  metronome BPM are separate. Adjust tempo beside the score; expand **Sound & MIDI
+  settings** for volume, chord pad, and MIDI devices. Click and pad share the same
+  beat clock. Resuming starts from the first bar; switching away from the tab
+  pauses playback.
 - **Score and live input:** a grand staff shows the assigned parts, chord symbols,
   key signature, and rhythm. Blue MIDI marks keep fractional timing against the
   playback clock; their tails show physical key holds, excluding pedal sustain.
-  Eight-bar exercises have two pages of four bars. **Follow playback** follows the
-  current page and scrolls inside the score on smaller screens. Playback buttons
-  beside the score mirror the metronome controls. Improvisation has allowed pitches
-  and rest bars, with no invented melody; bass diamonds mean a beat-1 attack whose
+  All bars share one continuous horizontal staff and beat scale. **Follow playback**
+  scrolls within the score as the cursor advances, without jumps at bar boundaries
+  or page turns. A score that fits the viewport stays still; the cursor returns to
+  the beginning at each loop. Turn following off to scroll manually. Whole-note
+  centers are transparent, and the score omits bar numbers and hand labels.
+  Improvisation has allowed pitches and rest bars, with no invented melody; bass
+  diamonds mean a beat-1 attack whose
   hold length is unspecified. Input placement follows the assigned staff or pitch
   range, not detected hands. This view does not assess correctness or fill reports.
   Charleston eighth notes illustrate short attacks on 1 and 2&; the illustration

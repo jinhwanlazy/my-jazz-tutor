@@ -55,38 +55,35 @@ main{margin-left:205px;padding:0 46px;max-width:1560px}
 .daily-summary strong span{font-size:14px;color:var(--muted);letter-spacing:0;font-weight:400}
 .daily-summary small{font-size:11px;color:var(--muted)}
 .suggestion-note{font-size:12px;color:#757c6e;margin-bottom:20px;line-height:1.7}
-.practice-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr);gap:24px;align-items:start}
+.lesson-card{margin-bottom:24px}
 .score-card{margin-bottom:24px;min-width:0}
 .score-heading{flex-wrap:wrap}
-.score-heading h2{margin:8px 0 12px;font-size:21px}
+.score-heading h2{margin:0;font-size:21px}
 .score-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:11px;color:var(--muted)}
 .score-legend span:before{content:"";display:inline-block;width:10px;height:7px;border-radius:50%;margin-right:7px;background:#8b928b}
 .score-legend .input-swatch:before{background:#1d6cab}
 .score-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 8px;font-size:12px;color:var(--muted)}
 .score-toolbar>div{display:flex;align-items:center;gap:12px}
 .score-toolbar .check-line{margin:0;font-size:12px;font-weight:400}
-.score-toolbar button{padding:6px 10px;font-size:20px}
-.score-viewport{width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-color:#aebcaf #f1f3eb;border-radius:8px}
+.score-viewport{width:100%;overflow-x:auto;scroll-behavior:auto;overscroll-behavior-x:contain;scrollbar-color:#aebcaf #f1f3eb;border-radius:8px}
 .score-viewport:focus-visible{outline:3px solid #b18942;outline-offset:3px}
 .practice-score{display:block;width:100%;min-width:760px;height:auto;background:#fffef9}
 .score-glyph{font-family:Bravura;font-size:40px;fill:currentColor}
 .score-staff-line{stroke:#c0c6bb;stroke-width:1}
 .score-bar-line{stroke:#9aa494;stroke-width:1.1}
 .score-brace{fill:none;stroke:#647264;stroke-width:2.5}
-.score-bar-number{font-size:11px;fill:#7b8777}
 .score-chord{font-size:18px;font-weight:600;fill:var(--ink)}
-.score-hand{font-size:12px;fill:#74806d}
 .score-meter{font:700 25px Georgia,serif;fill:#56664f}
 .score-target{color:#7e887c}
 .score-ledger{stroke:currentColor;stroke-width:1}
-.score-whole,.score-onset{fill:#fffef9;stroke:currentColor;stroke-width:2}
+.score-whole{fill:none;stroke:currentColor;stroke-width:2}
+.score-onset{fill:#fffef9;stroke:currentColor;stroke-width:2}
 .score-notehead,.score-rest{fill:currentColor}
 .score-stem{stroke:currentColor;stroke-width:1.2}
 .score-improv{fill:#7b8777;font-size:12px;font-style:italic}
 .score-improv-help{font-size:12px;line-height:1.6;color:var(--muted);margin:4px 0 0}
 .score-beat-tick{stroke:#c0c6bb;stroke-width:1}
 .score-beat-label{font-size:11px;fill:#8c9685;text-anchor:middle}
-.score-bar-highlight{fill:#eef3e8}
 .score-live-layer{color:#1d6cab}
 .score-input-head{fill:#1d6cab;stroke:#fffef9;stroke-width:.6}
 .score-hold{stroke:#1d6cab;stroke-width:2.7;stroke-linecap:round;opacity:.7}
@@ -95,9 +92,6 @@ main{margin-left:205px;padding:0 46px;max-width:1560px}
 .score-cursor{fill:#b27b25;pointer-events:none}
 .score-cursor-line{stroke:#b27b25;stroke-width:1.5;opacity:.85}
 .score-card>.field-note{margin:10px 0 0}
-.score-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
-.score-actions .button{min-height:40px;padding:10px 16px;font-size:12px}
-.score-actions>span{font-size:12px;color:var(--muted)}
 .score-details{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.7}
 .score-details summary{cursor:pointer}
 .score-details p{margin:8px 0 0;max-width:850px}
@@ -105,6 +99,8 @@ main{margin-left:205px;padding:0 46px;max-width:1560px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px}
 .section-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .lesson-purpose{font-size:13px;color:var(--muted);line-height:1.75}
+.lesson-material{margin:14px 0}
+.lesson-material[open]>summary{margin-bottom:18px}
 .meta-row{display:flex;flex-wrap:wrap;gap:8px;margin:19px 0 28px}
 .meta-row span{font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:6px}
 .chord-label{display:flex;justify-content:space-between;font-size:9px;letter-spacing:1px;color:#8a8f7f;margin-bottom:12px}
@@ -131,31 +127,30 @@ summary{cursor:pointer;font-size:12px;color:#6c7a62;line-height:1.7}
 .chooser-fields select,.chooser-fields input{padding:9px!important;font-size:12px}
 .lesson-actions{display:flex;gap:15px;flex-wrap:wrap;margin-top:12px}
 .text-button{background:none;border:0;padding:6px 0;font-size:12px;color:#718366;text-decoration:underline;text-decoration-color:#bec8b5;text-underline-offset:4px}
-.transport-card{background:#203f38;color:#f6f3df;border:1px solid #203f38;border-radius:16px;padding:27px 26px;box-shadow:0 9px 24px #233b3610}
-.transport-card .eyebrow{color:#aab7a1}
-.transport-status{font-size:10px;color:#b6c4b0;border:1px solid #567062;border-radius:5px;padding:4px 8px}
-.tempo-control{display:flex;justify-content:center;align-items:center;gap:25px;margin:31px 0 18px}
+.practice-controls{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:20px 0 14px;margin-top:18px}
+.playback-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px 24px}
+.playback-tempo{display:flex;align-items:center;gap:16px}
+.playback-progress{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted)}
+#elapsed{font-variant-numeric:tabular-nums}
+.transport-status{font-size:10px;color:var(--green);border:1px solid var(--border);border-radius:5px;padding:4px 8px}
+.tempo-control{display:flex;align-items:center;gap:10px}
 .round-button{width:32px;height:32px;border:1px solid #bdc8b8;border-radius:50%;background:transparent;color:inherit;font-size:20px;line-height:1;display:grid;place-items:center;flex-shrink:0}
-.transport-card .round-button{border-color:#5b7467;color:#b2c1ad}
-.tempo-control>div{text-align:center}
-.tempo-control input{appearance:textfield;-moz-appearance:textfield;display:block;font:300 72px/1 Georgia,serif;background:transparent;border:0;color:#f8f3db;width:125px;text-align:center;letter-spacing:-3px;padding:0}
+.tempo-control>div{display:flex;align-items:baseline;gap:4px}
+.tempo-control input{appearance:textfield;-moz-appearance:textfield;display:block;font-size:24px;font-variant-numeric:tabular-nums;background:transparent;border:0;color:var(--ink);width:52px;text-align:center;padding:4px 0}
 .tempo-control input::-webkit-inner-spin-button{appearance:none}
-.tempo-control div>span{display:block;font-size:10px;letter-spacing:3px;color:#adba9d;margin-top:8px}
-.tempo-range{width:100%;height:3px;margin:15px 0 28px;display:block}
-.beats{display:flex;justify-content:center;gap:13px;margin:12px 0 22px}
-.beats span{width:29px;height:29px;display:grid;place-items:center;border:1px solid #5a7262;border-radius:50%;font-size:11px;color:#91a68f;transition:background .06s}
+.tempo-control div>span{font-size:10px;color:var(--muted)}
+.tempo-range{width:85px;height:3px;margin:0;display:block}
+.tempo-hint{font-size:10px;color:var(--muted);margin:10px 0 16px}
+.beats{display:flex;gap:8px}
+.beats span{width:25px;height:25px;display:grid;place-items:center;border:1px solid var(--border);border-radius:50%;font-size:11px;color:var(--muted);transition:background .06s}
 .beats span.active{color:#263d32;background:#d8b574;border-color:#d8b574;box-shadow:0 0 0 4px #d8b57412}
-.transport-caption{display:flex;justify-content:space-between;align-items:center;font-size:9px;color:#93a890;margin-bottom:17px;gap:6px}
-.transport-caption>span:first-child{font-variant-numeric:tabular-nums;letter-spacing:1px;font-size:12px;color:#c4cfb9}
 .button{border:1px solid transparent;border-radius:9px;font-weight:600;font-size:13px;padding:13px 18px;min-height:44px}
 .primary{background:var(--green);color:#fff}
 .primary:hover{background:#27573f}
 .secondary{background:#edf1e7;border-color:#dce3d3;color:#476241}
 .transport-buttons{display:flex;gap:9px}
-.play-button{background:#ddbd7d;color:#263c31;flex:1}
-.play-button:hover{background:#edce91}
-.stop-button{border-color:#637665;background:transparent;color:#c7d2bc}
-.sound-controls{margin-top:24px;border-top:1px solid #446052;padding-top:20px}
+.playback-settings-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px;padding-top:18px}
+.sound-controls{max-width:360px}
 .sound-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:17px}
 .switch-label{display:flex;flex-direction:row;align-items:center;gap:8px;font-size:11px;font-weight:400;position:relative;cursor:pointer}
 .switch-label input{position:absolute;opacity:0;width:30px;height:18px;margin:0}
@@ -164,16 +159,17 @@ summary{cursor:pointer;font-size:12px;color:#6c7a62;line-height:1.7}
 .switch-label input:checked+.switch{background:#bb9c5b}
 .switch-label input:checked+.switch:after{background:#f9f3df;transform:translateX(12px)}
 .switch-label input:focus-visible+.switch{outline:2px solid #ddbd7d;outline-offset:4px}
-.sound-row>input{width:66px;height:3px}
-.sound-hint{font-size:10px;color:#90a68d;margin:0 0 6px}
-.midi-area{border-top:1px solid #446052;margin-top:20px;padding-top:19px}
+.sound-row>input{width:95px;height:3px}
+.sound-hint{font-size:11px;color:var(--muted);margin:0 0 6px}
+.midi-area{border-left:1px solid var(--border);padding-left:24px}
 .midi-area strong{font-size:11px;font-weight:500}
 .midi-light{display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:#6d8272}
-.midi-light.connected{background:#b7d1a2;box-shadow:0 0 0 3px #b7d1a210}
+.midi-light.connected{background:var(--green);box-shadow:0 0 0 3px #b7d1a230}
 .midi-light.received{background:#e7c27a;box-shadow:0 0 0 4px #e7c27a35}
-.midi-button{font-size:10px;color:#c5d0b9;border:1px solid #637c68;border-radius:5px;background:none;padding:5px 9px}
-.midi-area p{font-size:10px;line-height:1.6;color:#9aaf95;margin:10px 0 0}
-.midi-area small{display:block;font-size:9px;color:#899f87;margin-top:8px}
+.midi-button{font-size:11px;color:var(--green);border:1px solid #b4c2ad;border-radius:5px;background:none;padding:6px 10px}
+.midi-area p{font-size:11px;line-height:1.6;color:var(--muted);margin:10px 0 0}
+.midi-area select{width:100%;margin-top:12px}
+.save-status{display:block;font-size:10px;color:var(--muted);margin-top:10px}
 .midi-area select{width:100%;font-size:11px;background:#2c4b40;border:1px solid #597660;border-radius:6px;color:#d8e2ca;padding:8px;margin-top:12px}
 .record-card,.feedback-card{margin-top:25px}
 .record-card h2{margin:8px 0 0}
@@ -232,9 +228,7 @@ dialog::backdrop{background:#1b302a80;backdrop-filter:blur(3px)}
 @media(max-width:1100px){.sidebar{width:170px;padding:30px 15px}
 main{margin-left:170px;padding:0 28px}
 .brand{gap:9px;font-size:10px}
-.practice-grid{grid-template-columns:minmax(0,1.2fr) minmax(290px,1fr);gap:18px}
 .card{padding:23px}
-.transport-card{padding:24px 20px}
 .daily-summary{min-width:160px;padding-left:20px}
 .chord-box strong{font-size:14px}
 }
@@ -244,10 +238,8 @@ main{margin-left:170px;padding:0 28px}
 .brand small{font-size:9px}
 .nav-button{padding:13px 11px;font-size:12px;gap:9px}
 main{margin-left:145px;padding:0 24px}
-.practice-grid{grid-template-columns:1fr}
-.transport-card{display:block;padding:26px 32px}
-.tempo-control{margin:20px 0 10px}
-.tempo-range{margin-bottom:20px}
+.playback-settings-grid{grid-template-columns:1fr;gap:18px}
+.midi-area{border-left:0;border-top:1px solid var(--border);padding:18px 0 0}
 .page-heading{align-items:flex-start}
 .daily-summary{min-width:130px}
 h1{font-size:30px}
@@ -279,13 +271,13 @@ h1{font-size:28px;letter-spacing:-1.4px;margin-bottom:8px}
 .daily-summary strong span{font-size:10px}
 .daily-summary>span,.daily-summary small{font-size:9px}
 .suggestion-note{font-size:10px;margin-bottom:15px}
-.practice-grid{gap:16px}
 .card{padding:22px 19px;border-radius:12px}
 h2{font-size:22px}
 .chord-box strong{font-size:16px}
 .chord-label{font-size:8px}
-.transport-card{padding:24px;border-radius:12px}
-.transport-caption{font-size:9px}
+.playback-bar{align-items:stretch;flex-direction:column;gap:18px}
+.transport-buttons .button{flex:1}
+.playback-tempo,.playback-progress{justify-content:space-between}
 .form-row,.form-row.two{grid-template-columns:1fr;gap:15px;margin:20px 0}
 .checks{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .checks label{font-size:10px}

@@ -31,7 +31,7 @@ async function api(path, body) {
 }
 
 const score = new ScoreView({root: $('score-viewport'), status: $('score-position'),
-  previous: $('score-previous'), next: $('score-next'), follow: $('score-follow')});
+  follow: $('score-follow'), help: $('score-material-help')});
 const transport = new Transport({
   onStart: () => score.begin(),
   onPause: position => score.pause(position),
@@ -113,7 +113,7 @@ function target() {
 function renderLesson(resetTempo = false) {
   const current = pending(), t = target();
   score.setScore(t.notation);
-  $('score-context').textContent = t.title;
+  if (!t.notation) $('lesson-material').open = true;
   const lesson = ui.data.exercises.find(x => x.id === (current?.exercise_id || ui.selected.exercise));
   $('lesson-kind').textContent = tr`${current ? tr('Current task') : tr('Next task')} / ${lesson.id}`;
   $('lesson-title').textContent = t.title;
@@ -143,7 +143,6 @@ function renderLesson(resetTempo = false) {
 function setTempo(value) {
   const numeric = Math.min(ui.data.maximum_bpm, Math.max(ui.data.minimum_bpm, Math.round(Number(value) || ui.data.minimum_bpm)));
   $('tempo').value = $('tempo-range').value = numeric;
-  $('score-tempo').textContent = `${numeric} BPM`;
   transport.setTempo(numeric);
 }
 function updateTransport() {
@@ -157,9 +156,6 @@ function updateTransport() {
   $('transport-state').textContent = recording ? transport.playing ? tr('Practicing') : recording.ended ? tr('Waiting to save') : tr('Paused') : tr('Ready');
   $('manual-record-btn').disabled = Boolean(recording) || recovery || ui.busy;
   $('skip-btn').disabled = Boolean(recording) || recovery || ui.busy;
-  for (const [from, to] of [['practice-btn', 'score-play'], ['finish-btn', 'score-finish']]) {
-    $(to).disabled = $(from).disabled; $(to).textContent = $(from).textContent;
-  }
 }
 
 function registerPort(port) {
@@ -441,8 +437,6 @@ $('finish-btn').addEventListener('click', finish);
 $('recover-btn').addEventListener('click', recover);
 $('manual-record-btn').addEventListener('click', () => showRecord(pending()));
 $('record-form').addEventListener('submit', saveReport);
-$('score-play').addEventListener('click', startOrPause);
-$('score-finish').addEventListener('click', finish);
 $('close-record').addEventListener('click', () => $('record-panel').hidden = true);
 $('next-btn').addEventListener('click', () => { $('feedback-panel').hidden = true; window.scrollTo({top: 0, behavior: 'smooth'}); });
 $('tempo').addEventListener('change', event => setTempo(event.target.value));
