@@ -31,17 +31,24 @@ against their assigned criteria. Current milestones count only successes with
 compatible criteria, material, and playing conditions.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.2.7`; create a new tag for later releases instead of moving an old tag:
+selects `v0.2.8`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.2.7 --activate
+uv run python publish.py --ref v0.2.8
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
 `workflow/` directory are cached in `../practice/.runtime/<commit>/`, outside Git
-tracking. `--activate` pins the full commit hash in local `practice/runtime.json`.
-An unfinished task blocks activation of a different commit. Omitting `--activate`
-only prepares the cache.
+tracking. Publication activates the selected commit by default, pinning its full
+hash in local `practice/runtime.json`. `--activate` remains supported; use
+`--cache-only` to prepare a cache without changing the pin or tasks.
+
+Compatible unfinished tasks carry forward with their original snapshots. Tasks
+whose exercise, key, assigned BPM, playing conditions, material, criteria, or
+instructions are no longer supported are retired with an update reason. Retirement
+preserves records and MIDI, adds no performance result or prerequisite credit, and
+does not defer the replacement exercise as a same-day skip. Version numbers and
+UI/accompaniment changes alone do not retire tasks. Completed reports remain intact.
 
 The default ref is `HEAD`; publication rejects uncommitted runtime source changes.
 An explicit older tag installs that committed version independently of the working
@@ -87,11 +94,10 @@ uv run --project practice jazz
 ```
 
 The server listens at `http://127.0.0.1:8765` and cannot be reached from other
-devices. Use `--port 8768` if needed, and Ctrl+C to stop. If an unfinished task
-blocks activation, record its actual result with the old runtime, or cancel it
-only when the user confirms they did not practice. Then run
-`uv run python publish.py --ref v0.2.7 --activate` from this directory. Never invent
-or delete practice evidence just to install the UI.
+devices. Use `--port 8768` if needed, and Ctrl+C to stop. After publishing a new
+version, restart the server. Unfinished tasks do not block activation. Return with
+the same browser, address, and port to recover pending MIDI uploads; recovery also
+preserves input attached to retired tasks without creating a performance report.
 
 - **Practice room:** read the task instructions, target conditions, and success
   criteria first, then use the score and its single set of playback controls.
@@ -289,7 +295,7 @@ results; `event_id` identifies each event. Writes use a file lock.
 
 | Main column | Meaning |
 | --- | --- |
-| event_type | assigned / reported / cancelled / corrected |
+| event_type | assigned / reported / cancelled / retired / corrected |
 | target_json | Assigned key, BPM, hands, rhythm, bass, voicing, melody, material, and criteria |
 | actual_json | Conditions the user reports actually practicing |
 | checks_json | Notes, pulse, and uninterrupted playing: true / false / null |

@@ -27,17 +27,21 @@ uv run python review.py report --output build/preview.html
 함께 올리고 `uv lock` 후 테스트합니다. 새 curriculum에서도 과거 과제는 발급 당시 기준으로
 평가됩니다. 대표 목표는 현재 기준과 자료/연주 조건이 호환되는 성공만 집계합니다.
 
-검증한 소스를 Git에 커밋하고 버전 태그를 붙인 뒤 설치합니다. 다음은 `0.2.3` 태그가
+검증한 소스를 Git에 커밋하고 버전 태그를 붙인 뒤 설치합니다. 다음은 `0.2.8` 태그가
 가리키는 커밋을 선택하는 예입니다. 이후 버전은 새 태그를 만들고 기존 태그를 이동하지 않습니다.
 
 ```sh
-uv run python publish.py --ref v0.2.3 --activate
+uv run python publish.py --ref v0.2.8
 ```
 
 버전 이력은 Git 커밋·태그에만 보관합니다. 실행 파일은 선택한 커밋의 `workflow/`에서
-읽어 `../practice/.runtime/<commit>/`에 캐시하며 Git에 추가하지 않습니다. `--activate`는
-로컬 `practice/runtime.json`에 전체 커밋 해시를 고정합니다. 미완료 과제가 있으면
-다른 커밋의 활성화를 거부합니다. `--activate`를 생략하면 캐시만 준비합니다.
+읽어 `../practice/.runtime/<commit>/`에 캐시하며 Git에 추가하지 않습니다. 기본 동작은
+새 버전 활성화이며 로컬 `practice/runtime.json`에 전체 커밋 해시를 고정합니다.
+`--activate`도 계속 지원하고, 캐시만 준비하려면 `--cache-only`를 지정합니다.
+호환되는 미완료 과제는 원래 조건으로 이어가고, 연주 조건·자료·기준·지시가 달라지거나
+항목·키·BPM이 지원되지 않는 과제는 `retired` 사건으로 종료합니다. 원문과 MIDI는
+보존하며 실패·미연습·당일 스킵으로 집계하지 않습니다. 버전 번호나 UI·반주 변경만으로
+과제를 종료하지 않습니다.
 
 기본 ref는 `HEAD`이며 실행 소스에 미커밋 변경이 있으면 설치를 거부합니다. 이전 태그를
 명시하면 작업 중인 소스와 독립적으로 그 Git 커밋을 설치할 수 있습니다. 새 작업 공간의
@@ -71,10 +75,9 @@ uv run --project practice jazz
 ```
 
 주소는 `http://127.0.0.1:8765`이며 다른 장치에서 접속할 수 없습니다. 포트를 이미
-사용 중이면 `--port 8768`처럼 바꿉니다. 종료는 Ctrl+C입니다. 미완료 과제가 있어
-0.2.0 활성화가 보류됐다면 기존 버전에서 해당 과제의 실제 결과를 기록하거나, 사용자가
-연습하지 않았다고 확인한 경우 취소한 뒤 workflow에서 `uv run python publish.py --ref v0.2.3 --activate`를
-실행합니다. 새 UI 설치를 위해 과제나 보고를 임의로 만들거나 없애지 않습니다.
+사용 중이면 `--port 8768`처럼 바꿉니다. 종료는 Ctrl+C입니다. 새 버전 발행 후 서버를
+다시 시작합니다. 미완료 과제는 활성화를 막지 않습니다. 미전송 MIDI는 같은 브라우저·
+주소·포트에서 복구할 수 있고, 종료된 과제의 입력도 연습 결과를 추정하지 않고 보존합니다.
 
 - **연습실**: 추천 또는 선택한 과제로 시작합니다. 목표 BPM과 현재 메트로놈 BPM은
   구분합니다. BPM·음량을 조절하고 코드 패드를 선택적으로 켭니다. 재생과 패드는 같은
@@ -240,7 +243,7 @@ CHROME_EXECUTABLE=/usr/bin/google-chrome node tests/browser.mjs
 
 | 주요 열 | 의미 |
 | --- | --- |
-| event_type | assigned / reported / cancelled / corrected |
+| event_type | assigned / reported / cancelled / retired / corrected |
 | target_json | 발급 당시 키·BPM·손·리듬·베이스·보이싱·멜로디·자료·통과 기준 |
 | actual_json | 사용자가 실제 수행했다고 보고한 조건 |
 | checks_json | 음/박/무중단 여부. true / false / null |

@@ -44,7 +44,7 @@ class LauncherTests(unittest.TestCase):
     def test_uv_command_uses_active_release_even_if_newer_is_installed(self):
         version = r.curriculum()['version']
         git_fixture.bump(self.source, version, '9.9.9')
-        publish.publish(self.source, self.root)
+        publish.publish(self.source, self.root, activate=False)
         result = self.run_uv('status')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['version'], version)

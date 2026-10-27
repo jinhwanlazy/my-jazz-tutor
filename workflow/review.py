@@ -198,6 +198,20 @@ def target_for(data, exercise_id, key=None, bpm=None):
     }
 
 
+def incompatible_target_fields(data, task):
+    """Compare the assigned contract, not release numbers or display/accompaniment."""
+    exercise_id, target = task["assignment"]["exercise_id"], task["target"]
+    if not any(lesson["id"] == exercise_id for lesson in data["exercises"]):
+        return ["exercise_id"]
+    if target["key"] not in data["allowed_keys"]:
+        return ["key"]
+    if not data["minimum_bpm"] <= target["bpm"] <= data["maximum_bpm"]:
+        return ["bpm"]
+    expected = target_for(data, exercise_id, target["key"], target["bpm"])
+    return [field for field in SPEC + ["material", "criteria", "instructions"]
+            if target.get(field) != expected[field]]
+
+
 def read_events(root):
     path = Path(root) / "practice.csv"
     if not path.exists():
@@ -229,14 +243,15 @@ def records(events):
             require(target["criteria"].get("checks") == CHECKS, "Unknown task criteria.")
             number(target["criteria"]["min_clean_runs"], "min_clean_runs", 1, 20)
             tasks[task_id] = {"assignment": event, "target": target, "report": None,
-                              "cancelled": False, "cancellation": None}
+                              "cancelled": False, "retired": False, "cancellation": None}
             continue
         require(task_id in tasks, "This result has no matching assignment.")
         task = tasks[task_id]
         require(event["release"] == task["assignment"]["release"] and event["exercise_id"] == task["assignment"]["exercise_id"], "The task version or exercise ID has changed.")
-        if kind == "cancelled":
+        if kind in ("cancelled", "retired"):
             require(not task["report"] and not task["cancelled"], "A resolved task cannot be cancelled.")
             task["cancelled"] = True
+            task["retired"] = kind == "retired"
             task["cancellation"] = event
         elif kind in ("reported", "corrected"):
             require(not task["cancelled"], "A cancelled task cannot receive a report.")
@@ -341,6 +356,8 @@ def latest_activity(tasks, today):
     """Use the practice day, not the correction time, to order observations."""
     latest = {}
     for task in tasks:
+        if task["retired"]:
+            continue  # A release transition is not a practice attempt or a skipped exercise.
         if task["report"]:
             day = iso_day(task["report"]["practice_date"])
         elif task["cancellation"]:

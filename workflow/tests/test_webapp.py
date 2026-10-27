@@ -246,6 +246,40 @@ class StoreTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Application(root, self.data)
 
+    def test_retired_task_preserves_midi_and_can_recover_input_on_new_runtime(self):
+        (self.root / 'AGENTS.md').write_text('temporary test workspace')
+        (self.root / 'profile.json').write_text('{}')
+        source, _ = git_fixture.copy_source(self.root)
+        old_release = publish.publish(source, self.root)['installed']
+        old_app = Application(self.root, self.data, source=old_release)
+        session = old_app.post('/api/sessions/start', {'task_id': self.task, 'session_id': 'S-' + 'a' * 32})
+        first = raw((100, 0, [0x90, 60, 100]))
+        old_app.post('/api/sessions/chunk', {'session_id': session['id'], 'packet': chunk(first, elapsed=1000)})
+        original = (self.root / 'practice.csv').read_bytes()
+        data = r.curriculum(source / 'curriculum.yaml')
+        data['criteria']['min_clean_runs'] = 3
+        (source / 'curriculum.yaml').write_text(r.yaml.safe_dump(data, allow_unicode=True))
+        git_fixture.bump(source, data['version'], '9.9.9')
+        release = publish.publish(source, self.root)
+        self.assertEqual(release['retired_tasks'], [self.task])
+        self.assertTrue((self.root / 'practice.csv').read_bytes().startswith(original))
+        app = Application(self.root, r.curriculum(source / 'curriculum.yaml'), source=release['installed'])
+        history = app.state()['history'][0]
+        self.assertTrue(history['retired'])
+        self.assertIsNone(history['report'])
+        with self.assertRaises(ValueError):
+            old_app.post('/api/assign', {'exercise_id': 'E01'})
+        # A stale tab's checkpoint can be uploaded after reopening on the new runtime.
+        last = raw((1200, 0, [0x80, 60, 0]))
+        app.post('/api/sessions/chunk', {'session_id': session['id'], 'packet': chunk(last, seq=1, elapsed=2000)})
+        app.post('/api/sessions/finish', {'session_id': session['id'], 'expected_chunks': 2, 'interrupted': True})
+        blob, metadata = app.store.export(session['id'])
+        self.assertEqual(blob, b'JPM1' + first + last)
+        self.assertEqual(metadata['status'], 'interrupted')
+        self.assertEqual(metadata['target']['criteria']['min_clean_runs'], 2)
+        self.assertEqual(app.state()['status']['reported_attempts'], 0)
+        self.assertEqual(app.state()['status']['next']['exercise_id'], 'E01')
+
     def test_installed_web_assets_are_hashed_and_stale_server_cannot_mutate(self):
         (self.root / 'AGENTS.md').write_text('temporary test workspace')
         (self.root / 'profile.json').write_text('{}')

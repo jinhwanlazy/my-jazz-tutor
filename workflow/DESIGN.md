@@ -26,10 +26,11 @@
 예전 `practice/releases/` 복사본은 현재 트리에서 제거하고 기존 Git 이력에 보존한다.
 개인 CSV·프로필·MIDI·개선 메모·보고서·백업은 로컬에 보관하며 Git에서 제외한다.
 공유하는 프로필 예제에는 기본 설정만 두고 실제 사용자 관측은 넣지 않는다.
-새 과제는 활성 버전으로 발급하며, 미완료 과제가 있으면 새 버전 활성화를 보류한다.
+새 과제는 활성 버전으로 발급하며, 발행 시 새 버전 활성화를 우선한다. 미완료 과제는
+호환되면 이어가고 비호환이면 원문·MIDI를 보존한 채 업데이트 사유로 종료한다.
 각 과제에 기준을 스냅샷으로 남겨 과거 판정을 새 커리큘럼으로 재해석하지 않는다.
 
-CSV는 append-only event log다. `assigned`, `reported`, `cancelled`, `corrected`
+CSV는 append-only event log다. `assigned`, `reported`, `cancelled`, `retired`, `corrected`
 사건을 task_id로 연결한다. 수정도 원문을 덮지 않고 새 사건으로 남긴다. 한 사용자
 보고에 여러 조건이 섞이면 한 조건의 결과로 뭉개지 말고 대표 결과를 명시하거나
 분리된 시도로 기록한다. 현재 버전은 한 과제에 하나의 최종 자기보고를 받는다.
@@ -162,6 +163,31 @@ loop, pause, disconnect, and language-switch semantics.
 The staff omits bar numbers and hand labels. Whole-note interiors are transparent
 so staff and ledger lines remain visible. These presentation changes do not change
 assigned material, success criteria, raw MIDI capture, or historical evidence.
+
+## Activation before unfinished tasks — 0.2.8
+
+Publication activates the selected committed release by default. `--cache-only`
+prepares a cache without changing the active pin or tasks; `--activate` remains an
+explicit alias for the default. Source edits and cache deletion do not switch the
+runtime. Restart a running practice server after publication.
+
+An unfinished task carries forward when its exercise, key, assigned BPM, playing
+conditions, material, criteria, and instructions remain supported. Compare its own
+assigned BPM, not the new default. Release numbers, presentation titles, daily
+budgets, and accompaniment changes do not make a task incompatible. Original target
+snapshots and reports are never rewritten, including reports submitted after an update.
+
+Incompatible unfinished tasks receive a `retired` event with the update reason.
+They leave the pending queue without inferring a result, counting practice, earning
+prerequisite credit, or creating a same-day skip. Completed reports, notes, and raw
+MIDI remain intact. Open recordings can still upload pending checkpoints and be
+closed through recovery on the new runtime, even when their task was retired.
+
+Publication validates the selected snapshot and its ability to read the resulting
+event history before changing local records. Retirement and pin changes share the
+practice write lock; a failed write rolls back that transition. Repeating publication
+does not duplicate retirements. An older runtime that cannot read the history is
+rejected without changing the active pin or records.
 
 ## 출처와 구분
 

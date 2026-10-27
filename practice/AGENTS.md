@@ -40,4 +40,8 @@ recorded events; let the CLI create it when the user starts a real task.
 The runtime commit is intentionally fixed in local `runtime.json`. Cache deletion
 does not switch it; Git reconstructs the same snapshot. Never force-add the cache
 or local pin. `runtime-ref` is only the first-run default for a new workspace.
+Workflow publication activates the selected release without waiting for unfinished
+tasks. Compatible tasks retain their original conditions; incompatible tasks are
+marked retired. Do not resume retired tasks or interpret retirement as failure,
+an unpracticed skip, or a self-report. Original records and MIDI remain available.
 The role boundary is an operating convention, not a claim of OS access isolation.

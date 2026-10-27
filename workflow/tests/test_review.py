@@ -7,7 +7,7 @@ import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 import io
 
 import review as r
@@ -358,15 +358,18 @@ class ReleaseTests(unittest.TestCase):
         self.version = r.curriculum(self.source / "curriculum.yaml")["version"]
         self.revision = git_fixture.initialize(self.source)
 
-    def bump_version(self):
+    def bump_version(self, change=None):
         data = r.curriculum(self.source / "curriculum.yaml")
+        before = data["version"]
         parts = data["version"].split(".")
         data["version"] = ".".join(parts[:2] + [str(int(parts[2]) + 1)])
+        if change:
+            change(data)
         (self.source / "curriculum.yaml").write_text(r.yaml.safe_dump(data, allow_unicode=True))
         project = self.source / "pyproject.toml"
-        project.write_text(project.read_text().replace(f'version = "{self.version}"', f'version = "{data["version"]}"'))
+        project.write_text(project.read_text().replace(f'version = "{before}"', f'version = "{data["version"]}"'))
         lock = self.source / "uv.lock"
-        lock.write_text(lock.read_text().replace(self.version, data["version"]))
+        lock.write_text(lock.read_text().replace(before, data["version"]))
         git_fixture.commit(self.source)
         return data
 
@@ -379,17 +382,23 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             p.publish(self.source, self.practice, True)
 
-    def test_release_cannot_switch_while_task_is_pending(self):
+    def test_publish_activates_by_default_and_carries_compatible_pending_task(self):
         p.publish(self.source, self.practice, True)
         data = r.curriculum(self.source / "curriculum.yaml")
-        r.assign(self.practice, data, "E01")
-        self.bump_version()
-        with self.assertRaises(ValueError):
-            p.publish(self.source, self.practice, True)
-        self.assertEqual((self.practice / "active-version").read_text().strip(), self.version)
-        self.assertEqual(len(r.read_events(self.practice)), 1)
+        task_id = r.assign(self.practice, data, "E01", bpm=55)["task_id"]
+        original = (self.practice / "practice.csv").read_bytes()
+        new_data = self.bump_version(lambda data: data.update(default_bpm=70))
+        result = p.publish(self.source, self.practice)
+        self.assertTrue(result["activated"])
+        self.assertEqual(result["carried_tasks"], [task_id])
+        self.assertEqual(result["retired_tasks"], [])
+        self.assertEqual(p.runtime.read_pin(self.practice)["version"], new_data["version"])
+        self.assertEqual((self.practice / "practice.csv").read_bytes(), original)
+        next_task = r.status(self.practice, new_data)["next"]
+        self.assertEqual(next_task["task_id"], task_id)
+        self.assertEqual(next_task["target"]["bpm"], 55)
 
-    def test_pending_release_installs_and_only_activates_after_report(self):
+    def test_cache_only_defers_activation_and_carried_reports_keep_original_release(self):
         p.publish(self.source, self.practice, True)
         old_data = r.curriculum(self.source / "curriculum.yaml")
         task_id = r.assign(self.practice, old_data, "E01")["task_id"]
@@ -400,9 +409,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertFalse(installed["activated"])
         self.assertTrue((Path(installed["installed"]) / "manifest.json").is_file())
         self.assertEqual((self.practice / "practice.csv").read_bytes(), original)
-        with self.assertRaises(ValueError):
-            p.publish(self.source, self.practice, True)
-        r.record_result(self.practice, old_data, task_id,
+        p.publish(self.source, self.practice, True)
+        r.record_result(self.practice, new_data, task_id,
                         {"raw_note": "테스트: 어려워서 중단", "difficulty": "hard", "actual_minutes": 3})
         reported = (self.practice / "practice.csv").read_bytes()
         self.assertEqual(p.publish(self.source, self.practice, True)["active"], new_data["version"])
@@ -431,15 +439,124 @@ class ReleaseTests(unittest.TestCase):
         p.publish(self.source, self.practice, True)
         self.assertEqual(before, (self.practice / "practice.csv").read_bytes())
 
+    def test_incompatible_pending_task_is_retired_without_practice_or_deferral(self):
+        p.publish(self.source, self.practice)
+        old_data = r.curriculum(self.source / 'curriculum.yaml')
+        task_id = r.assign(self.practice, old_data, 'E01')['task_id']
+        original = (self.practice / 'practice.csv').read_bytes()
+        data = self.bump_version(lambda data: data['criteria'].update(min_clean_runs=3))
+        cached = p.publish(self.source, self.practice, activate=False)
+        self.assertFalse(cached['activated'])
+        self.assertEqual((self.practice / 'practice.csv').read_bytes(), original)
+        result = p.publish(self.source, self.practice)
+        self.assertEqual(result['retired_tasks'], [task_id])
+        self.assertEqual(result['carried_tasks'], [])
+        self.assertTrue((self.practice / 'practice.csv').read_bytes().startswith(original))
+        task = r.records(r.read_events(self.practice))[0]
+        self.assertTrue(task['retired'])
+        self.assertEqual(task['cancellation']['event_type'], 'retired')
+        self.assertEqual(task['cancellation']['release'], self.version)
+        self.assertIn(data['version'], task['cancellation']['reason'])
+        self.assertEqual(task['target']['criteria']['min_clean_runs'], 2)
+        self.assertIsNone(task['report'])
+        self.assertEqual(r.outcome(task), 'unknown')
+        self.assertEqual(r.status(self.practice, data)['reported_attempts'], 0)
+        self.assertEqual(r.suggestion(data, [task])['exercise_id'], 'E01')
+        self.assertEqual(r.suggestion(data, [task])['deferred_today'], [])
+        # Retirement neither earns prerequisite credit nor blocks a fresh task.
+        with self.assertRaises(ValueError):
+            r.assign(self.practice, data, 'E03')
+        before = (self.practice / 'practice.csv').read_bytes()
+        self.assertEqual(p.publish(self.source, self.practice)['retired_tasks'], [])
+        self.assertEqual((self.practice / 'practice.csv').read_bytes(), before)
+        self.assertEqual(r.assign(self.practice, data, 'E01')['target']['criteria']['min_clean_runs'], 3)
+
+    def test_removed_exercise_is_retired_and_reported_history_is_preserved(self):
+        p.publish(self.source, self.practice)
+        old_data = r.curriculum(self.source / 'curriculum.yaml')
+        complete = r.assign(self.practice, old_data, 'E01')['task_id']
+        r.record_result(self.practice, old_data, complete,
+                        {'raw_note': 'Synthetic original note', 'followed_target': True,
+                         'checks': dict.fromkeys(r.CHECKS, True), 'clean_runs': 2})
+        old_task = r.records(r.read_events(self.practice))[0]
+        pending = r.assign(self.practice, old_data, 'E06', purpose='diagnostic')['task_id']
+        def remove(data):
+            data['exercises'] = [e for e in data['exercises'] if e['id'] != 'E06']
+            data['milestones'] = [m for m in data['milestones'] if m['exercise_id'] != 'E06']
+        data = self.bump_version(remove)
+        self.assertEqual(p.publish(self.source, self.practice)['retired_tasks'], [pending])
+        self.assertEqual(r.records(r.read_events(self.practice))[0], old_task)
+        self.assertEqual(r.status(self.practice, data)['reported_attempts'], 1)
+
+    def test_compatibility_checks_conditions_material_and_criteria_not_release_or_playback(self):
+        data = r.curriculum(self.source / 'curriculum.yaml')
+        r.assign(self.practice, data, 'E01')
+        task = r.records(r.read_events(self.practice))[0]
+        changed = copy.deepcopy(data)
+        changed['version'] = '9.9.9'
+        changed['daily_minutes'] = 45
+        changed['exercises'][0]['title'] = 'New presentation title'
+        changed['playback']['four-bar']['C']['bars'][0]['notes'] = [48]
+        self.assertEqual(r.incompatible_target_fields(changed, task), [])
+        cases = [
+            ('arrangement', lambda d: d['exercises'][0].update(arrangement='melody-and-bass')),
+            ('instructions', lambda d: d['exercises'][0].update(instructions='Different playing instructions')),
+            ('material', lambda d: d['materials']['four-bar']['C'].update(roots='C2 | A2 | D3 | G2')),
+            ('criteria', lambda d: d['criteria'].update(id='new-criteria')),
+            ('key', lambda d: d.update(allowed_keys=['F', 'Bb'])),
+            ('bpm', lambda d: d.update(minimum_bpm=70)),
+        ]
+        for field, change in cases:
+            with self.subTest(field=field):
+                changed = copy.deepcopy(data)
+                change(changed)
+                self.assertIn(field, r.incompatible_target_fields(changed, task))
+
+    def test_unreadable_candidate_does_not_retire_tasks_or_change_pin(self):
+        p.publish(self.source, self.practice)
+        r.assign(self.practice, r.curriculum(self.source / 'curriculum.yaml'), 'E01')
+        before = {name: (self.practice / name).read_bytes() for name in ['practice.csv', 'runtime.json', 'active-version']}
+        self.bump_version(lambda data: data['criteria'].update(min_clean_runs=3))
+        path = self.source / 'review.py'
+        path.write_text(path.read_text().replace('def records(events):',
+                        'def records(events):\n    raise ValueError("Synthetic incompatible reader")'))
+        git_fixture.commit(self.source)
+        with self.assertRaisesRegex(ValueError, '런타임이 연습 기록을 읽을 수 없어'):
+            p.publish(self.source, self.practice)
+        for name, content in before.items():
+            self.assertEqual((self.practice / name).read_bytes(), content)
+
+    def test_failed_activation_rolls_back_its_retirement_and_pin_changes(self):
+        p.publish(self.source, self.practice)
+        r.assign(self.practice, r.curriculum(self.source / 'curriculum.yaml'), 'E01')
+        before = {name: (self.practice / name).read_bytes() for name in ['practice.csv', 'runtime.json', 'active-version']}
+        self.bump_version(lambda data: data['criteria'].update(min_clean_runs=3))
+        activate = p.runtime.activate
+        def fail_after_write(root, manifest):
+            activate(root, manifest)
+            raise OSError('Synthetic activation failure')
+        with patch.object(p.runtime, 'activate', side_effect=fail_after_write), self.assertRaises(OSError):
+            p.publish(self.source, self.practice)
+        for name, content in before.items():
+            self.assertEqual((self.practice / name).read_bytes(), content)
+
+    def test_cli_defaults_to_activation_and_has_explicit_cache_only_mode(self):
+        args = ['publish.py', '--practice-root', str(self.practice), '--ref', self.revision]
+        for extra, activated in [(['--cache-only'], False), ([], True)]:
+            output = io.StringIO()
+            with patch.object(p, 'SOURCE', self.source), patch('sys.argv', args + extra), redirect_stdout(output):
+                self.assertEqual(p.main(), 0)
+            self.assertEqual(json.loads(output.getvalue())['activated'], activated)
+
     def test_explicit_revision_uses_committed_code_despite_dirty_source(self):
         original = (self.source / 'COACH.md').read_bytes()
         (self.source / 'COACH.md').write_text('uncommitted development change')
-        result = p.publish(self.source, self.practice, ref=self.revision)
+        result = p.publish(self.source, self.practice, activate=False, ref=self.revision)
         self.assertEqual((Path(result['installed']) / 'COACH.md').read_bytes(), original)
         self.assertFalse((self.practice / 'runtime.json').exists())
 
     def test_legacy_migration_preserves_pending_task_and_runtime(self):
-        installed = Path(p.publish(self.source, self.practice)['installed'])
+        installed = Path(p.publish(self.source, self.practice, activate=False)['installed'])
         legacy = self.practice / 'releases' / self.version
         shutil.copytree(installed, legacy)
         (self.practice / 'active-version').write_text(self.version + '\n')
@@ -450,16 +567,16 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(p.runtime.read_pin(self.practice)['revision'], self.revision)
         self.assertEqual((self.practice / 'practice.csv').read_bytes(), before)
 
-    def test_migration_cannot_replace_changed_legacy_runtime_with_pending_task(self):
+    def test_migration_replaces_changed_legacy_runtime_with_compatible_pending_task(self):
         legacy = self.practice / 'releases' / self.version
         shutil.copytree(self.source, legacy)
         (legacy / 'COACH.md').write_text('different runtime')
         (self.practice / 'active-version').write_text(self.version + '\n')
         r.assign(self.practice, r.curriculum(self.source / 'curriculum.yaml'), 'E01')
         before = (self.practice / 'practice.csv').read_bytes()
-        with self.assertRaises(ValueError):
-            p.publish(self.source, self.practice, True)
-        self.assertFalse((self.practice / 'runtime.json').exists())
+        result = p.publish(self.source, self.practice)
+        self.assertTrue(result['activated'])
+        self.assertEqual(p.runtime.read_pin(self.practice)['revision'], self.revision)
         self.assertEqual((self.practice / 'practice.csv').read_bytes(), before)
 
     def test_missing_ref_preserves_active_pin_and_evidence(self):

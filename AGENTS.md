@@ -20,3 +20,6 @@ Do not invent practice history or a mastery deadline. Personal records, profiles
 MIDI sessions, and coaching notes stay local and must not be force-added to Git.
 Git commits and tags retain runtime history. `practice/.runtime/` is a disposable
 cache; `practice/runtime.json` pins the local active commit and stays untracked.
+Publishing prioritizes activating the selected release. Compatible unfinished tasks
+carry forward with their original snapshots; incompatible ones are retired with a
+reason while preserving history and MIDI. Retirement is not a practice result or skip.

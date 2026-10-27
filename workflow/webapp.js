@@ -381,7 +381,7 @@ function renderHistory() {
     const button = el('button', undefined, 'history-item'), left = el('div');
     const day = task.report?.practice_date || task.assigned_at.slice(0, 10);
     left.append(el('small', `${day} / ${task.exercise_id}`), el('h3', task.target.title), el('p', tr`${task.target.key} · Target ${task.target.bpm} BPM${task.report?.actual_minutes ? tr` · ${Number(Number(task.report.actual_minutes).toFixed(2))} min` : ''}`));
-    button.append(left, el('span', task.cancelled ? tr('Skipped') : task.report ? tr(labels[task.outcome]) : tr('In progress'), `tag ${task.outcome}`));
+    button.append(left, el('span', task.retired ? tr('Retired on update') : task.cancelled ? tr('Skipped') : task.report ? tr(labels[task.outcome]) : tr('In progress'), `tag ${task.outcome}`));
     button.addEventListener('click', () => showDetail(task));
     $('history-list').append(button);
   }
@@ -403,7 +403,7 @@ function showDetail(task) {
   if (task.report) {
     const a = JSON.parse(task.report.actual_json);
     actualBox.append(el('div', tr`${a.key || tr('Key unknown')} · ${a.bpm ?? tr('Unknown')} BPM · ${a.bars ?? tr('Unknown')} bars`), el('div', ui.data.arrangements[a.arrangement] || tr('Hand arrangement unknown')), el('div', tr`${tr(labels[task.outcome])} · Consecutive successful runs: ${task.report.clean_runs || tr('Unknown')}`));
-  } else actualBox.append(el('div', task.cancelled ? tr('Cancelled before practice') : tr('No result reported yet')));
+  } else actualBox.append(el('div', task.retired ? tr('Closed by an update. No practice result was inferred.') : task.cancelled ? tr('Cancelled before practice') : tr('No result reported yet')));
   grid.append(intended, actualBox); box.append(grid);
   box.append(el('p', task.report?.raw_note || task.reason, 'raw-note'));
   if (task.report) {

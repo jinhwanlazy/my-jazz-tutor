@@ -16,8 +16,11 @@ user requests implementation. Read `DESIGN.md`, `README.md`, `curriculum.yaml`, 
 - Edit source files here. Do not edit an installed release in place.
 - A change to source does not activate it. Commit runtime changes, then use
   `publish.py --ref <commit-or-tag>` to validate and cache that Git snapshot.
-  Activation waits until the current assigned task is resolved. Never commit
-  runtime copies or the local active pin; Git commits/tags retain version history.
+  Publication activates the selected version by default; `--cache-only` explicitly
+  prepares a cache without activation. Carry compatible unfinished tasks with their
+  original snapshots; retire incompatible ones with a reason, preserving history
+  and MIDI. Unfinished tasks do not block upgrades or imply failure/unpracticed status.
+  Never commit runtime copies or the local active pin; Git commits/tags retain version history.
 - Publish when the user's task includes applying/releasing the change. Do not add
   a permission round trip if that action is already authorized.
 - Initial workspace setup and initial release are authorized by the setup request.

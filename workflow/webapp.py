@@ -99,7 +99,8 @@ class Application:
             report = task["report"]
             history.append({"id": task["assignment"]["task_id"], "exercise_id": task["assignment"]["exercise_id"],
                             "assigned_at": task["assignment"]["recorded_at"], "target": display_target(task["target"], language),
-                            "cancelled": task["cancelled"], "reason": (task["cancellation"] or task["assignment"])["reason"],
+                            "cancelled": task["cancelled"], "retired": task["retired"],
+                            "reason": (task["cancellation"] or task["assignment"])["reason"],
                             "report": report, "outcome": r.outcome(task), "feedback": feedback(task, language),
                             "revisions": [e for e in events if e["task_id"] == task["assignment"]["task_id"]
                                           and e["event_type"] in ("reported", "corrected")]})

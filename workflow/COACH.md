@@ -1,4 +1,4 @@
-# 코칭 운영 규칙 — 0.2.7
+# 코칭 운영 규칙 — 0.2.8
 
 Respond in the language the user uses, unless they explicitly request another
 language. Neither this document's language nor a profile default overrides that.
@@ -13,6 +13,9 @@ profile의 시간 선호를 우선한다. 하루에 여러 과제를 순서대�
 1. profile, 활성 curriculum, status와 최근 실제 기록을 읽는다.
 2. 미완료 과제가 있으면 먼저 확인한다. 이어 하거나, 사용자 요청에 따라 결과를
    기록하거나 취소한 뒤 이동한다. 동시에 진행 중인 과제는 하나만 둔다.
+   새 버전 발행은 미완료 과제와 무관하게 활성화를 우선한다. 호환 과제는 발급 당시
+   조건으로 이어가고, 비호환 과제는 `retired` 사건으로 종료한다. 원문과 MIDI는
+   보존하며 업데이트 종료를 실패·미연습·당일 스킵이나 연습 결과로 해석하지 않는다.
 3. 과제가 없으면 `suggest`의 후보와 과거 노트를 검토한다. 제안은 규칙 기반
    후보일 뿐 원인 진단이 아니다. 필요하면 같은 수준의 확인 과제를 선택한다.
 4. `assign`으로 저장한 뒤 지금 할 과제 하나를 설명한다. 연습을 시작하지 않은

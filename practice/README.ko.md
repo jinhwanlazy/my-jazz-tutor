@@ -57,9 +57,11 @@ BPM·시간 후보를 확인하고 간단한 결과와 메모를 남깁니다. �
 `runtime-ref`의 태그를 `runtime.json`의 커밋으로 고정합니다. 이후 소스나 태그가 바뀌어도
 같은 커밋을 실행합니다. `.runtime/` 캐시는 삭제해도 로컬 Git 이력에서 다시 생성됩니다.
 
-미완료 과제 때문에 웹 버전 활성화가 대기 중이라면 기존 버전으로 해당 과제를 마친 뒤
-workflow에서 `uv run python publish.py --ref v0.2.3 --activate`를 실행합니다.
-실행 명령은 과제를 취소하거나 기존 고정 커밋을 자동 변경하지 않습니다.
+workflow에서 `uv run python publish.py --ref v0.2.8`로 발행하면 미완료 과제와 무관하게
+활성화합니다. 호환 과제는 원래 조건으로 이어가고 비호환 과제는 사유를 남겨 종료하며
+기록과 MIDI를 보존합니다. 업데이트 종료는 연습 결과나 당일 스킵으로 집계하지 않습니다.
+캐시만 준비하려면 `--cache-only`를 쓰고, 활성화 후 서버를 다시 시작합니다.
+평소 실행 명령은 기존 고정 커밋을 따릅니다.
 
 `practice.csv`, `profile.json`, `workflow-feedback.md`, `sessions.sqlite3`와
 `runtime.json`, `active-version`, `.runtime/`, `reports/`, `backups/`는 Git 추적에서 제외합니다.

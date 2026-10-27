@@ -87,10 +87,12 @@ cache location. First launch resolves `runtime-ref` to a commit in local
 `runtime.json`. Later source or tag changes do not change that pin. Deleting the
 `.runtime/` cache reconstructs the same commit from local Git history.
 
-If an unfinished task blocks activation, resolve it with the current runtime,
-then run `uv run --project workflow python workflow/publish.py --ref v0.2.6 --activate`
-from the repository root. Launching the app does not cancel tasks or replace the
-existing pin.
+Publishing activates the selected release even with unfinished tasks. From the
+repository root, run `uv run --project workflow python workflow/publish.py --ref v0.2.8`.
+Compatible tasks keep their original conditions; incompatible tasks are retired
+with a reason while preserving history and MIDI. Retirement is not a performance
+result or a skip. Use `--cache-only` to prepare without activating, and restart the
+practice server after activation. Launching alone follows the existing pin.
 
 `practice.csv`, `profile.json`, `workflow-feedback.md`, `sessions.sqlite3`,
 `runtime.json`, `active-version`, `.runtime/`, `reports/`, and `backups/` are ignored

@@ -60,6 +60,8 @@
     "C4 is middle C.": "C4는 가운데 도입니다.",
     "CHORD PROGRESSION": "코드 진행",
     "Cancelled before practice": "연습 전 취소",
+    "Retired on update": "업데이트로 종료",
+    "Closed by an update. No practice result was inferred.": "업데이트로 종료되었습니다. 연습 결과는 추정하지 않았습니다.",
     "Check connection": "연결 확인 필요",
     "Checks only accept true, false, or null.": "checks는 true/false/null만 허용합니다.",
     "Choose another exercise": "다른 과제 선택",

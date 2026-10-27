@@ -79,8 +79,10 @@ development previews, and recovery.
 With no arguments, `jazz` runs `serve --open`; no separate environment activation
 or installation command is required. To use another port, run
 `uv run --project practice jazz serve --open --port 8768`. The launcher follows the
-local pinned commit. It does not cancel unfinished tasks or automatically activate
-new versions.
+local pinned commit. Publishing from `workflow/` activates the selected release by
+default, carries compatible unfinished tasks, and retires incompatible tasks while
+preserving their history and MIDI. Use `--cache-only` to defer activation; restart
+the practice server after publishing.
 
 Role boundaries are enforced by directory instructions and runtime publication.
 They are operating conventions, not an OS sandbox blocking access to other files.
