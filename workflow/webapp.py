@@ -13,7 +13,7 @@ import webbrowser
 
 import review as r
 from notation import score_for
-from sessions import SessionStore
+from sessions import SessionStore, reflection_measurements
 
 ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "text/javascript",
           "audio.mjs": "text/javascript", "capture.mjs": "text/javascript",
@@ -32,6 +32,8 @@ def feedback(task, language="en"):
     report, target = task["report"], task["target"]
     if report is None:
         return {"title": text("No result reported yet."), "details": []}
+    if report["difficulty"] in r.RATINGS:
+        return {"title": text("Practice saved"), "details": [], "evidence": "subjective difficulty"}
     actual, checks = json.loads(report["actual_json"]), json.loads(report["checks_json"])
     details = []
     labels = {"notes_correct": "Notes", "steady_pulse": "Steady pulse", "no_stops": "No stops"}
@@ -86,10 +88,13 @@ class Application:
     def state(self, language="en"):
         events = r.read_events(self.root)
         tasks = r.records(events)
+        profile_path = self.root / "profile.json"
+        profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
+        sessions = self.store.list()
         lessons = []
         for lesson in self.data["exercises"]:
             eligible = [key for key in self.data["allowed_keys"]
-                        if all(r.goal_successes(self.data, tasks, parent, key, self.data["default_bpm"])
+                        if all(r.practice_ready(self.data, tasks, parent, key)
                                for parent in lesson["prerequisites"])]
             lessons.append({**r.display_builtin(lesson, language), "eligible_keys": eligible,
                             "targets": {key: display_target(r.target_for(self.data, lesson["id"], key), language)
@@ -102,6 +107,8 @@ class Application:
                             "cancelled": task["cancelled"], "retired": task["retired"],
                             "reason": (task["cancellation"] or task["assignment"])["reason"],
                             "report": report, "outcome": r.outcome(task), "feedback": feedback(task, language),
+                            "observations": r.reflection_observations(report) if report else reflection_measurements(
+                                [s for s in sessions if s["task_id"] == task["assignment"]["task_id"]], profile),
                             "revisions": [e for e in events if e["task_id"] == task["assignment"]["task_id"]
                                           and e["event_type"] in ("reported", "corrected")]})
         status = r.status(self.root, self.data)
@@ -114,7 +121,7 @@ class Application:
                 "status": status, "exercises": lessons,
                 "keys": self.data["allowed_keys"], "minimum_bpm": self.data["minimum_bpm"],
                 "maximum_bpm": self.data["maximum_bpm"], "arrangements": r.display_builtin(r.ARRANGEMENTS, language),
-                "history": history, "sessions": self.store.list()}
+                "history": history, "sessions": sessions}
 
     def post(self, path, payload, language="en"):
         r.require(isinstance(payload, dict), "The request must be a JSON object.")
@@ -123,6 +130,10 @@ class Application:
             if path == "/api/assign":
                 return r.assign(self.root, self.data, payload["exercise_id"], payload.get("key"),
                                 payload.get("bpm"), "practice", payload.get("reason", "Practice selected in the web app"))
+            if path == "/api/reflection":
+                r.require(set(payload) <= {"task_id", "rating", "note", "expected_event_id"}, "The feedback contains unknown fields.")
+                return self.store.reflect(self.data, payload["task_id"], payload.get("rating"),
+                                          payload.get("note", ""), payload.get("expected_event_id"))
             if path in ("/api/report", "/api/cancel"):
                 task_id = payload["task_id"]
                 sessions = self.store.list(task_id)

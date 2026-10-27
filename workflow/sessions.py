@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import base64
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import math
 from pathlib import Path
 import sqlite3
 import struct
 import uuid
+from zoneinfo import ZoneInfo
 
 import review as r
 
@@ -17,6 +18,37 @@ FRAME = struct.Struct("<dHH")  # elapsed milliseconds, input index, byte count
 MAX_MS = 24 * 60 * 60 * 1000
 EVENTS = {"play", "pause", "tempo", "pad", "click", "device", "disconnect",
           "visibility", "audio_interrupted", "recovered"}
+
+
+def reflection_measurements(sessions, profile, now=None):
+    """Freeze timing provenance separately from any claims about played notes or tempo."""
+    zone_name = profile.get("timezone", "UTC")
+    zone = ZoneInfo(zone_name)
+    now = now or datetime.now(timezone.utc)
+    observations, days = [], {}
+    for session in sessions:
+        summary = session["summary"]
+        if not summary:
+            continue
+        started = datetime.fromisoformat(session["created_at"])
+        day = (started + timedelta(milliseconds=summary["first_note_ms"] or 0)).astimezone(zone).date().isoformat()
+        duration = None if session["status"] != "finished" else summary["input_span_ms"]
+        basis = "midi_span"
+        if duration is None:
+            basis = "playback"
+            # A normal session without a complete MIDI span can still have known playback time.
+            duration = summary["active_ms"] if session["status"] == "finished" else None
+        minutes = duration / 60000 if duration is not None else None
+        days[day] = None if minutes is None or (day in days and days[day] is None) else days.get(day, 0) + minutes
+        observations.append({"id": session["id"], "date": day, "minutes": minutes,
+                             "duration_source": basis if minutes is not None else "unknown",
+                             "metronome_bpm": summary["last_note_bpm"] or summary["last_setting_bpm"]})
+    minutes = sum(days.values()) if days and all(v is not None for v in days.values()) else None
+    return {"source": "session-reflection-v1", "timezone": zone_name,
+            "practice_date": max(days) if days else now.astimezone(zone).date().isoformat(),
+            "date_source": "session" if days else "feedback_date", "days": days,
+            "minutes": minutes, "sessions": observations,
+            "metronome_bpm": next((s["metronome_bpm"] for s in reversed(observations) if s["metronome_bpm"] is not None), None)}
 
 
 def midi_messages(blob):
@@ -189,6 +221,39 @@ class SessionStore:
                     "SELECT COUNT(*) FROM chunks WHERE session_id=?", (row["id"],)).fetchone()[0]
                 result.append(item)
             return result
+
+    def reflect(self, data, task_id, rating, note="", expected_event_id=None):
+        r.require(isinstance(rating, str) and rating in r.RATINGS, "Choose a practice rating.")
+        r.require(isinstance(note, str), "The note must be text.")
+        with r.log_lock(self.root):
+            events = r.read_events(self.root)
+            task = next((t for t in r.records(events) if t["assignment"]["task_id"] == task_id), None)
+            r.require(task is not None and not task["cancelled"], "Active task ID not found.")
+            sessions = self.list(task_id)
+            r.require(not any(s["status"] == "recording" for s in sessions), "Finish and save the current practice session first.")
+            previous = task["report"]
+            if previous and previous["difficulty"] == rating and previous["raw_note"] == note:
+                return {"task_id": task_id, "event_id": previous["event_id"]}
+            r.require((previous["event_id"] if previous else None) == expected_event_id,
+                      "This feedback has changed. Refresh before editing it.")
+            event = r.new_event("corrected" if previous else "reported", task_id, data,
+                                task["assignment"]["exercise_id"], task["assignment"]["purpose"])
+            if previous:
+                # A label or memo edit must never discard older performance evidence.
+                for field in ("practice_date", "actual_json", "checks_json", "clean_runs", "actual_minutes", "hypothesis", "reason"):
+                    event[field] = previous[field]
+            else:
+                profile_path = self.root / "profile.json"
+                profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
+                measured = reflection_measurements(sessions, profile)
+                event.update(practice_date=measured["practice_date"], actual_json="{}", checks_json="{}",
+                             actual_minutes="" if measured["minutes"] is None else str(measured["minutes"]),
+                             reason=r.jdump(measured))
+            event.update(release=task["assignment"]["release"], difficulty=rating, raw_note=note,
+                         supersedes=previous["event_id"] if previous else "")
+            r.records(events + [event])
+            r.append_event(self.root, event)
+        return {"task_id": task_id, "event_id": event["event_id"]}
 
     def append(self, session_id, packet):
         r.require(isinstance(packet, dict) and set(packet) == {"sequence", "midi", "events", "elapsed_ms"},

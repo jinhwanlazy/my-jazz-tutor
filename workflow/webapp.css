@@ -174,6 +174,22 @@ summary{cursor:pointer;font-size:12px;color:#6c7a62;line-height:1.7}
 .record-card,.feedback-card{margin-top:25px}
 .record-card h2{margin:8px 0 0}
 .record-card .eyebrow{margin:0}
+.rating-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:24px 0 12px}
+.rating-options button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px 12px;min-height:116px;border:1px solid #cfd8c7;border-radius:12px;background:#fafbf7;color:var(--ink);font-size:13px;line-height:1.5}
+.rating-options button>span{font-size:30px;line-height:1}
+.rating-options strong{word-break:keep-all;text-wrap:balance}
+.record-card{scroll-margin-top:90px}
+.rating-options button:hover{background:#edf2e7;border-color:#819873}
+.rating-options button[aria-pressed=true]{background:#e3ecd9;border:2px solid #59744a;padding:19px 11px}
+#reflection-status{min-height:20px;color:#47653a}
+.memo-details{margin:16px 0}
+.memo-details summary{cursor:pointer;font-size:13px;color:#59744a;padding:8px 0}
+.memo-details form{display:grid;gap:12px;margin-top:12px}
+.memo-details .button{justify-self:start}
+#feedback-panel{margin-top:20px}
+#feedback-next{font-size:13px;line-height:1.7}
+#close-record{margin-top:18px}
+@media(max-width:700px){.rating-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.rating-options button{min-height:108px}}
 .form-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px;margin:22px 0 15px}
 .form-row.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .check-line{flex-direction:row;align-items:center;line-height:1.7;margin:23px 0 15px;font-weight:400}

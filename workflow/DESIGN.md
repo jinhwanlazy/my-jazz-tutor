@@ -8,8 +8,8 @@
   진행 중인 MIDI 수집과 미저장 결과 입력을 유지하고 개인 기록·원문은 번역하지 않는다.
 - Charlie Tran의 melody, rhythm, bass, voicing 어휘와 적용 방식을 참고한다.
 - 대화로 과제 제시 → 실제 연습 → 자연어 노트 → 다음 과제의 루프.
-- 하루에 여러 과제를 순서대로 진행한다. 어렵다면 보류/단순화하고, 쉬우면 기준을
-  짧게 확인한 뒤 바로 다음 항목으로 이동한다. 30분은 하루 전체의 기본 시간 예산이다.
+- 하루에 여러 과제를 순서대로 진행한다. 체감 난이도로 반복/단순화/다음 과제를 고른다.
+  다음 연습을 여는 것과 숙련도 통과를 구분한다. 30분은 하루 전체의 기본 시간 예산이다.
 - 일일 연습 세션과 워크플로 편집 세션의 작업 디렉터리와 역할을 분리한다.
 - CLI와 같은 기록·기준을 사용하는 로컬 웹 연습실을 제공한다. 과제 제시, 결과 입력,
   규칙 기반 피드백, 기록 조회와 정정, 메트로놈, 선택적 코드 패드를 한곳에서 사용한다.
@@ -38,13 +38,13 @@ CSV는 append-only event log다. `assigned`, `reported`, `cancelled`, `retired`,
 동시에 미완료인 과제는 하나만 두지만 하루 과제 수에는 제한을 두지 않는다.
 결과 기록 또는 취소 후 같은 날 다음 과제를 발급할 수 있다. 연습 전 스킵은 이유를
 남긴 취소, 연습 후 중단은 실제 조건과 원문을 남긴 결과 기록으로 구분한다.
-취소한 항목과 어렵다고 보고한 미통과 항목은 그날 같은 항목·키의 자동 추천에서
+취소한 항목과 기존 CLI의 `hard`로 보고한 미통과 항목은 그날 같은 항목·키의 자동 추천에서
 보류한다. 다른 과제도 선행 조건을 충족해야 하며, 후보가 없으면 마무리 또는 조건
 단순화를 안내한다. 명시적으로 재시도할 수 있고 새 결과가 있으면 그 결과가 우선한다.
 보류는 영구 제외가 아니며 다음 날 다시 후보가 된다. 취소일과 실제 연습일을 쓰고,
 과거 결과를 오늘 정정했다는 이유로 오늘의 시도로 재해석하지 않는다.
 
-쉬운 과제는 기준을 짧게 확인하고 당일 바로 다음 항목으로 간다. 성공 기준과 후일
+웹의 좋은 연습/너무 쉬움은 정확도 설문 없이 당일 다음 연습을 열 수 있다. 성공 기준과 후일
 재현 기준은 유지한다. 하루 시간은 과제별 보고를 합산하며 준비·듣기·기록도 예산에
 포함한다. 시간이 알려지지 않은 기록은 0분으로 바꾸지 않고 남은 시간을 미확인으로
 둔다. 알려진 시간만으로 예산에 도달하면 마무리를 권하지만 추가 연습을 차단하지 않는다.
@@ -78,7 +78,7 @@ MIDI의 음·박자·스윙 분석과 자동 피드백 대체는 아직 설계�
 Python 표준 라이브러리 서버를 127.0.0.1에만 열고, 브라우저는 같은 서버의 API로
 기존 발급·보고·정정·취소 함수를 사용한다. 외부 LLM 호출이나 호스팅은 없다.
 페이지를 여는 것만으로 과제가 발급되거나 연습 실적이 만들어지지 않는다.
-웹의 피드백은 보고한 조건·검사 결과와 기존 기준의 비교이며 자유 대화형 코칭은 아니다.
+웹의 피드백은 명시적인 체감 난이도 라벨과 선택 메모다. 음악적 판정과 분리한다.
 
 Web Audio의 오디오 시계 하나로 메트로놈과 마디별 코드 패드를 예약한다. 패드는
 기본 꺼짐이며 과제의 코드 진행을 반복한다. 템포와 두 음량은 연습 중 변경할 수 있다.
@@ -97,7 +97,7 @@ Web Audio의 오디오 시계 하나로 메트로놈과 마디별 코드 패드�
 청크를 지운다. 재접속 시 잔여 청크를 전송하고 중단 상태를 남긴다. 마지막 체크포인트
 이후 브라우저가 강제 종료되면 미저장 입력은 복구할 수 없으므로 완전한 기록으로 표시하지 않는다.
 
-자동 입력 후보는 다음처럼 원본에서 파생한다. 사용자가 확인·수정해야 CSV에 보고된다.
+라벨을 저장할 때 서버가 자동 관측을 파생하며 사용자에게 재입력을 요구하지 않는다.
 
 - BPM: 마지막 Note On 시점의 메트로놈 설정. 입력이 없으면 마지막 재생 설정.
   연주를 분석해 측정한 BPM이 아니다. 설정 변경 이력도 별도로 보존한다.
@@ -105,7 +105,7 @@ Web Audio의 오디오 시계 하나로 메트로놈과 마디별 코드 패드�
   앞뒤의 무입력만 제외하며 중간 쉼은 포함한다. MIDI clock·제어 메시지만으로 늘리지 않는다.
 - Note Off 누락·장치 변경/끊김·수집 중단이면 MIDI 구간은 미확인이다.
 - MIDI 구간을 측정할 수 없으면 일시정지를 뺀 재생 시간을 대안으로 표시한다.
-  브라우저 복구로 종료한 세션은 실제 시간을 직접 입력한다. 준비·회고 시간은 필요하면 더한다.
+  브라우저 복구로 종료한 세션은 전체 시간을 미확인으로 둔다. 준비·회고 시간을 추정하지 않는다.
 
 원본은 자르지 않으며 결과 정정도 녹음을 변경하지 않는다. 입력 유무만으로 성공 검사나
 연속 성공 횟수를 자동 채우지 않는다. 재생 정보는 기존 material과 분리해 저장하여
@@ -199,3 +199,34 @@ rejected without changing the active pin or records.
 
 전체 원영상 자막을 확보하지 못했다. 이 커리큘럼, 수치 기준, 분리 구조는 대화에서
 만든 설계이며 Charlie Tran의 공식 강의나 원영상의 완전한 전사가 아니다.
+
+## One-tap practice feedback — 0.2.9
+
+The web accepts one explicit label: `impossible`, `challenging`, `good`, or
+`too_easy`. A tap saves immediately; a memo is optional and can be saved later or
+with Next practice. There are no manual date, tempo, duration, correctness,
+continuity, condition-confirmation, or run-count controls. Missing evidence does
+not produce a questionnaire after saving. Legacy observations remain in history.
+
+The CSV schema stays unchanged. New reports use the existing `difficulty` column;
+`raw_note` may be empty for these four values. Actual conditions/checks stay empty,
+and no success count is inferred. Report `reason` contains a tagged
+`session-reflection-v1` JSON snapshot of session IDs, duration sources, last
+metronome setting, timezone, practice date and daily totals. Metronome BPM is never
+written as analyzed playing BPM. Complete sessions use the MIDI span, or playback
+time without pauses; interrupted sessions leave the total unknown. Dates use each
+session's first input/start in the profile timezone. A midnight-crossing session
+belongs to its starting day; multiple sessions on different dates are allocated
+separately. With no sessions, the saving date is explicitly a recording date.
+
+The latest compatible good/too-easy feedback opens ordinary practice prerequisites
+in the same key. It never changes success/retention calculations or review/transfer
+requirements. Impossible lowers tempo by 10 BPM within bounds; challenging repeats
+at the observed metronome setting (assigned tempo if unknown). Positive labels
+prefer the next eligible exercise; with all exercises comfortable, too-easy raises
+tempo by 10 BPM. Existing success-based retention reviews remain due as before.
+
+Label/memo changes append corrections while preserving prior dates, measurements,
+explicit legacy performance evidence and raw input. Revision tokens reject stale
+edits, and identical retries do not append duplicate reports. Tests and previews
+use temporary workspaces only.

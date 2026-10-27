@@ -38,7 +38,7 @@
         <div id="chords" class="chords"></div>
         <div id="hand-notes" class="hand-notes"></div>
         </details>
-        <div class="criterion"><span class="criterion-icon" aria-hidden="true">✓</span><div><strong><span data-i18n="Success criteria">Success criteria</span></strong><p id="criterion-text"></p><small><span data-i18n="Confirm notes, pulse, uninterrupted playing, and consecutive successful runs yourself.">Confirm notes, pulse, uninterrupted playing, and consecutive successful runs yourself.</span></small></div></div>
+        <div class="criterion"><span class="criterion-icon" aria-hidden="true">✓</span><div><strong><span data-i18n="Success criteria">Success criteria</span></strong><p id="criterion-text"></p></div></div>
         <details id="chooser" class="chooser"><summary><span data-i18n="Choose another exercise">Choose another exercise</span></summary><div class="chooser-fields"><label><span data-i18n="Exercise">Exercise</span><select id="exercise-select"></select></label><label><span data-i18n="Key">Key</span><select id="key-select"></select></label><label><span data-i18n="Target BPM">Target BPM</span><input id="goal-bpm" type="number" min="40" max="120" value="60"></label></div><p id="eligibility" class="subtle"></p></details>
         <div class="lesson-actions"><button id="skip-btn" class="text-button" hidden><span data-i18n="Not practiced · skip">Not practiced · skip</span></button><button id="manual-record-btn" class="text-button" hidden><span data-i18n="Already practiced · add report">Already practiced · add report</span></button></div>
       </section>
@@ -68,21 +68,27 @@
         <details class="score-details"><summary data-i18n="About the live display">About the live display</summary><p data-i18n="Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.">Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.</p></details>
       </section>
       <section id="record-panel" class="card record-card" hidden>
-        <div class="section-top"><div><p class="eyebrow" data-i18n="REFLECT &amp; CONTINUE">REFLECT &amp; CONTINUE</p><h2 id="record-title"><span data-i18n="How did your practice go?">How did your practice go?</span></h2></div><span class="tag"><span data-i18n="Self-report">Self-report</span></span></div>
+        <p class="eyebrow" data-i18n="REFLECT &amp; CONTINUE">REFLECT &amp; CONTINUE</p>
+        <h2 id="record-title" data-i18n="How did your practice go?">How did your practice go?</h2>
+        <p class="field-note" data-i18n="One tap saves your feedback. You can change it anytime.">One tap saves your feedback. You can change it anytime.</p>
+        <div class="rating-options" role="group" aria-labelledby="record-title">
+          <button type="button" data-rating="impossible" aria-pressed="false"><span aria-hidden="true">😈</span><strong data-i18n="Impossible">Impossible</strong></button>
+          <button type="button" data-rating="challenging" aria-pressed="false"><span aria-hidden="true">💪</span><strong data-i18n="Challenging">Challenging</strong></button>
+          <button type="button" data-rating="good" aria-pressed="false"><span aria-hidden="true">🙂</span><strong data-i18n="Good practice">Good practice</strong></button>
+          <button type="button" data-rating="too_easy" aria-pressed="false"><span aria-hidden="true">🙄</span><strong data-i18n="Too easy to be useful">Too easy to be useful</strong></button>
+        </div>
+        <p id="reflection-status" class="field-note" role="status" aria-live="polite"></p>
+        <details id="memo-details" class="memo-details"><summary data-i18n="Add a note · optional">Add a note · optional</summary>
+          <form id="record-form">
+            <label for="raw-note" data-i18n="Your note">Your note</label>
+            <textarea id="raw-note" rows="3" placeholder="Anything you want to remember" data-i18n-placeholder="Anything you want to remember"></textarea>
+            <button id="save-note" type="submit" class="button secondary" data-i18n="Save note">Save note</button>
+          </form>
+        </details>
         <div id="measurements" class="measurements"></div>
-        <form id="record-form">
-          <div class="form-row"><label><span data-i18n="Actual BPM">Actual BPM</span><input id="actual-bpm" type="number" min="1" max="400" placeholder="Unknown" data-i18n-placeholder="Unknown"></label><label><span data-i18n="Actual practice time · minutes">Actual practice time · minutes</span><input id="actual-minutes" type="number" min="0" max="1440" step="any" placeholder="Unknown" data-i18n-placeholder="Unknown"></label><label><span data-i18n="Practice date">Practice date</span><input id="practice-date" type="date" required></label></div>
-          <p id="prefill-note" class="field-note"><span data-i18n="Suggested values do not verify your performance. Check that they match what you actually played.">Suggested values do not verify your performance. Check that they match what you actually played.</span></p>
-          <label class="check-line"><input id="followed-target" type="checkbox"><span data-i18n="I followed the assigned key, hands, section, rhythm, and notes.">I followed the assigned key, hands, section, rhythm, and notes.</span></label>
-          <details class="actual-details"><summary><span data-i18n="I changed the practice conditions">I changed the practice conditions</span></summary><div class="form-row"><label><span data-i18n="Actual key">Actual key</span><select id="actual-key"><option value="" data-i18n="Unknown">Unknown</option></select></label><label><span data-i18n="Actual hand arrangement">Actual hand arrangement</span><select id="actual-arrangement"><option value="" data-i18n="Unknown">Unknown</option></select></label><label><span data-i18n="Actual bar count">Actual bar count</span><input id="actual-bars" type="number" min="1" max="1000" placeholder="Unknown" data-i18n-placeholder="Unknown"></label></div></details>
-          <div class="form-row checks"><label><span data-i18n="Were the notes correct?">Were the notes correct?</span><select id="notes-correct"><option value="" data-i18n="Unknown">Unknown</option><option value="true" data-i18n="Yes">Yes</option><option value="false" data-i18n="No">No</option></select></label><label><span data-i18n="Did you keep a steady pulse?">Did you keep a steady pulse?</span><select id="steady-pulse"><option value="" data-i18n="Unknown">Unknown</option><option value="true" data-i18n="Yes">Yes</option><option value="false" data-i18n="No">No</option></select></label><label><span data-i18n="Did you play without stopping?">Did you play without stopping?</span><select id="no-stops"><option value="" data-i18n="Unknown">Unknown</option><option value="true" data-i18n="Yes">Yes</option><option value="false" data-i18n="No">No</option></select></label></div>
-          <div class="form-row two"><label><span data-i18n="Consecutive successful runs">Consecutive successful runs</span><input id="clean-runs" type="number" min="0" max="1000" placeholder="Unknown" data-i18n-placeholder="Unknown"></label><label><span data-i18n="Difficulty today">Difficulty today</span><select id="difficulty"><option value="unknown" data-i18n="Not selected">Not selected</option><option value="easy" data-i18n="Easy">Easy</option><option value="manageable" data-i18n="Manageable">Manageable</option><option value="hard" data-i18n="Hard">Hard</option></select></label></div>
-          <p id="assessment-help" class="field-note"></p>
-          <label><span data-i18n="Practice note">Practice note</span><textarea id="raw-note" rows="3" required maxlength="20000" placeholder="What felt comfortable? Where did you get stuck?" data-i18n-placeholder="What felt comfortable? Where did you get stuck?"></textarea></label>
-          <div class="form-actions"><button id="save-report" type="submit" class="button primary"><span data-i18n="Save report · view feedback">Save report · view feedback</span></button><button id="close-record" type="button" class="text-button"><span data-i18n="Report later">Report later</span></button></div>
-        </form>
+        <div id="feedback-panel" hidden><p id="feedback-next"></p><button id="next-btn" class="button primary" data-i18n="Next practice">Next practice</button></div>
+        <button id="close-record" type="button" class="text-button" data-i18n="Report later">Report later</button>
       </section>
-      <section id="feedback-panel" class="card feedback-card" tabindex="-1" hidden><p class="eyebrow"><span data-i18n="YOUR NEXT STEP">YOUR NEXT STEP</span></p><h2 id="feedback-title"></h2><ul id="feedback-details"></ul><p id="feedback-next"></p><button id="next-btn" class="button primary"><span data-i18n="See next exercise">See next exercise</span></button><small><span data-i18n="Feedback compares your report with the criteria. Musical MIDI analysis is not available yet.">Feedback compares your report with the criteria. Musical MIDI analysis is not available yet.</span></small></section>
       <div class="practice-footer"><span><span data-i18n="One task at a time. Several in a day.">One task at a time. Several in a day.</span></span><span><span data-i18n="Practice at a pace that feels right.">Practice at a pace that feels right.</span></span></div>
     </section>
     <section id="view-history" class="view" hidden>

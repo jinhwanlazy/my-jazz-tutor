@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from functools import lru_cache
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -29,6 +30,8 @@ FIELDS = [
 ]
 SPEC = ["key", "bpm", "bars", "arrangement", "rhythm", "bass", "voicing", "melody", "material_id"]
 CHECKS = ["notes_correct", "steady_pulse", "no_stops"]
+RATINGS = {"impossible": "Impossible", "challenging": "Challenging",
+           "good": "Good practice", "too_easy": "Too easy to be useful"}
 STATES = {"unknown": "Unassessed", "attempted": "Attempted", "success": "Same-day success", "retained": "Later retention"}
 RESULTS = {"unknown": "Assessment pending", "unmet": "Target not met", "success": "Criteria met"}
 DOMAINS = {"melody": "Melody", "rhythm": "Rhythm", "bass": "Bass", "voicing": "Voicing"}
@@ -260,13 +263,17 @@ def records(events):
             else:
                 require(task["report"] and event["supersedes"] == task["report"]["event_id"], "The correction does not refer to the latest report.")
             practice_day = iso_day(event["practice_date"])
-            assigned_day = datetime.fromisoformat(task["assignment"]["recorded_at"]).date()
+            observations = reflection_observations(event)
+            assigned_at = datetime.fromisoformat(task["assignment"]["recorded_at"])
+            assigned_day = assigned_at.astimezone(ZoneInfo(observations["timezone"])).date() if observations else assigned_at.date()
             require(practice_day >= assigned_day, "The practice date is earlier than the assignment date.")
-            require(event["raw_note"].strip(), "The original user note is required.")
+            require(event["raw_note"].strip() or event["difficulty"] in RATINGS, "The original user note is required.")
             actual = json.loads(event["actual_json"])
             checks = json.loads(event["checks_json"])
             validate_observations(actual, checks)
             for field, high in [("clean_runs", 1000), ("actual_minutes", 1440)]:
+                if field == "actual_minutes" and observations:
+                    high *= max(1, len(observations["sessions"]))
                 if event[field]:
                     number(float(event[field]), field, 0, high)
             if event["clean_runs"]:
@@ -275,6 +282,17 @@ def records(events):
         else:
             raise ValueError(f"Unsupported event_type: {kind}")
     return list(tasks.values())
+
+
+def reflection_observations(report):
+    """Automatic timing snapshot; legacy reports retain their original observations."""
+    if not report or report["difficulty"] not in RATINGS or not report["reason"].startswith('{'):
+        return None
+    try:
+        value = json.loads(report["reason"])
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) and value.get("source") == "session-reflection-v1" else None
 
 
 def validate_observations(actual, checks):
@@ -342,6 +360,45 @@ def retained(tasks, days):
     return any((max(dates) - min(dates)).days >= days for dates in groups.values())
 
 
+def practice_ready(data, tasks, exercise_id, key):
+    """Comfort can open practice choices, but never supplies success or retention evidence."""
+    if goal_successes(data, tasks, exercise_id, key, data["default_bpm"]):
+        return True
+    reports = [t for t in tasks if t["report"] and t["assignment"]["exercise_id"] == exercise_id
+               and t["target"]["key"] == key and not incompatible_target_fields(data, t)]
+    latest = max(enumerate(reports), key=lambda pair: (pair[1]["report"]["practice_date"], pair[0]), default=(0, None))[1]
+    return bool(latest and latest["report"]["difficulty"] in ("good", "too_easy"))
+
+
+def reflection_suggestion(data, tasks, latest, deferred):
+    recent = [t for _, t in latest.values() if t["report"] and t["report"]["difficulty"] in RATINGS
+              and not incompatible_target_fields(data, t)]
+    if not recent:
+        return None
+    task = max(recent, key=lambda t: (t["report"]["practice_date"], t["assignment"]["recorded_at"]))
+    target, rating = task["target"], task["report"]["difficulty"]
+    exercise, key = task["assignment"]["exercise_id"], target["key"]
+    observations = reflection_observations(task["report"])
+    bpm = (observations or {}).get("metronome_bpm") or target["bpm"]
+    bpm = min(data["maximum_bpm"], max(data["minimum_bpm"], bpm))
+    lesson = next(x for x in data["exercises"] if x["id"] == exercise)
+    eligible = all(practice_ready(data, tasks, parent, key) for parent in lesson["prerequisites"])
+    if rating in ("impossible", "challenging") and (exercise, key) not in deferred and eligible:
+        return {"action": "practice", "exercise_id": exercise, "key": key,
+                "bpm": max(data["minimum_bpm"], bpm - 10) if rating == "impossible" else bpm,
+                "reason": "Try this exercise more slowly." if rating == "impossible" else "Keep this tempo and try the exercise again."}
+    for lesson in data["exercises"]:
+        if ((lesson["id"], key) not in deferred and not practice_ready(data, tasks, lesson["id"], key)
+                and all(practice_ready(data, tasks, parent, key) for parent in lesson["prerequisites"])):
+            return {"action": "practice", "exercise_id": lesson["id"], "key": key, "bpm": bpm,
+                    "reason": "Try the next exercise based on how the practice felt."}
+    if (exercise, key) not in deferred and eligible:
+        return {"action": "practice", "exercise_id": exercise, "key": key,
+                "bpm": min(data["maximum_bpm"], bpm + 10) if rating == "too_easy" else bpm,
+                "reason": "Try a faster tempo." if rating == "too_easy" and bpm < data["maximum_bpm"] else "Keep practicing, or choose another key or exercise."}
+    return None
+
+
 def cell(data, tasks, exercise_id, key, bpm=None):
     bpm = data["default_bpm"] if bpm is None else bpm
     successes = goal_successes(data, tasks, exercise_id, key, bpm)
@@ -394,10 +451,13 @@ def suggestion(data, tasks, today=None):
         delay = data["maintenance_days"] if info["state"] == "retained" else data["retention_days"]
         if info["last_success"] and (today - iso_day(info["last_success"])).days >= delay:
             successes = goal_successes(data, tasks, milestone["exercise_id"], milestone["key"], milestone["bpm"])
-            latest = max(successes, key=lambda t: t["report"]["practice_date"])
-            actual_bpm = json.loads(latest["report"]["actual_json"])["bpm"]
+            latest_success = max(successes, key=lambda t: t["report"]["practice_date"])
+            actual_bpm = json.loads(latest_success["report"]["actual_json"])["bpm"]
             return {"action": "review", **milestone, "bpm": actual_bpm, **context,
                     "reason": "It is time to check later retention at the tempo of your previous success."}
+    reflection_next = reflection_suggestion(data, tasks, latest, deferred)
+    if reflection_next:
+        return reflection_next | context
     by_id = {x["id"]: x for x in data["exercises"]}
     unfinished = False
     for milestone in data["milestones"]:
@@ -408,7 +468,7 @@ def suggestion(data, tasks, today=None):
         if token in deferred:
             continue
         lesson = by_id[milestone["exercise_id"]]
-        if all(goal_successes(data, tasks, parent, milestone["key"], data["default_bpm"]) for parent in lesson["prerequisites"]):
+        if all(practice_ready(data, tasks, parent, milestone["key"]) for parent in lesson["prerequisites"]):
             previous = latest.get(token)
             report = previous[1]["report"] if previous else None
             reason = "This milestone is not yet confirmed. Use recent notes to choose a repeat or a focused check."
@@ -431,10 +491,22 @@ def practice_totals(reports):
 
 
 def daily_summary(data, tasks, profile, today=None):
-    today = today or date.today()
+    today = today or datetime.now(ZoneInfo(profile.get("timezone", "UTC"))).date()
     budget = profile.get("daily_minutes", data["daily_minutes"])
     number(budget, "daily_minutes", 1, 1440)
-    reports = [t["report"] for t in tasks if t["report"] and iso_day(t["report"]["practice_date"]) == today]
+    reports = []
+    for task in tasks:
+        report = task["report"]
+        if not report:
+            continue
+        observations = reflection_observations(report)
+        days = observations.get("days", {}) if observations else {}
+        if days:
+            if today.isoformat() in days:
+                minutes = days[today.isoformat()]
+                reports.append(report | {"actual_minutes": "" if minutes is None else str(minutes)})
+        elif iso_day(report["practice_date"]) == today:
+            reports.append(report)
     totals = practice_totals(reports)
     reached = totals["known_minutes"] >= budget
     remaining = max(0, budget - totals["known_minutes"]) if reached or not totals["minutes_unknown"] else None
@@ -480,7 +552,8 @@ def assign(root, data, exercise_id, key=None, bpm=None, purpose="practice", reas
         lesson = next(x for x in data["exercises"] if x["id"] == exercise_id)
         if purpose != "diagnostic":
             for parent in lesson["prerequisites"]:
-                require(goal_successes(data, tasks, parent, target["key"], data["default_bpm"]), f"First complete prerequisite {parent} in the same key. Use diagnostic explicitly for a diagnostic task.")
+                ready = practice_ready(data, tasks, parent, target["key"]) if purpose == "practice" else goal_successes(data, tasks, parent, target["key"], data["default_bpm"])
+                require(ready, f"First complete prerequisite {parent} in the same key. Use diagnostic explicitly for a diagnostic task.")
         event = new_event("assigned", "T-" + uuid.uuid4().hex[:10], data, exercise_id, purpose)
         event.update(target_json=jdump(target), reason=reason)
         records(events + [event])
@@ -549,7 +622,7 @@ def status(root, data):
     return {"version": data["version"], "profile": profile, "evidence": "Self-reported / unassessed does not mean failed",
             **practice_totals([t["report"] for t in reported]),
             "today": daily_summary(data, tasks, profile),
-            "goals": goals, "next": suggestion(data, tasks),
+            "goals": goals, "next": suggestion(data, tasks, datetime.now(ZoneInfo(profile.get("timezone", "UTC"))).date()),
             "recent": [{"task_id": t["assignment"]["task_id"], "exercise": t["assignment"]["exercise_id"],
                         "date": t["report"]["practice_date"], "actual": json.loads(t["report"]["actual_json"]),
                         "outcome": outcome(t), "difficulty": t["report"]["difficulty"],

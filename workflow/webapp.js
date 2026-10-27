@@ -4,16 +4,18 @@ import {Capture, Outbox, uploadPending} from './capture.mjs';
 import {ScoreView} from './score.mjs';
 
 const $ = id => document.getElementById(id);
-const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, correcting: false, ports: new Map()};
+const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, reflectionSaving: false, ports: new Map()};
 let outbox, midiAccess, midiSelection = 'all', timer, detailTask;
 const labels = {success: 'Criteria met', unmet: 'Target not met', unknown: 'Assessment pending'};
+const ratings = {impossible: 'Impossible', challenging: 'Challenging', good: 'Good practice', too_easy: 'Too easy to be useful'};
+const ratingEmoji = {impossible: '😈', challenging: '💪', good: '🙂', too_easy: '🙄'};
+const ratingText = rating => `${ratingEmoji[rating]} ${tr(ratings[rating])}`;
 const states = {unknown: 'Unassessed', attempted: 'Attempted', success: 'Same-day success', retained: 'Later retention'};
 function el(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 function option(value, text, disabled = false) { const node = el('option', text); node.value = value; node.disabled = disabled; return node; }
 function clock(ms) { const s = Math.max(0, Math.floor((ms || 0) / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
 function fail(error) { ui.error = error; $('error').textContent = tr(error.message || String(error)); $('error').hidden = false; }
 function clearError() { ui.error = null; $('error').hidden = true; }
-function numberOrNull(id) { return $(id).value === '' ? null : Number($(id).value); }
 function pending() { return ui.data?.history.find(t => !t.report && !t.cancelled); }
 function openSessions() { return ui.data?.sessions.filter(s => s.status === 'recording' && s.id !== ui.capture?.session.id) || []; }
 function taskSessions(id) { return ui.data.sessions.filter(s => s.task_id === id); }
@@ -92,11 +94,6 @@ function renderChoices() {
   ['exercise-select', 'key-select', 'goal-bpm'].forEach(id => $(id).disabled = lock);
   const lesson = ui.data.exercises.find(x => x.id === ui.selected.exercise);
   $('eligibility').textContent = lock ? tr('The assigned conditions stay fixed. You can change them for the next task.') : lesson.eligible_keys.includes(ui.selected.key) ? tr('Starting practice assigns this task with the selected conditions.') : tr`First complete the prerequisites in this key: ${lesson.prerequisites.join(', ')}.`;
-  const actualKey = $('actual-key').value, actualArrangement = $('actual-arrangement').value;
-  $('actual-key').replaceChildren(option('', tr('Unknown')), ...ui.data.keys.map(key => option(key, key)));
-  $('actual-arrangement').replaceChildren(option('', tr('Unknown')), ...Object.entries(ui.data.arrangements).map(([value, title]) => option(value, title)));
-  $('actual-key').value = actualKey;
-  $('actual-arrangement').value = actualArrangement;
   const exerciseFilter = $('filter-exercise').value, keyFilter = $('filter-key').value;
   $('filter-exercise').replaceChildren(option('', tr('All exercises')), ...ui.data.exercises.map(x => option(x.id, `${x.id} · ${x.title}`)));
   $('filter-key').replaceChildren(option('', tr('All keys')), ...ui.data.keys.map(k => option(k, k)));
@@ -274,94 +271,59 @@ function renderRecordText() {
   if (!ui.recordTask) return;
   const task = ui.data.history.find(t => t.id === ui.recordTask.id) || ui.recordTask;
   ui.recordTask = task;
-  $('record-title').textContent = ui.correcting ? tr`Correct the report for ${task.exercise_id}` : tr('How did your practice go?');
-  $('save-report').textContent = ui.correcting ? tr('Save correction') : tr('Save report · view feedback');
-  $('assessment-help').textContent = tr`The target needs ${task.target.criteria.min_clean_runs} consecutive successful runs. Count complete runs of the assigned section, not individual bars. Unknown values still save your practice, with assessment pending.`;
+  const rating = task.report?.difficulty;
+  $('record-title').textContent = tr('How did your practice go?');
+  document.querySelectorAll('[data-rating]').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.rating === rating));
+    button.disabled = Boolean(ui.reflectionSaving);
+  });
+  $('reflection-status').textContent = tr(ui.reflectionSaving ? 'Saving…' : ratings[rating] ? 'Practice saved' : '');
+  $('save-note').disabled = Boolean(ui.reflectionSaving) || !ratings[rating];
+  $('raw-note').disabled = Boolean(ui.reflectionSaving);
+  $('next-btn').disabled = Boolean(ui.reflectionSaving);
+  $('close-record').disabled = Boolean(ui.reflectionSaving);
+  $('close-record').hidden = Boolean(task.report);
+  $('feedback-panel').hidden = !task.report;
   $('measurements').replaceChildren();
-  const summaries = taskSessions(task.id).filter(s => s.summary).map(s => s.summary);
-  if (summaries.length) {
-    const elapsed = summaries.reduce((n, s) => n + s.elapsed_ms, 0);
-    const completeSpans = summaries.filter(s => s.input_span_ms !== null);
-    $('measurements').append(el('span', tr`Elapsed ${clock(elapsed)}`), el('span', tr`${summaries.length} saved session(s)`));
-    if (completeSpans.length) $('measurements').append(el('span', tr`Measured MIDI span ${clock(completeSpans.reduce((n, s) => n + s.input_span_ms, 0))}`));
-    if (summaries.some(s => s.capture_warnings.length)) $('measurements').append(el('span', tr('Missing input or interruptions detected')));
+  const measured = task.observations;
+  if (measured) {
+    $('measurements').append(el('span', measured.date_source === 'session' ? measured.practice_date : tr`Recorded ${measured.practice_date}`));
+    if (measured.minutes !== null) $('measurements').append(el('span', tr`Practice time ${clock(measured.minutes * 60000)}`));
+    else $('measurements').append(el('span', tr('Practice time unknown')));
+    if (measured.metronome_bpm !== null) $('measurements').append(el('span', tr`Metronome ${measured.metronome_bpm} BPM`));
   }
-  const note = ui.correcting ? 'The previous conditions and original note are loaded. Earlier reports will be preserved.' : summaries.length ?
-    'BPM is the metronome setting at the last note, or the last playback setting without MIDI. Duration uses the MIDI span with leading and trailing inactivity removed, or playback time excluding pauses when that span is unknown. Check rests and actual conditions. Enter duration manually for interrupted sessions.' :
-    'No measured sessions are available. Enter only the actual conditions you remember and leave unknown values unset.';
-  $('prefill-note').textContent = tr(note);
 }
 
 function renderFeedback() {
-  const task = ui.data.history.find(t => t.id === ui.feedbackTaskId);
-  if (!task) return;
-  $('feedback-title').textContent = task.feedback.title;
-  $('feedback-details').replaceChildren(...task.feedback.details.map(text => el('li', text)));
-  $('feedback-next').textContent = ui.data.status.next.reason;
+  if (ui.recordTask?.report) $('feedback-next').textContent = ui.data.status.next.reason;
 }
 
-function showRecord(task, correcting = false) {
+function showRecord(task) {
   if (!task || ui.capture || openSessions().length) return;
-  ui.recordTask = task; ui.correcting = correcting;
-  $('record-form').reset();
-  for (const id of ['actual-key', 'actual-arrangement', 'actual-bars']) $(id).disabled = false;
+  if (ui.recordTask?.id !== task.id) {
+    $('record-form').reset();
+    $('raw-note').value = task.report?.raw_note || '';
+    $('memo-details').open = Boolean(task.report?.raw_note);
+    ui.reflectionEventId = task.report?.event_id || null;
+  }
+  ui.recordTask = task;
   $('record-panel').hidden = false;
-  $('feedback-panel').hidden = true;
-  $('practice-date').max = ui.data.status.today.date;
-  $('practice-date').value = ui.data.status.today.date;
-  const sessions = taskSessions(task.id).filter(s => s.summary);
-  const summaries = sessions.map(s => s.summary);
-  if (summaries.length) {
-    const last = [...summaries].reverse().find(s => s.last_note_bpm !== null || s.last_setting_bpm !== null);
-    if (last) $('actual-bpm').value = last.last_note_bpm ?? last.last_setting_bpm;
-    if (sessions.every(s => s.status === 'finished')) {
-      $('actual-minutes').value = (summaries.reduce((n, s) => n + (s.input_span_ms ?? s.active_ms), 0) / 60000).toFixed(3);
-    }
-  }
-  if (correcting) {
-    const report = task.report, actual = JSON.parse(report.actual_json), checks = JSON.parse(report.checks_json);
-    $('practice-date').value = report.practice_date;
-    $('actual-bpm').value = actual.bpm ?? '';
-    $('actual-minutes').value = report.actual_minutes;
-    $('actual-key').value = actual.key || '';
-    $('actual-arrangement').value = actual.arrangement || '';
-    $('actual-bars').value = actual.bars ?? '';
-    $('notes-correct').value = checks.notes_correct == null ? '' : String(checks.notes_correct);
-    $('steady-pulse').value = checks.steady_pulse == null ? '' : String(checks.steady_pulse);
-    $('no-stops').value = checks.no_stops == null ? '' : String(checks.no_stops);
-    $('clean-runs').value = report.clean_runs;
-    $('difficulty').value = report.difficulty || 'unknown';
-    $('raw-note').value = report.raw_note;
-  }
-  renderRecordText();
+  renderRecordText(); renderFeedback();
   $('record-panel').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
-async function saveReport(event) {
-  event.preventDefault(); clearError(); $('save-report').disabled = true;
+async function saveReflection(rating) {
+  if (ui.reflectionSaving || !ui.recordTask || !ratings[rating]) return false;
+  clearError(); ui.reflectionSaving = true; renderRecordText();
   try {
-    const followedTarget = $('followed-target').checked;
-    const actual = ui.correcting && !followedTarget ? {...JSON.parse(ui.recordTask.report.actual_json)} : {};
-    actual.bpm = numberOrNull('actual-bpm');
-    if (!followedTarget) {
-      for (const [id, key] of [['actual-key', 'key'], ['actual-arrangement', 'arrangement']]) actual[key] = $(id).value || null;
-      actual.bars = numberOrNull('actual-bars');
-    }
-    const checks = {};
-    for (const [id, key] of [['notes-correct', 'notes_correct'], ['steady-pulse', 'steady_pulse'], ['no-stops', 'no_stops']]) checks[key] = $(id).value === '' ? null : $(id).value === 'true';
-    const result = {practice_date: $('practice-date').value, followed_target: followedTarget,
-      actual, checks, clean_runs: numberOrNull('clean-runs'), actual_minutes: numberOrNull('actual-minutes'),
-      difficulty: $('difficulty').value, raw_note: $('raw-note').value};
-    if (ui.correcting) result.hypothesis = ui.recordTask.report.hypothesis;
-    const saved = await api('/api/report', {task_id: ui.recordTask.id, result, correction: ui.correcting});
-    ui.feedbackTaskId = saved.task_id;
+    const saved = await api('/api/reflection', {task_id: ui.recordTask.id, rating,
+      note: $('raw-note').value, expected_event_id: ui.reflectionEventId});
+    // Keep the revision token even if the subsequent refresh loses its response.
+    ui.reflectionEventId = saved.event_id;
+    ui.recordTask.report = {...ui.recordTask.report, event_id: saved.event_id, difficulty: rating, raw_note: $('raw-note').value};
     await refresh();
-    $('record-panel').hidden = true;
-    $('feedback-panel').hidden = false;
-    $('feedback-panel').focus();
-    $('feedback-panel').scrollIntoView({behavior: 'smooth', block: 'center'});
-    ui.recordTask = null;
-  } catch (error) { fail(error); }
-  finally { $('save-report').disabled = false; }
+    return true;
+  } catch (error) { fail(error); return false; }
+  finally { ui.reflectionSaving = false; renderRecordText(); renderFeedback(); }
 }
 
 function switchView(name) {
@@ -381,7 +343,7 @@ function renderHistory() {
     const button = el('button', undefined, 'history-item'), left = el('div');
     const day = task.report?.practice_date || task.assigned_at.slice(0, 10);
     left.append(el('small', `${day} / ${task.exercise_id}`), el('h3', task.target.title), el('p', tr`${task.target.key} · Target ${task.target.bpm} BPM${task.report?.actual_minutes ? tr` · ${Number(Number(task.report.actual_minutes).toFixed(2))} min` : ''}`));
-    button.append(left, el('span', task.retired ? tr('Retired on update') : task.cancelled ? tr('Skipped') : task.report ? tr(labels[task.outcome]) : tr('In progress'), `tag ${task.outcome}`));
+    button.append(left, el('span', task.retired ? tr('Retired on update') : task.cancelled ? tr('Skipped') : task.report ? (ratings[task.report.difficulty] ? ratingText(task.report.difficulty) : tr(labels[task.outcome])) : tr('In progress'), `tag ${task.outcome}`));
     button.addEventListener('click', () => showDetail(task));
     $('history-list').append(button);
   }
@@ -400,13 +362,19 @@ function showDetail(task) {
   const grid = el('div', undefined, 'detail-grid');
   const intended = el('div'); intended.append(el('h3', tr('Assigned conditions')), el('div', tr`${task.target.key} · ${task.target.bpm} BPM · ${task.target.bars} bars`), el('div', ui.data.arrangements[task.target.arrangement] || task.target.arrangement));
   const actualBox = el('div'); actualBox.append(el('h3', tr('Reported performance')));
-  if (task.report) {
+  if (task.report && ratings[task.report.difficulty]) {
+    actualBox.append(el('div', ratingText(task.report.difficulty)));
+    const observed = task.observations;
+    if (observed?.metronome_bpm) actualBox.append(el('div', tr`Metronome ${observed.metronome_bpm} BPM`));
+    if (task.report.actual_minutes) actualBox.append(el('div', tr`Practice time ${clock(Number(task.report.actual_minutes) * 60000)}`));
+  } else if (task.report) {
     const a = JSON.parse(task.report.actual_json);
     actualBox.append(el('div', tr`${a.key || tr('Key unknown')} · ${a.bpm ?? tr('Unknown')} BPM · ${a.bars ?? tr('Unknown')} bars`), el('div', ui.data.arrangements[a.arrangement] || tr('Hand arrangement unknown')), el('div', tr`${tr(labels[task.outcome])} · Consecutive successful runs: ${task.report.clean_runs || tr('Unknown')}`));
   } else actualBox.append(el('div', task.retired ? tr('Closed by an update. No practice result was inferred.') : task.cancelled ? tr('Cancelled before practice') : tr('No result reported yet')));
   grid.append(intended, actualBox); box.append(grid);
-  box.append(el('p', task.report?.raw_note || task.reason, 'raw-note'));
-  if (task.report) {
+  const note = task.report ? task.report.raw_note : task.reason;
+  if (note) box.append(el('p', note, 'raw-note'));
+  if (task.report && !ratings[task.report.difficulty]) {
     const assessment = el('section', undefined, 'assessment-details');
     const details = el('ul'); details.append(...task.feedback.details.map(text => el('li', text)));
     assessment.append(el('h3', tr('Assessment')), el('p', task.feedback.title), details);
@@ -424,7 +392,7 @@ function showDetail(task) {
   }
   if (task.revisions.length > 1) {
     const details = el('details', undefined, 'revision'); details.append(el('summary', tr`Original and corrections: ${task.revisions.length} reports`));
-    for (const revision of task.revisions) { details.append(el('small', `${revision.recorded_at.slice(0, 16).replace('T', ' ')} · ${revision.event_type === 'reported' ? tr('Original report') : tr('Correction')}`), el('p', revision.raw_note)); }
+    for (const revision of task.revisions) { details.append(el('small', `${revision.recorded_at.slice(0, 16).replace('T', ' ')} · ${revision.event_type === 'reported' ? tr('Original report') : tr('Correction')}`), el('p', [ratings[revision.difficulty] ? ratingText(revision.difficulty) : '', revision.raw_note].filter(Boolean).join('\n'))); }
     box.append(details);
   }
   $('correct-btn').hidden = !task.report;
@@ -436,9 +404,14 @@ $('practice-btn').addEventListener('click', startOrPause);
 $('finish-btn').addEventListener('click', finish);
 $('recover-btn').addEventListener('click', recover);
 $('manual-record-btn').addEventListener('click', () => showRecord(pending()));
-$('record-form').addEventListener('submit', saveReport);
+document.querySelectorAll('[data-rating]').forEach(button => button.addEventListener('click', () => saveReflection(button.dataset.rating)));
+$('record-form').addEventListener('submit', event => { event.preventDefault(); saveReflection(ui.recordTask?.report?.difficulty); });
 $('close-record').addEventListener('click', () => $('record-panel').hidden = true);
-$('next-btn').addEventListener('click', () => { $('feedback-panel').hidden = true; window.scrollTo({top: 0, behavior: 'smooth'}); });
+$('next-btn').addEventListener('click', async () => {
+  if ($('raw-note').value !== ui.recordTask?.report?.raw_note && !await saveReflection(ui.recordTask?.report?.difficulty)) return;
+  $('record-panel').hidden = true; ui.recordTask = null;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+});
 $('tempo').addEventListener('change', event => setTempo(event.target.value));
 $('tempo-range').addEventListener('input', event => setTempo(event.target.value));
 $('tempo-down').addEventListener('click', () => setTempo(Number($('tempo').value) - 5));
@@ -486,10 +459,7 @@ $('skip-form').addEventListener('submit', async event => {
   catch (error) { $('skip-dialog').close(); fail(error); }
 });
 $('dialog-close').addEventListener('click', () => $('history-dialog').close());
-$('followed-target').addEventListener('change', event => {
-  for (const id of ['actual-key', 'actual-arrangement', 'actual-bars']) $(id).disabled = event.target.checked;
-});
-$('correct-btn').addEventListener('click', () => { $('history-dialog').close(); switchView('practice'); showRecord(detailTask, true); });
+$('correct-btn').addEventListener('click', () => { $('history-dialog').close(); switchView('practice'); showRecord(detailTask); });
 for (const id of ['filter-exercise', 'filter-key', 'filter-from', 'filter-to']) $(id).addEventListener('change', renderHistory);
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', async () => { switchView(button.dataset.view); if (!ui.capture) { try { await refresh(true); } catch (error) { fail(error); } } }));
 document.querySelector('.brand').addEventListener('click', () => switchView('practice'));

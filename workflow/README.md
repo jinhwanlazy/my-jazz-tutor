@@ -31,10 +31,10 @@ against their assigned criteria. Current milestones count only successes with
 compatible criteria, material, and playing conditions.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.2.8`; create a new tag for later releases instead of moving an old tag:
+selects `v0.2.9`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.2.8
+uv run python publish.py --ref v0.2.9
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -80,11 +80,13 @@ and port. Switching preserves active capture and unfinished report inputs. Agent
 follow the user's conversation language independently. Original notes and historical
 evidence retain their original wording.
 
-**Assessment pending** means the report is saved but lacks details needed to assess
-the assigned target. History details list the missing conditions or run count.
-Confirm the assigned conditions only if you followed them, and count consecutive
-complete runs of the assigned section. Unknown values are allowed and do not mean
-failure. Use **Correct this report** to add information you actually remember.
+Choose one label after practicing: 😈 **Impossible**, 💪 **Challenging**,
+🙂 **Good practice**, or 🙄 **Too easy to be useful**. One tap saves it.
+**Add a note · optional** is the only text field; you can edit the label or memo
+later. Date, duration, and metronome settings are recorded automatically.
+Good/too-easy feedback can open the next practice exercise in the same key without
+claiming correct notes, steady timing, mastery, or retention. No accuracy survey
+or missing-evidence prompts are required to continue.
 
 Once a web-capable version is active, run this from the repository root. `uv`
 prepares the environment; `jazz` with no arguments runs `serve --open`:
@@ -120,10 +122,11 @@ preserves input attached to retired tasks without creating a performance report.
   range, not detected hands. This view does not assess correctness or fill reports.
   Charleston eighth notes illustrate short attacks on 1 and 2&; the illustration
   does not add an exact hold-duration requirement to the assignment.
-- **Finish and record:** finishing saves input and suggests BPM and duration.
-  Confirm the key, hands, section, notes, pulse, stops, successful runs, and note
-  yourself. An easy difficulty rating alone is not a pass. Record what actually
-  happened before moving on from a difficult task.
+- **Finish and record:** finishing saves input and opens four feedback labels.
+  Tap one to save, optionally add a memo, then choose **Next practice**. Impossible
+  suggests a slower tempo; challenging keeps the same tempo. Good/too-easy feedback
+  prioritizes the next eligible exercise. If all are comfortable, too-easy raises
+  the tempo within the curriculum's limits. These choices do not pass mastery criteria.
 - **Skip:** defer an unattempted task for today with a reason. The next task still
   follows prerequisites. There is no daily task-count limit.
 - **History and progress:** filter by date, exercise, and key; compare original
@@ -137,7 +140,7 @@ without requesting SysEx permission. Other practice features work without MIDI
 access or a device. See [MDN Web MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API)
 for browser support details.
 
-Suggested values have specific meanings:
+Automatic observations have specific meanings:
 
 - **BPM** is the metronome setting at the last note input, or the last playback
   setting when there is no MIDI. It is not an analysis of your playing tempo.
@@ -145,9 +148,14 @@ Suggested values have specific meanings:
   release. Only leading and trailing inactivity is excluded; internal rests stay.
   Raw input is never trimmed. Missing note endings, device changes, or interrupted
   capture leave the span unknown.
-- If a MIDI span cannot be measured, **playback time** excluding pauses is
-  suggested. Enter duration manually for recovered interrupted sessions. Review
-  the actual time and include preparation or reflection if appropriate.
+- If a MIDI span cannot be measured, **playback time** excluding pauses is used
+  for normally finished sessions. Interrupted sessions leave total time unknown.
+  Preparation and reflection outside playback are not added automatically.
+- **Practice date** uses the session's first input (or start without input) in the
+  profile's timezone, defaulting to UTC. A session crossing midnight belongs to
+  that starting day. For sessions on multiple days, the report uses the latest day
+  and the daily totals allocate each session to its own day. With no saved session,
+  the feedback date is labeled as the recording date; tempo and duration stay unknown.
 
 Every three seconds, input is first saved to IndexedDB and then sent to the
 server. Chunks remain in the browser until acknowledged; retries do not duplicate
@@ -244,8 +252,10 @@ known time, reports with unknown duration, and remaining budget. Remaining time 
 `null` when a report lacks duration, unless known time already exhausts the budget,
 in which case it is zero. The budget never blocks additional practice.
 
-For an easy task, briefly verify the criteria before continuing; `difficulty: easy`
-alone does not pass it. Unsuccessful tasks reported as `difficulty: hard` and
+The web labels `impossible`, `challenging`, `good`, and `too_easy` guide practice
+choices separately from mastery. Only compatible reports in the same key can open
+prerequisites for ordinary practice; review/transfer still require success evidence.
+Legacy detailed CLI reports retain their rules: `difficulty: easy` alone does not pass. Unsuccessful tasks reported as `difficulty: hard` and
 cancelled tasks are deferred for the same exercise and key that day.
 `suggest.deferred_today` preserves original notes and task IDs. Other candidates
 must still meet prerequisites. With no candidate, `action: pause` suggests stopping
@@ -300,7 +310,9 @@ results; `event_id` identifies each event. Writes use a file lock.
 | actual_json | Conditions the user reports actually practicing |
 | checks_json | Notes, pulse, and uninterrupted playing: true / false / null |
 | clean_runs | Consecutive successful runs under the conditions; empty when unknown |
-| raw_note | Original user text, including commas and newlines |
+| raw_note | Original user text, including commas and newlines; optional with a web label |
+| difficulty | Web labels: impossible / challenging / good / too_easy; legacy CLI values retained |
+| reason | Assignment/closure reason; web reports store a session-reflection-v1 JSON timing snapshot |
 | hypothesis | Coach interpretation, separate from the original note |
 | supersedes | ID of the previous result replaced by a correction |
 
