@@ -2,13 +2,14 @@
 
 Your private AI jazz piano tutor, powered by Codex.
 
-[English](README.md) · [Korean original](README.ko.md)
+[English](README.md) · [한국어](README.ko.md)
 
-This is **a local experiment in building a private piano tutor around a Codex
-subscription**, rather than a deployed service. Codex conversations handle
-assignments and practice context, while a local practice room provides a metronome,
-optional accompaniment, and recording. Web feedback currently compares your reports
-with fixed criteria using rules.
+This is a local piano tutor using your Codex login. Both conversational coaching
+and **New practice** in the browser analyze an explicit profile and actual records,
+feedback, notes and skip reasons to compose the next exercise. The curriculum is
+optional reference material, not a fixed sequence. The local practice room provides
+a metronome, optional accompaniment, notation and MIDI capture. The app validates
+Codex's structured result before creating an immutable task.
 
 The `my-jazz-tutor/` Git monorepo contains two work areas. Open the directory for
 your intended role and follow its `AGENTS.md`. Paths and commands below are relative
@@ -67,11 +68,20 @@ version is active, start the server and open your browser with:
 uv run --project practice jazz
 ```
 
-The interface covers assignments, practice reports, rule-based feedback, history,
-and corrections. It includes a metronome, optional chord pad, raw Web MIDI capture,
-and suggested BPM and duration values. A grand staff shows the assigned notes and
-rhythm, with a moving beat cursor and live MIDI marks. Musical MIDI scoring is not
-implemented.
+The landing screen is a dated practice list. New practice shows generation progress
+and adds an item; open it explicitly to enter the room. Complete practice saves
+recording and measurements and returns to the list. Leave one of four difficulty
+labels and an optional memo there. Feedback is editable independently of completion.
+Skipped items retain optional reasons. Practice again creates a separate attempt.
+A continuous grand staff shows assigned notes and live input. Musical MIDI scoring
+is not implemented; recorded BPM values are metronome settings.
+
+Generation requires an installed Codex CLI, a working login (`codex login status`),
+network access and available usage allowance. No separate API key is required.
+Only the explicit coaching context is sent; there is no shared chat memory. Errors
+are shown instead of replacing a failed request with fixed-curriculum recommendations.
+Personal recommendation artifacts remain local and excluded from Git.
+
 Raw MIDI is stored in `practice/sessions.sqlite3`. See the
 [workflow README](workflow/README.md#web-practice-room) for startup, activation,
 development previews, and recovery.

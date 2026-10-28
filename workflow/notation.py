@@ -1,7 +1,7 @@
 """Display-only notation from an assignment's own material, never pad voicings.
 
-Only the existing curriculum's explicit note/rhythm forms are supported. Unknown
-forms return None rather than silently inventing a score or changing evidence.
+Generated scores use their validated explicit contract. Legacy material forms are
+kept for original snapshots; unknown forms never invent notation or evidence.
 """
 import re
 
@@ -29,6 +29,15 @@ def event(beat=0, duration=4, notes=None, kind=None):
 
 def score_for(target):
     try:
+        if target.get("kind") == "generated":
+            value = target["exercise"]["notation"]
+            if value is None:
+                return None
+            return {"key": target["key"], "beats_per_bar": 4,
+                    "bars": [{"chord": bar["chord"], **{hand: [event(e["beat"], e["duration"],
+                              [pitches(p)[0] for p in e["notes"]]) for e in bar[hand]]
+                              for hand in ("left", "right")}} for bar in value["bars"]],
+                    "allowed_pitches": [], "bass_onset_only": False, "short_attacks": False}
         return _score(target)
     except (KeyError, TypeError, ValueError, IndexError):
         return None

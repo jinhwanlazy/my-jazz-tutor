@@ -1,6 +1,6 @@
 // Optional browser integration check. Requires Playwright and Chrome; all records are temporary.
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
+import {spawn, execFileSync} from 'node:child_process';
 import {once} from 'node:events';
 import {mkdtemp, mkdir, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -11,7 +11,7 @@ const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const root = await mkdtemp(join(tmpdir(), 'jazz-browser-'));
 await writeFile(join(root, 'profile.json'), '{"daily_minutes":30}');
 await mkdir(join(project, 'build/browser'), {recursive:true});
-const server = spawn('uv', ['run', 'python', 'review.py', '--practice-root', root, 'serve', '--port', '0'], {cwd:project});
+const server = spawn('uv', ['run', 'python', 'tests/serve_browser.py', root], {cwd:project});
 let browser;
 try {
   const url = await new Promise((resolve, reject) => {
@@ -50,23 +50,20 @@ try {
     await page.locator('#settings-back').click();
   };
   let loseAddResponse = true;
-  const add = async exercise => {
+  const add = async () => {
+    if (loseAddResponse) await page.route('**/api/recommend*', async route => { await route.fetch(); await route.abort(); });
     await page.locator('#new-practice').click();
-    if (exercise) await page.locator('#exercise-select').selectOption(exercise);
-    if (loseAddResponse) await page.route('**/api/assign*', async route => { await route.fetch(); await route.abort(); });
-    await page.locator('#add-practice').click();
     if (loseAddResponse) {
-      await visible('#new-error');
-      const count=(await state()).history.length;
-      await page.unroute('**/api/assign*');
-      await page.locator('#add-practice').click();
-      await hidden('#new-dialog');
-      assert.equal((await state()).history.length,count);
+      await visible('#error');
+      await page.unroute('**/api/recommend*');
       loseAddResponse=false;
     }
-    await hidden('#new-dialog'); await visible('#view-list');
-    await page.waitForFunction(()=>!document.querySelector('#back-list').disabled);
-    return (await state()).history.find(t=>t.pending).id;
+    await page.waitForFunction(()=>document.querySelector('#generation-title').textContent==='Your new practice is in the list.');
+    await visible('#view-list'); await hidden('#view-practice');
+    const data=await state();
+    assert.equal(data.history.filter(t=>t.pending).length,1);
+    assert.match(data.history.find(t=>t.pending).exercise_id,/^G-/);
+    return data.history.find(t=>t.pending).id;
   };
   const item = id => page.locator(`.practice-item[data-task-id="${id}"]`);
   const enter = async id => {await item(id).locator('.history-item').click(); await visible('#view-practice');};
@@ -80,11 +77,15 @@ try {
   assert.equal((await state()).history.length,0);
   assert.equal(await page.locator('[data-view="history"], [data-view="progress"], #next-btn').count(),0);
   assert.doesNotMatch(await page.locator('body').innerText(),/[가-힣]/);
+  await page.locator('.recommendation-focus summary').click();
+  await page.locator('#recommendation-request').fill('simulate:auth');
   await page.locator('#new-practice').click();
-  await page.locator('#exercise-select').selectOption('E03');
-  assert.equal(await page.locator('#add-practice').isEnabled(),false);
-  await page.locator('#new-close').click();
+  await visible('#generation-panel');
+  await page.waitForFunction(()=>document.querySelector('#generation-panel').getAttribute('aria-busy')==='true');
+  await visible('#retry-recommendation');
+  assert.match(await page.locator('#generation-message').textContent(),/login/);
   assert.equal((await state()).history.length,0);
+  await page.locator('#recommendation-request').fill('');
   const first=await add('E01');
   assert.equal((await state()).sessions.length,0);
   await hidden('#view-practice');
@@ -102,16 +103,17 @@ try {
   assert.equal(await page.locator('.score-hand,.score-bar-number').count(),0);
   assert.equal(await page.locator('.score-whole').first().evaluate(node=>getComputedStyle(node).fill),'none');
   await page.evaluate(()=>document.fonts.load('40px Bravura'));
-  const displayChecks = await page.evaluate(async () => {
+  const notationFixtures = JSON.parse(execFileSync('uv', ['run','python','-c', "import json,review;from notation import score_for;print(json.dumps({i:score_for(review.target_for(review.curriculum(),i,'Bb')) for i in ('E04','E06')}))"], {cwd:project}).toString());
+  const displayChecks = await page.evaluate(async fixtures => {
     const {ScoreView} = await import('/score.mjs');
-    const data = await (await fetch('/api/state')).json();
+
     const host = document.createElement('div'); host.style.width = '300px';
     const root = document.createElement('div'); root.className = 'score-viewport'; host.append(root);
     document.body.append(host);
     const follow = document.createElement('input'); follow.type = 'checkbox'; follow.checked = true;
     const status = document.createElement('span');
     const view = new ScoreView({root, status, follow});
-    const score = id => data.exercises.find(e => e.id === id).targets.Bb.notation;
+    const score = id => fixtures[id];
     const at = (absolute, bars) => ({absolute, bar: Math.floor(absolute / 4) % bars, pass: Math.floor(absolute / (bars * 4)), beat: absolute % 4});
     view.setScore(score('E04')); view.begin(); view.frame(at(8.1, 4));
     view.midi([0x90, 50, 100], 'test', at(8.1, 4)); // D3 belongs to the right hand here.
@@ -160,7 +162,7 @@ try {
     const fallback = !root.querySelector('svg') && root.textContent.includes('not available');
     host.remove();
     return {lowRight, alignedY, continuous, oneCanvas, joinedTail, manualScroll, loop, continuedHold, interrupted, reset, localScroll, fittingScore, fallback};
-  });
+  }, notationFixtures);
   assert.ok(Object.values(displayChecks).every(Boolean), JSON.stringify(displayChecks));
   await page.locator('#playback-settings > summary').click();
   await page.locator('#midi-connect').click();
@@ -218,7 +220,7 @@ try {
   await rate('good');
   assert.equal((await state()).status.today.reported_attempts,1);
   assert.equal((await state()).history[0].outcome,'unknown');
-  assert.equal((await state()).status.next.exercise_id,'E02');
+  assert.equal((await state()).status.next.action,'generate');
   assert.match(await item(first).locator('.practice-result').textContent(),/Good practice/);
   await page.locator('#memo-details').evaluate(e=>e.open=true);
   const note='Synthetic memo, "quoted"\n<img src=x onerror=alert(1)> 원문';
@@ -234,9 +236,7 @@ try {
   await visible('#history-dialog');await hidden('#view-practice');
   assert.equal(await page.locator('#history-detail img').count(),0);
   assert.equal(await page.locator('#history-detail .raw-note').textContent(),note);
-  await page.locator('#repeat-btn').click();await visible('#new-dialog');
-  assert.equal(await page.locator('#exercise-select').inputValue(),'E01');
-  await page.locator('#add-practice').click();await hidden('#new-dialog');
+  await page.locator('#repeat-btn').click();await hidden('#history-dialog');
   const repeated=(await state()).history.find(t=>t.pending).id;
   assert.notEqual(repeated,first);await hidden('#view-practice');
   await enter(repeated);
@@ -268,7 +268,7 @@ try {
   await page.locator('#recover-btn').click();await hidden('#recovery');
   await enter(second);await page.locator('#finish-btn').click();await visible('#record-panel');await visible('#view-list');
   await rate('too_easy');
-  assert.equal((await state()).status.next.exercise_id,'E03');
+  assert.equal((await state()).status.next.action,'generate');
   // Discard from an active room saves input, preserves an optional reason, and returns to the list.
   await page.locator('#close-record').click();
   const third=await add('E03');await enter(third);
@@ -286,7 +286,9 @@ try {
   assert.match(await item(third).textContent(),/Synthetic skip reason/);
   assert.equal(await page.locator('#new-practice').isEnabled(),true);
   await page.locator('.list-filters').evaluate(e=>e.open=true);
-  await page.locator('#filter-key').selectOption('F');assert.equal(await page.locator('.practice-item').count(),0);
+  await page.locator('#filter-key').selectOption('D');assert.equal(await page.locator('.practice-item').count(),4);
+  await page.locator('#filter-from').fill('2099-01-01');assert.equal(await page.locator('.practice-item').count(),0);
+  await page.locator('#filter-from').fill('');
   await page.locator('#filter-key').selectOption('');assert.equal(await page.locator('.practice-item').count(),4);
   await page.locator('.list-filters').evaluate(e=>e.open=false);
   for(const language of ['en','ko']){
@@ -297,8 +299,20 @@ try {
     await page.screenshot({path:join(project,`build/browser/list-mobile-${language}.png`),fullPage:true});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
   }
+  await changeLanguage('en');
+  await page.locator('.recommendation-focus').evaluate(e=>e.open=true);
+  await page.locator('#recommendation-request').fill('simulate:no-pad');
+  const withoutPad=await add(); await enter(withoutPad);
+  assert.equal(await page.locator('#pad-toggle').isEnabled(),false);
+  assert.equal(await page.locator('.score-target[data-duration="2"] .score-whole').first().evaluate(n=>getComputedStyle(n).fill),'none');
+  await page.locator('#tempo').fill('240'); await page.locator('#tempo').dispatchEvent('change');
+  await page.locator('#practice-btn').click();
+  await page.waitForFunction(()=>document.querySelector('#bar-position').textContent.startsWith('Bar 2'), {timeout:10000});
+  await page.locator('#practice-btn').click();
+  await page.screenshot({path:join(project,'build/browser/generated-score.png'),fullPage:true});
+  await page.locator('#discard-btn').click();await page.locator('#discard-submit').click();await hidden('#discard-dialog');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,checks:['list landing without writes','explicit create and enter','pending resume after reload','completion before feedback','no duplicate counts','notes and skip reasons inline','repeat creates another item','score continuity and MIDI','failed save and recovery','active discard preserves recordings','languages and mobile layout'],screenshots:'workflow/build/browser'}));
+  console.log(JSON.stringify({passed:true,checks:['Codex job progress and authentication failure','response loss without duplicate generation','custom tasks outside the catalog','list landing without writes','explicit create and enter','pending resume after reload','completion before feedback','no duplicate counts','notes and skip reasons inline','repeat creates another item','score continuity and MIDI','failed save and recovery','active discard preserves recordings','languages and mobile layout'],screenshots:'workflow/build/browser'}));
 } finally {
   if(browser)await browser.close();
   const exited=once(server,'exit');server.kill('SIGTERM');await exited;

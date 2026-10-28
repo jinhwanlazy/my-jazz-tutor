@@ -28,6 +28,8 @@
       <details class="list-filters"><summary data-i18n="Filter practices">Filter practices</summary>
       <div class="card filters"><label><span data-i18n="Exercise">Exercise</span><select id="filter-exercise"><option value="" data-i18n="All exercises">All exercises</option></select></label><label><span data-i18n="Key">Key</span><select id="filter-key"><option value="" data-i18n="All keys">All keys</option></select></label><label><span data-i18n="From">From</span><input id="filter-from" type="date"></label><label><span data-i18n="To">To</span><input id="filter-to" type="date"></label></div>
       </details>
+      <details class="recommendation-focus"><summary data-i18n="Focus for the next practice · optional">Focus for the next practice · optional</summary><label for="recommendation-request" data-i18n="Anything you want to work on?">Anything you want to work on?</label><textarea id="recommendation-request" rows="2" maxlength="2000"></textarea></details>
+      <div id="generation-panel" class="card generation-panel" role="status" aria-live="polite" hidden><strong id="generation-title"></strong><p id="generation-message"></p><button id="retry-recommendation" class="button secondary" data-i18n="Try again" hidden>Try again</button></div>
       <div id="history-list" class="history-list"></div>
       <section id="record-panel" class="card record-card" hidden>
         <p class="eyebrow" data-i18n="PRACTICE FEEDBACK">PRACTICE FEEDBACK</p>
@@ -59,13 +61,13 @@
         <h2 id="lesson-title"><span data-i18n="Loading your exercise">Loading your exercise</span></h2>
         <p id="lesson-purpose" class="lesson-purpose"></p>
         <div id="target-meta" class="meta-row"></div>
-        <p id="lesson-instructions" class="instructions"></p>
+        <p id="lesson-section" class="subtle"></p><p id="lesson-instructions" class="instructions"></p>
         <details id="lesson-material" class="lesson-material"><summary data-i18n="Notes and chord progression">Notes and chord progression</summary>
         <div class="chord-label"><span><span data-i18n="CHORD PROGRESSION">CHORD PROGRESSION</span></span><span id="bar-position"><span data-i18n="One chord per bar">One chord per bar</span></span></div>
         <div id="chords" class="chords"></div>
-        <div id="hand-notes" class="hand-notes"></div>
+        <p id="lesson-notes" class="instructions"></p><div id="hand-notes" class="hand-notes"></div>
         </details>
-        <div class="criterion"><span class="criterion-icon" aria-hidden="true">✓</span><div><strong><span data-i18n="Success criteria">Success criteria</span></strong><p id="criterion-text"></p></div></div>
+        <div class="criterion"><span class="criterion-icon" aria-hidden="true">✓</span><div><strong><span data-i18n="Practice focus">Practice focus</span></strong><p id="criterion-text"></p><ol id="lesson-steps" class="practice-steps"></ol><div id="lesson-analysis"></div></div></div>
 
         <div class="lesson-actions"><button id="discard-btn" class="text-button" hidden><span data-i18n="Discard task">Discard task</span></button></div>
       </section>
@@ -103,16 +105,6 @@
     <footer class="site-footer"><span>MY JAZZ TUTOR / PRACTICE ROOM</span><span><span data-i18n="Keep playing. Enjoy the process.">Keep playing. Enjoy the process.</span></span></footer>
   </main>
   <dialog id="history-dialog"><div class="dialog-top"><span class="eyebrow"><span data-i18n="SESSION NOTES">SESSION NOTES</span></span><button id="dialog-close" class="round-button" aria-label="Close session details" data-i18n-aria-label="Close session details">×</button></div><div id="history-detail"></div><div class="dialog-actions"><button id="correct-btn" class="button secondary"><span data-i18n="Correct this report">Correct this report</span></button><button id="repeat-btn" class="button secondary" data-i18n="Practice again">Practice again</button></div></dialog>
-  <dialog id="new-dialog" aria-labelledby="new-title">
-    <h2 id="new-title" data-i18n="New practice">New practice</h2>
-    <p id="suggestion-note" class="subtle"></p>
-    <form id="new-form">
-      <div class="chooser-fields"><label><span data-i18n="Exercise">Exercise</span><select id="exercise-select"></select></label><label><span data-i18n="Key">Key</span><select id="key-select"></select></label><label><span data-i18n="Target BPM">Target BPM</span><input id="goal-bpm" type="number" min="40" max="120" value="60" required></label></div>
-      <p id="new-description" class="instructions"></p><p id="eligibility" class="field-note"></p>
-      <p id="new-error" role="alert" hidden></p>
-      <div class="form-actions"><button id="add-practice" type="submit" class="button primary" data-i18n="Add to list">Add to list</button><button id="new-close" type="button" class="text-button" data-i18n="Go back">Go back</button></div>
-    </form>
-  </dialog>
   <dialog id="discard-dialog" aria-labelledby="discard-title">
     <h2 id="discard-title" data-i18n="Move on from this task?">Move on from this task?</h2>
     <p data-i18n="Reasons are optional. Saved recordings stay in history.">Reasons are optional. Saved recordings stay in history.</p>

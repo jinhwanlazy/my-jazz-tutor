@@ -142,7 +142,7 @@ def curriculum(path=HERE / "curriculum.yaml"):
     number(criteria["min_clean_runs"], "min_clean_runs", 1, 20)
     require(type(criteria["min_clean_runs"]) is int, "Consecutive successful runs must be an integer.")
     lessons = data["exercises"]
-    require(isinstance(lessons, list) and lessons, "At least one exercise is required.")
+    require(isinstance(lessons, list), "Reference exercises must be a list (it may be empty).")
     ids = [x["id"] for x in lessons]
     require(len(ids) == len(set(ids)), "Duplicate exercise IDs.")
     by_id = {x["id"]: x for x in lessons}
@@ -180,7 +180,6 @@ def curriculum(path=HERE / "curriculum.yaml"):
         require(token not in seen and token[0] in by_id and token[1] in keys, "Duplicate or invalid milestone.")
         seen.add(token)
         number(milestone["bpm"], "milestone bpm", data["minimum_bpm"], data["maximum_bpm"])
-    require(seen, "At least one fixed milestone is required.")
     return data
 
 
@@ -205,6 +204,13 @@ def target_for(data, exercise_id, key=None, bpm=None):
 def incompatible_target_fields(data, task):
     """Compare the assigned contract, not release numbers or display/accompaniment."""
     exercise_id, target = task["assignment"]["exercise_id"], task["target"]
+    if target.get("kind") == "generated":
+        from recommendation import validate_target
+        try:
+            validate_target(target)
+            return []
+        except (ValueError, KeyError, TypeError):
+            return ["generated_task_schema"]
     if not any(lesson["id"] == exercise_id for lesson in data["exercises"]):
         return ["exercise_id"]
     if target["key"] not in data["allowed_keys"]:
@@ -217,6 +223,7 @@ def incompatible_target_fields(data, task):
 
 
 def read_events(root):
+    csv.field_size_limit(2_000_000)  # Immutable generated scores can exceed csv's 128 KiB default.
     path = Path(root) / "practice.csv"
     if not path.exists():
         return []
@@ -244,8 +251,13 @@ def records(events):
             require(all(k in target for k in SPEC + ["criteria", "material"]), "The assigned-condition snapshot is incomplete.")
             number(target["bpm"], "target bpm", 1, 400)
             number(target["bars"], "target bars", 1, 1000)
-            require(target["criteria"].get("checks") == CHECKS, "Unknown task criteria.")
-            number(target["criteria"]["min_clean_runs"], "min_clean_runs", 1, 20)
+            if target.get("kind") == "generated":
+                from recommendation import validate_target
+                validate_target(target)
+                require(event["exercise_id"] == target["exercise_id"], "Generated exercise ID changed.")
+            else:
+                require(target["criteria"].get("checks") == CHECKS, "Unknown task criteria.")
+                number(target["criteria"]["min_clean_runs"], "min_clean_runs", 1, 20)
             tasks[task_id] = {"assignment": event, "target": target, "report": None, "completion": None,
                               "cancelled": False, "retired": False, "discarded": False, "cancellation": None}
             continue
@@ -354,7 +366,7 @@ def validate_observations(actual, checks):
 
 def outcome(task):
     report = task["report"]
-    if report is None:
+    if report is None or task["target"].get("kind") == "generated":
         return "unknown"
     actual, checks = json.loads(report["actual_json"]), json.loads(report["checks_json"])
     missing = False
@@ -467,7 +479,8 @@ def latest_activity(tasks, today):
     return latest
 
 
-def suggestion(data, tasks, today=None):
+def legacy_suggestion(data, tasks, today=None):
+    """Historical algorithm for compatibility tests only; no web/CLI recommendation uses it."""
     today = today or date.today()
     pending = [t for t in tasks if is_pending(t)]
     if pending:
@@ -695,12 +708,21 @@ def status(root, data):
     return {"version": data["version"], "profile": profile, "evidence": "Self-reported / unassessed does not mean failed",
             **practice_totals([practice_record(t) for t in reported]),
             "today": daily_summary(data, tasks, profile),
-            "goals": goals, "next": suggestion(data, tasks, datetime.now(ZoneInfo(profile.get("timezone", "UTC"))).date()),
+            "goals": goals, "next": next_action(tasks),
             "recent": [{"task_id": t["assignment"]["task_id"], "exercise": t["assignment"]["exercise_id"],
                         "date": practice_record(t)["practice_date"], "actual": json.loads(practice_record(t)["actual_json"]),
                         "outcome": outcome(t), "difficulty": practice_record(t)["difficulty"],
                         "raw_note": practice_record(t)["raw_note"], "hypothesis": practice_record(t)["hypothesis"]}
                        for t in reported[-5:]]}
+
+
+def next_action(tasks):
+    """Navigation state only. Recommendations require explicit LLM analysis."""
+    pending = next((t for t in tasks if is_pending(t)), None)
+    if pending:
+        return {"action": "resume", "task_id": pending["assignment"]["task_id"], "target": pending["target"],
+                "reason": "Open your unfinished practice below to continue or skip it."}
+    return {"action": "generate", "reason": "Create a practice from your profile, recent records, feedback, and notes."}
 
 
 def atomic_text(path, text):
@@ -719,76 +741,37 @@ def atomic_text(path, text):
 
 
 def render_report(root, data, output=None):
+    """Read-only history export. It neither generates tasks nor presents a fixed progress plan."""
     root = Path(root)
     tasks = records(read_events(root))
     info = status(root, data)
-    escape = lambda x: html.escape(str(x))
-    goals = info["goals"]
-    passed = sum(g["state"] in ("success", "retained") for g in goals)
-    held = sum(g["state"] == "retained" for g in goals)
-    required = {(g["exercise_id"], g["key"]) for g in goals}
-    table = []
-    for lesson in data["exercises"]:
-        cells = []
-        for key in data["allowed_keys"]:
-            metric = cell(data, tasks, lesson["id"], key)
-            tag = "Milestone" if (lesson["id"], key) in required else "Optional key"
-            cells.append(f'<td class="{metric["state"]}"><b>{STATES[metric["state"]]}</b><small>{tag} · Reports: {metric["attempts"]}</small></td>')
-        table.append(f'<tr><th>{escape(lesson["id"])} · {escape(display_builtin(lesson["title"]))}<small>{escape(display_builtin(lesson["phase"]))}</small></th>{"".join(cells)}</tr>')
-    bars = []
-    for domain, label in DOMAINS.items():
-        domain_ids = {x["id"] for x in data["exercises"] if domain in x["domains"]}
-        relevant = [g for g in goals if g["exercise_id"] in domain_ids]
-        count = sum(g["state"] in ("success", "retained") for g in relevant)
-        width = 100 * count / len(relevant) if relevant else 0
-        bars.append(f'<div class="domain"><span>{label}</span><div class="track"><div style="width:{width:.1f}%"></div></div><span>{count}/{len(relevant)}</span></div>')
-    history = []
-    for task in reversed([t for t in tasks if practice_record(t)][-20:]):
-        r = practice_record(task)
-        actual = json.loads(r["actual_json"])
-        history.append(f'<tr><td>{escape(r["practice_date"])}<small>{escape(r["task_id"])}</small></td><td>{escape(display_builtin(task["target"]["title"]))}</td>'
-                       f'<td>{escape(task["target"]["key"])} / {task["target"]["bpm"]} BPM<small>{escape(ARRANGEMENTS.get(task["target"]["arrangement"], task["target"]["arrangement"]))}</small></td>'
-                       f'<td>{escape(actual.get("key", "Unknown"))} / {escape(actual.get("bpm", "Unknown"))}<small>{escape(ARRANGEMENTS.get(actual.get("arrangement"), actual.get("arrangement", "Unknown")))}</small></td>'
-                       f'<td>{RESULTS[outcome(task)]}</td><td class="note">{escape(r["raw_note"])}</td></tr>')
-    next_task = info["next"]
-    candidate = next_task.get("target")
-    if not candidate and "exercise_id" in next_task:
-        candidate = target_for(data, next_task["exercise_id"], next_task["key"], next_task["bpm"])
-    if candidate:
-        candidate = display_builtin(candidate)
-        labels = {"chords": "Chord progression", "roots": "Left-hand bass", "melody": "Right-hand melody", "guide_tones": "Right-hand thirds and sevenths"}
-        material_rows = []
-        for field, label in labels.items():
-            if field not in candidate["material"]:
-                continue
-            if (field == "roots" and candidate["bass"] == "none") or (field == "melody" and candidate["melody"] == "none"):
-                continue
-            material_rows.append(f'<p><small>{label}</small>{escape(candidate["material"][field])}</p>')
-        next_text = f'<h3>{escape(candidate["title"])}</h3><p>{escape(candidate["key"])} · {candidate["bpm"]} BPM · {candidate["bars"]} bars</p><p>{escape(candidate["instructions"])}</p>{"".join(material_rows)}<small>C4 = middle C · numbers indicate octaves</small>'
-    elif next_task["action"] == "pause":
-        next_text = '<h3>Finish today or adjust a condition</h3>'
-    else:
-        next_text = '<h3>Connect what you have learned into music</h3>'
+    escape = lambda value: html.escape(str(value))
+    rows = []
+    for task in reversed(tasks):
+        target, record = task["target"], practice_record(task)
+        title = target["title"] if target.get("kind") == "generated" else display_builtin(target["title"])
+        state = ("Retired on update" if task["retired"] else "Discarded" if task["discarded"] else
+                 "Cancelled" if task["cancelled"] else "Completed" if record else "Ready to practice")
+        rating = RATINGS.get(record["difficulty"], RESULTS[outcome(task)]) if record else ""
+        note = record["raw_note"] if record else discard_details(task)["note"] if task["discarded"] else (task["cancellation"] or {}).get("reason", "")
+        day = record["practice_date"] if record else task["assignment"]["recorded_at"][:10]
+        actual = json.loads(record["actual_json"]) if record else {}
+        measured = reflection_observations(record)
+        observation = f"Metronome setting: {measured['metronome_bpm']} BPM" if measured and measured['metronome_bpm'] is not None else ""
+        duration = record["actual_minutes"] if record and record["actual_minutes"] else "Unknown"
+        rows.append(f'<article><small>{escape(day)} · {escape(task["assignment"]["task_id"])}</small>'
+                    f'<h2>{escape(title)}</h2><p>{escape(state)} · {escape(rating)}</p>'
+                    f'<p>Assigned: {escape(target["key"])} · {target["bpm"]} BPM · {target["bars"]} bars</p>'
+                    f'<p>Actual reported conditions: {escape(jdump(actual))} · Time: {escape(duration)} min</p>'
+                    f'<p>{escape(observation)}</p><p class="note">{escape(note)}</p></article>')
     daily = info["today"]
-    if daily["budget_reached"]:
-        time_note = "You have reached your daily time budget. Consider finishing, or continue if you want."
-    elif daily["remaining_minutes"] is None:
-        time_note = "Some reports have unknown duration, so the remaining time is unknown."
-    else:
-        time_note = f'Remaining recorded budget: {daily["remaining_minutes"]:g} min, including preparation, listening, and reporting.'
-    daily_text = (f'<p>Reports today: {daily["reported_attempts"]} · recorded time: {daily["known_minutes"]:g} min'
-                  f' / daily budget: {daily["budget_minutes"]:g} min · duration unknown: {daily["minutes_unknown"]}'
-                  f'<br>{time_note}</p>')
-    empty = '<tr><td colspan="6" class="empty">No practice results have been recorded yet.</td></tr>'
+    empty = '<p>No practice results have been recorded yet.</p>'
     page = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Jazz Practice · Practice history</title><style>
-:root{{font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;color:#e5eaf2;background:#101923}}*{{box-sizing:border-box}}body{{margin:0}}main{{max-width:1160px;margin:auto;padding:42px 24px}}header{{display:flex;justify-content:space-between;gap:20px;align-items:center}}h1{{font-size:32px;margin:8px 0}}h2{{font-size:21px;margin:0 0 18px}}h3{{margin:0 0 10px}}p{{line-height:1.7;color:#b8c6d6}}.eyebrow{{letter-spacing:3px;color:#e8bd79;font-size:12px}}.badge{{border:1px solid #46515e;padding:8px 14px;border-radius:20px;white-space:nowrap;font-size:13px}}.cards{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:28px 0}}.card,section{{background:#192634;border:1px solid #2b3b4b;border-radius:14px;padding:22px}}.card strong{{display:block;font-size:30px;margin:10px 0}}.card span,small{{color:#a8b9ca;font-size:12px}}small{{display:block;margin-top:7px}}section{{margin:20px 0}}.split{{display:grid;grid-template-columns:1.2fr 1fr;gap:20px}}.split section{{margin:0}}table{{border-collapse:collapse;width:100%;font-size:13px}}th,td{{padding:15px 12px;text-align:left;border-bottom:1px solid #334353;vertical-align:top}}thead th{{color:#a8b9ca;font-weight:500}}td.unknown{{color:#acb5c0}}td.attempted{{background:#273956}}td.success{{background:#304236}}td.retained{{background:#155345}}.scroll{{overflow:auto}}.legend{{font-size:12px;color:#a8b9ca}}.domain{{display:grid;grid-template-columns:65px 1fr 35px;gap:12px;align-items:center;margin:20px 0;font-size:13px}}.track{{height:8px;border-radius:8px;background:#354454;overflow:hidden}}.track div{{height:100%;background:#e8bd79}}pre{{white-space:pre-wrap;font-size:12px;line-height:1.7;color:#cee1ef}}.note{{white-space:pre-wrap;min-width:180px}}.empty{{text-align:center;padding:36px;color:#a8b9ca}}footer{{color:#899bac;font-size:12px;line-height:1.8;margin-top:28px}}@media(max-width:760px){{.cards{{grid-template-columns:repeat(2,1fr)}}.split{{grid-template-columns:1fr}}header{{align-items:flex-start}}main{{padding:24px 14px}}th,td{{min-width:115px}}}}
-</style></head><body><main><header><div><div class="eyebrow">JAZZ PRACTICE</div><h1>Your records, your next practice</h1><p>Share a daily budget of {daily['budget_minutes']:g} minutes across tasks</p>{daily_text}</div><div class="badge">Active version {escape(data['version'])}</div></header>
-<div class="cards"><div class="card">Reported tasks<strong>{info['reported_attempts']}</strong><span>Assignments alone do not count</span></div><div class="card">Recorded practice time<strong>{info['known_minutes']:g}<span> min</span></strong><span>Duration unknown: {info['minutes_unknown']}</span></div><div class="card">Milestones met<strong>{passed}<span> / {len(goals)}</span></strong><span>Fixed goals for this version · self-reported</span></div><div class="card">Later retention under the same conditions<strong>{held}<span> / {len(goals)}</span></strong><span>At least {data['retention_days']} days apart · self-reported</span></div></div>
-<div class="split"><section><h2>{'Current task' if next_task['action']=='resume' else 'Suggested next task · not yet assigned'}</h2>{next_text}<p>{escape(next_task['reason'])}</p></section><section><h2>Milestones by domain</h2>{''.join(bars)}<p>Counts show successful milestones in each domain. Domains overlap; these are not overall jazz ability scores or independent skill measures.</p></section></div>
-<section><h2>Conditions you have checked</h2><p class="legend">Unassessed → Attempted → Same-day success → Later retention. Unassessed does not mean failed. The default comparison tempo is {data['default_bpm']} BPM. Only reports meeting all hand, rhythm, and note conditions count as successful.</p><div class="scroll"><table><thead><tr><th>Exercise</th>{''.join(f'<th>{escape(k)}</th>' for k in data['allowed_keys'])}</tr></thead><tbody>{''.join(table)}</tbody></table></div></section>
-<section><h2>Recent practice reports</h2><div class="scroll"><table><thead><tr><th>Practice date</th><th>Task</th><th>Target</th><th>Actual</th><th>Outcome</th><th>Original note</th></tr></thead><tbody>{''.join(history) or empty}</tbody></table></div></section>
-<footer>These records are self-reported. Pitch, swing, and tone are not automatically assessed.<br>Generated: {escape(datetime.now(timezone.utc).isoformat(timespec='seconds'))} · Source: practice.csv · Run ./jazz report after new records to refresh</footer></main></body></html>'''
+body{{font-family:system-ui,sans-serif;max-width:900px;margin:auto;padding:32px;background:#f5f2eb;color:#263d37}}article{{background:#fffef9;border:1px solid #ddd;border-radius:12px;padding:20px;margin:16px 0}}p{{line-height:1.7}}.note{{white-space:pre-wrap}}small{{color:#646b60}}</style></head><body>
+<h1>Practice history</h1><p>Reports today: {daily['reported_attempts']} · Recorded time: {daily['known_minutes']:g} min / {daily['budget_minutes']:g} min · Duration unknown: {daily['minutes_unknown']}</p>
+<p>Create a practice in the app to request a new Codex recommendation. This export does not generate recommendations.</p>
+{''.join(rows) or empty}<footer>Metronome settings are not analyzed playing BPM. Labels are self-reports, not musical accuracy measurements.<br>Version {escape(data['version'])} · Source: practice.csv</footer></body></html>'''
     destination = Path(output) if output else root / "reports" / "index.html"
     atomic_text(destination, page)
     return str(destination)
@@ -799,8 +782,20 @@ def main(argv=None):
     parser.add_argument("--practice-root", type=Path, default=HERE.parent / "practice")
     parser.add_argument("--curriculum", type=Path, default=HERE / "curriculum.yaml")
     sub = parser.add_subparsers(dest="command", required=True)
-    for command in ("status", "suggest", "validate", "validate-curriculum"):
+    for command in ("status", "validate", "validate-curriculum", "recommendation-schema"):
         sub.add_parser(command)
+    for command in ("recommend", "suggest"):
+        recommendation = sub.add_parser(command, help="Analyze with Codex and add one validated practice to the list")
+        recommendation.add_argument("--request", default="", help="Optional coaching focus")
+        recommendation.add_argument("--language", choices=["ko", "en"])
+    context = sub.add_parser("recommend-context", help="Explicit context for conversational coaching")
+    context.add_argument("--output", type=Path, required=True)
+    context.add_argument("--request", default="")
+    context.add_argument("--language", choices=["ko", "en"])
+    acceptance = sub.add_parser("accept-recommendation", help="Validate and save conversational coaching JSON")
+    acceptance.add_argument("--context", type=Path, required=True)
+    acceptance.add_argument("--input", type=Path, required=True)
+    acceptance.add_argument("--request-id", default=None)
     report = sub.add_parser("report")
     report.add_argument("--output", type=Path)
     web = sub.add_parser("serve", help="Local web practice room")
@@ -816,6 +811,9 @@ def main(argv=None):
         recording = sub.add_parser(command)
         recording.add_argument("task_id")
         recording.add_argument("--input", type=Path, required=True, help="UTF-8 JSON file; preserves original multiline notes")
+    reflection = sub.add_parser("reflection", help="Save a difficulty label and optional note")
+    reflection.add_argument("task_id")
+    reflection.add_argument("--input", type=Path, required=True)
     cancelling = sub.add_parser("cancel")
     cancelling.add_argument("task_id")
     cancelling.add_argument("--reason", required=True)
@@ -829,7 +827,7 @@ def main(argv=None):
         development_source = (HERE / "publish.py").exists()
         production_root = (HERE.parent / "practice").resolve()
         if development_source and args.practice_root.resolve() == production_root:
-            require(args.command not in ("assign", "record", "correct", "cancel", "discard", "serve"),
+            require(args.command not in ("assign", "record", "correct", "reflection", "cancel", "discard", "serve", "recommend", "suggest", "accept-recommendation"),
                     "Development source cannot write the real practice log. Use ./jazz in the practice project. For tests, set --practice-root to a temporary directory.")
             if args.command == "report":
                 require(args.output is not None and not args.output.resolve().is_relative_to(production_root),
@@ -846,14 +844,36 @@ def main(argv=None):
             result = {"valid": True, "events": len(events), "tasks": len(tasks)}
         elif args.command == "status":
             result = status(args.practice_root, data)
-        elif args.command == "suggest":
-            result = suggestion(data, records(read_events(args.practice_root)))
+        elif args.command in ("suggest", "recommend"):
+            from recommendation import Recommendations, ERRORS
+            result = Recommendations(args.practice_root, data).start("R-" + uuid.uuid4().hex, args.language,
+                                                                     args.request, asynchronous=False)
+            require(result["state"] == "completed", ERRORS.get(result.get("error_code"), "Recommendation failed."))
+        elif args.command == "recommendation-schema":
+            from recommendation import SCHEMA
+            result = SCHEMA
+        elif args.command == "recommend-context":
+            from recommendation import context_for
+            with log_lock(args.practice_root):
+                context = context_for(args.practice_root, data, args.language, args.request)
+            atomic_text(args.output, jdump(context))
+            result = {"context": str(args.output), "fingerprint": context["fingerprint"]}
+        elif args.command == "accept-recommendation":
+            from recommendation import accept_conversation
+            result = accept_conversation(args.practice_root, data, json.loads(args.context.read_text()),
+                                         json.loads(args.input.read_text()), args.request_id)
         elif args.command == "report":
             result = {"report": render_report(args.practice_root, data, args.output)}
         elif args.command == "assign":
             result = assign(args.practice_root, data, args.exercise_id, args.key, args.bpm, args.purpose, args.reason)
         elif args.command in ("record", "correct"):
             result = record_result(args.practice_root, data, args.task_id, json.loads(args.input.read_text()), args.command == "correct")
+        elif args.command == "reflection":
+            from sessions import SessionStore
+            payload = json.loads(args.input.read_text())
+            require(isinstance(payload, dict) and set(payload) <= {"rating", "note", "expected_event_id"}, "Invalid feedback fields.")
+            result = SessionStore(args.practice_root).reflect(data, args.task_id, payload.get("rating"),
+                                                            payload.get("note", ""), payload.get("expected_event_id"))
         elif args.command == "cancel":
             result = cancel(args.practice_root, data, args.task_id, args.reason)
         elif args.command == "discard":

@@ -111,7 +111,7 @@ class PracticeListTests(unittest.TestCase):
         self.assertEqual(self.app.store.export(sid), archive)
         self.assertNotEqual(self.app.state()['status']['next'].get('exercise_id'), 'E01')
         self.assertFalse(r.practice_ready(self.data, self.tasks(), 'E01', 'C'))
-        self.assertEqual(r.suggestion(self.data, self.tasks(), date.today()+timedelta(days=1))['exercise_id'], 'E01')
+        self.assertEqual(r.legacy_suggestion(self.data, self.tasks(), date.today()+timedelta(days=1))['exercise_id'], 'E01')
         with self.assertRaises(ValueError):
             self.app.post('/api/discard', {'task_id': task, 'reason': 'Changed reason'})
         with self.assertRaises(ValueError):
@@ -122,7 +122,7 @@ class PracticeListTests(unittest.TestCase):
         first = self.assign()
         self.app.post('/api/discard', {'task_id': first, 'choice': 'already_practiced', 'reason': note})
         self.app.post('/api/discard', {'task_id': self.assign('E02'), 'choice': 'too_easy'})
-        self.assertEqual(self.app.state()['status']['next']['exercise_id'], 'E03')
+        self.assertEqual(self.app.state()['status']['next']['action'], 'generate')
         self.assertEqual(r.discard_details(self.tasks()[0])['note'], note)
         self.assertTrue(r.practice_ready(self.data, self.tasks(), 'E01', 'C'))
         self.assertFalse(r.practice_ready(self.data, self.tasks(), 'E01', 'F'))
@@ -153,18 +153,18 @@ class PracticeListTests(unittest.TestCase):
 
     def test_completed_review_and_too_easy_feedback_stop_the_repeat_loop(self):
         self.old_success()
-        self.assertEqual(self.app.state()['status']['next']['action'], 'review')
+        self.assertEqual(self.app.state()['status']['next']['action'], 'generate')
         task = self.assign()
         self.play(task)
         self.complete(task)
         self.assertNotEqual(self.app.state()['status']['next']['action'], 'review')
         self.app.post('/api/reflection', {'task_id': task, 'rating': 'too_easy'})
-        self.assertEqual(self.app.state()['status']['next']['exercise_id'], 'E02')
+        self.assertEqual(self.app.state()['status']['next']['action'], 'generate')
         self.assertEqual(len(r.goal_successes(self.data, self.tasks(), 'E01', 'C', 60)), 1)
         self.assertFalse(r.retained(r.goal_successes(self.data, self.tasks(), 'E01', 'C', 60), 2))
-        tomorrow = r.suggestion(self.data, self.tasks(), date.today()+timedelta(days=1))
+        tomorrow = r.legacy_suggestion(self.data, self.tasks(), date.today()+timedelta(days=1))
         self.assertEqual(tomorrow['exercise_id'], 'E02')
-        later = r.suggestion(self.data, self.tasks(), date.today()+timedelta(days=self.data['retention_days']))
+        later = r.legacy_suggestion(self.data, self.tasks(), date.today()+timedelta(days=self.data['retention_days']))
         self.assertEqual(later['action'], 'review')
 
     def test_unrelated_key_does_not_satisfy_due_review(self):
@@ -172,8 +172,8 @@ class PracticeListTests(unittest.TestCase):
         task = self.assign(key='F')
         self.play(task)
         self.complete(task)
-        self.assertEqual(self.app.state()['status']['next']['action'], 'review')
-        self.assertEqual(self.app.state()['status']['next']['key'], 'C')
+        self.assertEqual(self.app.state()['status']['next']['action'], 'generate')
+        self.assertNotIn('key', self.app.state()['status']['next'])
 
 
 class ListReleaseTests(unittest.TestCase):

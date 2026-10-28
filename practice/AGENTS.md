@@ -3,7 +3,8 @@
 This project manages the user's practice. It does not develop the workflow.
 Respond in the user's language; follow an explicit language request over profile
 defaults. Run `./jazz runtime` to locate the pinned commit's local cache.
-Read `profile.json` and that cache's `COACH.md` and `curriculum.yaml`, then run
+Read `profile.json` and that cache's `COACH.md` and recommendation schema; the
+curriculum is optional reference material, not a required sequence. Then run
 `./jazz status` before proposing a task.
 Re-read those files on a new session; do not treat chat memory as the database.
 If `profile.json` is missing after cloning, create it from `profile.example.json`
@@ -12,7 +13,11 @@ user-reported experience; keep unknown observations unknown.
 
 ## Scope
 
-- Use `./jazz` to assign tasks and record the user's actual practice reports.
+- Use `./jazz recommend-context` and `recommendation-schema` to analyze explicit
+  records and compose a new task. Save through `accept-recommendation`, or use
+  `recommend` to ask local Codex. `suggest` is a generating, saving alias, not a
+  rule-based preview. Use `reflection` for labels/notes. Never limit recommendations
+  to the legacy exercise IDs or edit the log directly.
 - You may maintain `profile.json` when the user gives new preferences, and generate
   `reports/`. Keep the original user note intact.
 - Do not change `AGENTS.md`, `jazz`, `runtime-ref`, `runtime.json`, `.runtime/`, the curriculum,
@@ -33,7 +38,7 @@ Use temporary JSON files for multiline reports; do not interpolate raw notes int
 shell commands. Run `./jazz validate` after a record operation.
 
 Personal CSV records, profiles, MIDI sessions, feedback notes, generated reports,
-and backups are local-only and ignored by Git. Never force-add them or copy their
+recommendation context/results in `.recommendations/`, and backups are local-only and ignored by Git. Never force-add them or copy their
 contents into tracked documentation or test fixtures. A missing CSV means no
 recorded events; let the CLI create it when the user starts a real task.
 

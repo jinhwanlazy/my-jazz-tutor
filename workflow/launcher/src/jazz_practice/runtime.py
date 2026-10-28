@@ -16,7 +16,8 @@ REQUIRED = ['review.py', 'COACH.md', 'curriculum.yaml', 'pyproject.toml', 'uv.lo
 WEB = ['webapp.py', 'sessions.py', 'webapp.html', 'webapp.css', 'webapp.js', 'audio.mjs', 'capture.mjs']
 LOCALIZATION = ['i18n.mjs', 'translations.json']
 NOTATION = ['notation.py', 'score.mjs', 'timeline.mjs', 'Bravura.woff2', 'Bravura-LICENSE.txt', 'THIRD_PARTY.md']
-FILES = REQUIRED + WEB + LOCALIZATION + NOTATION
+RECOMMENDATION = ['recommendation.py', 'recommendation.schema.json']
+FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION
 PIN = 'runtime.json'
 CACHE = '.runtime'
 
@@ -53,6 +54,8 @@ def snapshot(repo, ref):
             'Runtime localization files are incomplete.')
     require(not set(NOTATION).intersection(names) or set(NOTATION) <= set(names),
             'Runtime notation files are incomplete.')
+    require(not set(RECOMMENDATION).intersection(names) or set(RECOMMENDATION) <= set(names),
+            'Runtime recommendation files are incomplete.')
     contents = {name: git(repo, 'show', f'{revision}:workflow/{name}') for name in FILES if name in names}
     version = tomllib.loads(contents['pyproject.toml'].decode())['project']['version']
     manifest = {'revision': revision, 'version': version,

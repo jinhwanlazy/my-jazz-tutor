@@ -10,6 +10,7 @@ __pycache__/
 /practice/releases/
 /practice/practice.csv
 /practice/profile.json
+/practice/.recommendations/
 /practice/workflow-feedback.md
 /practice/sessions.sqlite3
 /practice/reports/

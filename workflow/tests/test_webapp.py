@@ -110,7 +110,7 @@ class StoreTests(unittest.TestCase):
         self.assertIn('연속 성공 횟수', ' '.join(korean['history'][0]['feedback']['details']))
         self.assertIn('손 구성', ' '.join(korean['history'][0]['feedback']['details']))
         self.assertIn('Bar count', ' '.join(english['history'][0]['feedback']['details']))
-        self.assertEqual(korean['exercises'][0]['title'], self.data['exercises'][0]['title'])
+        self.assertEqual(korean['history'][0]['target']['title'], self.data['exercises'][0]['title'])
         self.assertEqual(english['status']['goals'], korean['status']['goals'])
         self.assertEqual((self.root / 'practice.csv').read_bytes(), before)
 
@@ -130,7 +130,7 @@ class StoreTests(unittest.TestCase):
         assignment = r.read_events(self.root)[0]
         before = (self.root / 'practice.csv').read_bytes()
         state = self.app.state()
-        self.assertNotRegex(json.dumps(state['exercises'], ensure_ascii=False), r'[가-힣]')
+        self.assertNotIn('exercises', state)
         self.assertNotRegex(json.dumps(state['history'][0]['target'], ensure_ascii=False), r'[가-힣]')
         self.assertNotRegex(json.dumps(state['status']['next'], ensure_ascii=False), r'[가-힣]')
         self.assertEqual((self.root / 'practice.csv').read_bytes(), before)
@@ -148,7 +148,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(state['status']['goals'][0]['state'], 'success')
         self.assertEqual(len(r.goal_successes(self.data, r.records(r.read_events(self.root)),
                                              'E01', 'C', 60)), 1)
-        self.assertNotIn('C', state['exercises'][2]['eligible_keys'])
+        self.assertNotIn('exercises', state)
 
     def test_start_is_idempotent_but_only_one_capture_can_be_open(self):
         sid = self.start()
@@ -226,7 +226,7 @@ class StoreTests(unittest.TestCase):
 
     def test_web_prerequisites_and_same_day_skip_use_existing_rules(self):
         self.app.post('/api/cancel', {'task_id': self.task, 'reason': '테스트: 오늘 보류'})
-        self.assertEqual(self.app.state()['status']['next']['exercise_id'], 'E02')
+        self.assertEqual(self.app.state()['status']['next']['action'], 'generate')
         with self.assertRaises(ValueError):
             self.app.post('/api/assign', {'exercise_id': 'E03'})
         self.assertEqual(len(r.read_events(self.root)), 2)
@@ -278,7 +278,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(metadata['status'], 'interrupted')
         self.assertEqual(metadata['target']['criteria']['min_clean_runs'], 2)
         self.assertEqual(app.state()['status']['reported_attempts'], 0)
-        self.assertEqual(app.state()['status']['next']['exercise_id'], 'E01')
+        self.assertEqual(app.state()['status']['next']['action'], 'generate')
 
     def test_installed_web_assets_are_hashed_and_stale_server_cannot_mutate(self):
         (self.root / 'AGENTS.md').write_text('temporary test workspace')
@@ -341,10 +341,10 @@ class HTTPTests(unittest.TestCase):
             state = json.loads(body)
             self.assertEqual(state['language'], 'ko' if language == 'ko' else 'en')
             if language == 'ko':
-                self.assertRegex(state['exercises'][0]['title'], r'[가-힣]')
+                self.assertNotIn('exercises', state)
                 self.assertRegex(state['status']['next']['reason'], r'[가-힣]')
             else:
-                self.assertNotRegex(json.dumps(state['exercises'], ensure_ascii=False), r'[가-힣]')
+                self.assertNotIn('exercises', state)
         self.assertFalse((self.root / 'practice.csv').exists())
         self.assertFalse((self.root / 'sessions.sqlite3').exists())
 

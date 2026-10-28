@@ -84,11 +84,13 @@ function ledger(parent, x, y, staff) {
   for (let at = top - 10; at >= y; at -= 10) line(parent, x - 11, at, x + 11, at, 'score-ledger');
   for (let at = bottom + 10; at <= y; at += 10) line(parent, x - 11, at, x + 11, at, 'score-ledger');
 }
-function accidental(parent, pitch, x, y, key, live = false) {
-  const signature = FLATS[key].includes(pitch.letter) ? -1 : 0;
+function accidental(parent, pitch, x, y, key, live = false, state = null) {
+  const token = `${pitch.letter}${pitch.octave}`;
+  const signature = state?.get(token) ?? ((FLATS[key] || []).includes(pitch.letter) ? -1 : 0);
   if (pitch.alter !== signature || (live && pitch.alter !== 0)) {
     symbol(parent, pitch.alter === -1 ? 'flat' : pitch.alter === 1 ? 'sharp' : 'natural', x - 24, y);
   }
+  state?.set(token, pitch.alter);
 }
 
 export class ScoreView {
@@ -157,7 +159,9 @@ export class ScoreView {
     const score = this.score;
     this.width = scoreX(score.bars.length * 4) + 24;
     const scale = this.width / (scoreX(16) + 24);
-    this.svg = svg('svg', {viewBox: `0 0 ${this.width} ${HEIGHT}`, role: 'img', class: 'practice-score',
+    const written = score.bars.flatMap(bar => ['left', 'right'].flatMap(hand => bar[hand].flatMap(e => e.pitches.map(p => noteY(p, hand)))));
+    const minY = Math.min(0, ...written.map(y => y - 42)), maxY = Math.max(HEIGHT, ...written.map(y => y + 16));
+    this.svg = svg('svg', {viewBox: `0 ${minY} ${this.width} ${maxY - minY}`, role: 'img', class: 'practice-score',
       style: `width: ${Math.max(1, scale) * 100}%; min-width: ${scale * 760}px`,
       'aria-label': tr`Practice score in ${score.key}, ${score.bars.length} bars`});
     const canvas = this.svg;
@@ -166,7 +170,7 @@ export class ScoreView {
       const top = TOP[staff];
       for (let row = 0; row < 5; row++) line(canvas, 33, top + row * 10, this.width - 24, top + row * 10, 'score-staff-line');
       symbol(canvas, staff === 'right' ? 'treble' : 'bass', 39, top + (staff === 'right' ? 30 : 10));
-      for (const [i, letter] of FLATS[score.key].entries()) {
+      for (const [i, letter] of (FLATS[score.key] || []).entries()) {
         const pitch = {letter, octave: staff === 'right' ? 4 : 2};
         if (letter === 'E') pitch.octave++;
         symbol(canvas, 'flat', 78 + i * 12, noteY(pitch, staff));
@@ -185,7 +189,10 @@ export class ScoreView {
         line(canvas, bx, 275, bx, 280, 'score-beat-tick');
         canvas.append(svg('text', {x: bx, y: 298, class: 'score-beat-label'}, String(beat + 1)));
       }
-      for (const staff of ['right', 'left']) for (const event of bar[staff]) this.drawEvent(canvas, event, staff, at);
+      for (const staff of ['right', 'left']) {
+        const accidentals = new Map();
+        for (const event of bar[staff]) this.drawEvent(canvas, event, staff, at, accidentals);
+      }
       const end = x + BAR - (at === bars.length - 1 ? 0 : 20);
       line(canvas, end, TOP.right, end, TOP.left + 40, 'score-bar-line');
     }
@@ -208,7 +215,7 @@ export class ScoreView {
     this.root.scrollLeft = scroll;
     if (this.position) this.frame(this.position);
   }
-  drawEvent(canvas, event, staff, bar) {
+  drawEvent(canvas, event, staff, bar, accidentals) {
     const x = noteX(bar, event.beat), top = TOP[staff];
     const group = svg('g', {class: 'score-target', 'data-hand': staff, 'data-bar': bar, 'data-beat': event.beat,
       'data-kind': event.kind, 'data-duration': event.duration ?? ''});
@@ -218,6 +225,7 @@ export class ScoreView {
     }
     if (event.kind === 'rest') {
       if (event.duration === 4) group.append(svg('rect', {x: x + 53, y: top + 10, width: 14, height: 5, class: 'score-rest'}));
+      else if (event.duration === 2) group.append(svg('rect', {x: x - 7, y: top + 15, width: 14, height: 5, class: 'score-rest'}));
       else symbol(group, event.duration === .5 ? 'eighthRest' : 'quarterRest', x - 4, top + 20);
       return;
     }
@@ -226,10 +234,10 @@ export class ScoreView {
       const y = noteY(pitch, staff); ys.push(y);
       const note = svg('g', {'data-midi': pitch.midi, class: 'score-target-note'});
       note.append(svg('title', {}, pitch.name));
-      ledger(note, x, y, staff); accidental(note, pitch, x, y, this.score.key);
+      ledger(note, x, y, staff); accidental(note, pitch, x, y, this.score.key, false, accidentals);
       if (event.kind === 'onset') note.append(svg('path', {d: `M${x} ${y - 5} l7 5 -7 5 -7 -5 Z`, class: 'score-onset'}));
       else note.append(svg('ellipse', {cx: x, cy: y, rx: event.duration === 4 ? 8 : 6, ry: 4.3,
-        transform: `rotate(-18 ${x} ${y})`, class: event.duration === 4 ? 'score-whole' : 'score-notehead'}));
+        transform: `rotate(-18 ${x} ${y})`, class: event.duration >= 2 ? 'score-whole' : 'score-notehead'}));
       group.append(note);
     }
     if (event.kind !== 'onset' && event.duration < 4) {

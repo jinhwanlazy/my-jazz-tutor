@@ -64,7 +64,7 @@ class ReflectionTests(unittest.TestCase):
         self.assertEqual([s["duration_source"] for s in measured["sessions"]], ["midi_span"] * 2)
         self.assertEqual(report["actual_json"], "{}")
         self.assertAlmostEqual(self.app.state()["status"]["today"]["known_minutes"], .2)
-        self.assertEqual(self.app.state()["status"]["next"]["bpm"], 80)
+        self.assertNotIn("bpm", self.app.state()["status"]["next"])
 
     def test_interruptions_stay_unknown_and_playback_without_midi_is_measured(self):
         task = self.assign()
@@ -135,41 +135,19 @@ class ReflectionTests(unittest.TestCase):
             self.reflect(task)
         self.assertEqual(float(self.tasks()[0]["report"]["actual_minutes"]), 2880)
 
-    def test_comfort_opens_same_key_practice_without_mastery_or_retention(self):
-        first = self.assign()
-        saved = self.reflect(first)
-        self.assertEqual(self.app.state()["status"]["next"]["exercise_id"], "E02")
-        self.assertNotIn("C", self.app.state()["exercises"][2]["eligible_keys"])
-        self.reflect(self.assign("E02"), "too_easy")
-        self.assertEqual(self.app.state()["status"]["next"]["exercise_id"], "E03")
-        self.assertIn("C", self.app.state()["exercises"][2]["eligible_keys"])
-        self.assertNotIn("F", self.app.state()["exercises"][2]["eligible_keys"])
-        self.assertTrue(all(g["state"] in ("unknown", "attempted") for g in self.app.state()["status"]["goals"]))
-        with self.assertRaises(ValueError):
-            r.assign(self.root, self.data, "E03", purpose="review")
-        changed = copy.deepcopy(self.data)
-        changed["exercises"][0]["instructions"] += " Changed task."
-        self.assertFalse(r.practice_ready(changed, self.tasks(), "E01", "C"))
-        self.reflect(first, "impossible", expected_event_id=saved["event_id"])
-        self.assertNotIn("C", self.app.state()["exercises"][2]["eligible_keys"])
-        with self.assertRaises(ValueError):
-            self.assign("E03")
-
-    def test_all_four_ratings_guide_practice_and_respect_tempo_bounds(self):
-        task = self.assign(bpm=self.data["minimum_bpm"])
-        saved = self.reflect(task, "impossible")
-        next_task = self.app.state()["status"]["next"]
-        self.assertEqual(next_task["exercise_id"], "E01")
-        self.assertEqual(next_task["bpm"], self.data["minimum_bpm"])
-        self.reflect(task, "challenging", expected_event_id=saved["event_id"])
-        self.assertEqual(self.app.state()["status"]["next"]["bpm"], self.data["minimum_bpm"])
-        # Fill the practice route with comfort labels; never fill the mastery cells.
-        for lesson in self.data["exercises"]:
-            self.reflect(self.assign(lesson["id"], bpm=self.data["maximum_bpm"]), "too_easy")
-        next_task = self.app.state()["status"]["next"]
-        self.assertEqual(next_task["bpm"], self.data["maximum_bpm"])
-        self.assertEqual(next_task["action"], "practice")
-        self.assertTrue(all(g["successes"] == 0 for g in self.app.state()["status"]["goals"]))
+    def test_labels_are_preserved_without_fixed_prerequisites_or_tempo_rules(self):
+        task = self.assign()
+        saved = None
+        for label in ('impossible', 'challenging', 'good', 'too_easy'):
+            saved = self.reflect(task, label, expected_event_id=saved['event_id'] if saved else None)
+            state = self.app.state()
+            self.assertEqual(state['history'][0]['report']['difficulty'], label)
+            self.assertEqual(state['status']['next']['action'], 'generate')
+            self.assertNotIn('exercise_id', state['status']['next'])
+            self.assertNotIn('bpm', state['status']['next'])
+            self.assertNotIn('exercises', state)
+            self.assertTrue(all(g['successes'] == 0 for g in state['status']['goals']))
+        self.assertEqual(len(r.read_events(self.root)), 5)
 
     def test_cancelled_candidate_is_not_immediately_recommended_again(self):
         self.reflect(self.assign())

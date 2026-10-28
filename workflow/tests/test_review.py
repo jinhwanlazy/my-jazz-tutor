@@ -49,7 +49,7 @@ class PracticeTests(unittest.TestCase):
     def test_assignment_is_not_practice_and_pending_is_resumed(self):
         task_id = self.task()
         self.assertEqual(r.status(self.root, self.data)["reported_attempts"], 0)
-        self.assertEqual(r.suggestion(self.data, self.history())["task_id"], task_id)
+        self.assertEqual(r.legacy_suggestion(self.data, self.history())["task_id"], task_id)
         with self.assertRaises(ValueError):
             self.task("E02")
 
@@ -105,7 +105,7 @@ class PracticeTests(unittest.TestCase):
         self.success(self.task(bpm=80))
         tasks = self.history()
         tasks[0]["report"]["practice_date"] = (date.today() - timedelta(days=3)).isoformat()
-        suggested = r.suggestion(self.data, tasks)
+        suggested = r.legacy_suggestion(self.data, tasks)
         self.assertEqual((suggested["action"], suggested["bpm"]), ("review", 80))
 
     def test_csv_notes_roundtrip_and_html_escape(self):
@@ -179,10 +179,10 @@ class PracticeTests(unittest.TestCase):
 
     def test_multiple_easy_tasks_advance_same_day_with_shared_time(self):
         self.success(self.task("E01"), difficulty="easy", actual_minutes=3)
-        self.assertEqual(r.suggestion(self.data, self.history())["exercise_id"], "E02")
+        self.assertEqual(r.legacy_suggestion(self.data, self.history())["exercise_id"], "E02")
         self.success(self.task("E02"), difficulty="easy", actual_minutes=4)
         info = r.status(self.root, self.data)
-        self.assertEqual(info["next"]["exercise_id"], "E03")
+        self.assertEqual(info["next"]["action"], "generate")
         self.assertEqual(info["today"]["reported_attempts"], 2)
         self.assertEqual(info["today"]["known_minutes"], 7)
         self.assertEqual(info["today"]["remaining_minutes"], 23)
@@ -191,16 +191,16 @@ class PracticeTests(unittest.TestCase):
 
     def test_all_goals_can_pass_same_day_without_claiming_retention(self):
         for milestone in self.data["milestones"]:
-            self.assertEqual(r.suggestion(self.data, self.history())["exercise_id"], milestone["exercise_id"])
+            self.assertEqual(r.legacy_suggestion(self.data, self.history())["exercise_id"], milestone["exercise_id"])
             self.success(self.task(milestone["exercise_id"]), actual_minutes=2)
         info = r.status(self.root, self.data)
-        self.assertEqual(info["next"]["action"], "consolidate")
+        self.assertEqual(info["next"]["action"], "generate")
         self.assertTrue(all(g["state"] == "success" for g in info["goals"]))
         self.assertEqual(info["today"]["known_minutes"], 12)
 
     def test_easy_without_evidence_gets_quick_check_and_cannot_unlock(self):
         r.record_result(self.root, self.data, self.task(), {"raw_note": "쉬웠음", "difficulty": "easy"})
-        next_task = r.suggestion(self.data, self.history())
+        next_task = r.legacy_suggestion(self.data, self.history())
         self.assertEqual(next_task["exercise_id"], "E01")
         self.assertIn("Briefly check", next_task["reason"])
         self.assertEqual(r.outcome(self.history()[0]), "unknown")
@@ -210,15 +210,15 @@ class PracticeTests(unittest.TestCase):
     def test_cancel_defers_today_preserves_reason_and_expires_tomorrow(self):
         reason = '너무 어려워 보여서, 오늘은 스킵\n"다른 것부터"'
         r.cancel(self.root, self.data, self.task(), reason)
-        next_task = r.suggestion(self.data, self.history())
+        next_task = r.legacy_suggestion(self.data, self.history())
         self.assertEqual(next_task["exercise_id"], "E02")
         self.assertEqual(next_task["deferred_today"][0]["reason"], reason)
         self.assertEqual(r.status(self.root, self.data)["today"]["reported_attempts"], 0)
         self.success(self.task("E02"), actual_minutes=3)
-        self.assertEqual(r.suggestion(self.data, self.history())["action"], "pause")
+        self.assertEqual(r.legacy_suggestion(self.data, self.history())["action"], "pause")
         with self.assertRaises(ValueError):
             self.task("E03")
-        tomorrow = r.suggestion(self.data, self.history(), date.today() + timedelta(days=1))
+        tomorrow = r.legacy_suggestion(self.data, self.history(), date.today() + timedelta(days=1))
         self.assertEqual(tomorrow["exercise_id"], "E01")
         self.assertEqual(tomorrow["deferred_today"], [])
 
@@ -231,8 +231,8 @@ class PracticeTests(unittest.TestCase):
         events[1]["practice_date"] = earlier
         events[2]["recorded_at"] = earlier + "T11:00:00+00:00"
         tasks = r.records(events)
-        self.assertEqual(r.suggestion(self.data, tasks)["exercise_id"], "E02")
-        tomorrow = r.suggestion(self.data, tasks, date.today() + timedelta(days=1))
+        self.assertEqual(r.legacy_suggestion(self.data, tasks)["exercise_id"], "E02")
+        tomorrow = r.legacy_suggestion(self.data, tasks, date.today() + timedelta(days=1))
         self.assertEqual((tomorrow["action"], tomorrow["exercise_id"]), ("review", "E01"))
 
     def test_hard_attempt_is_preserved_without_inventing_failure(self):
@@ -240,48 +240,48 @@ class PracticeTests(unittest.TestCase):
         r.record_result(self.root, self.data, self.task(),
                         {"raw_note": note, "difficulty": "hard", "actual_minutes": 5})
         info = r.status(self.root, self.data)
-        self.assertEqual(info["next"]["exercise_id"], "E02")
-        self.assertEqual(info["next"]["deferred_today"][0]["reason"], note)
+        self.assertEqual(info["next"]["action"], "generate")
+        self.assertEqual(info["recent"][0]["raw_note"], note)
         self.assertEqual(info["today"]["known_minutes"], 5)
         self.assertEqual(r.outcome(self.history()[0]), "unknown")
         self.assertEqual(info["goals"][0]["state"], "attempted")
-        tomorrow = r.suggestion(self.data, self.history(), date.today() + timedelta(days=1))
+        tomorrow = r.legacy_suggestion(self.data, self.history(), date.today() + timedelta(days=1))
         self.assertEqual(tomorrow["exercise_id"], "E01")
         self.assertIn("simplifying", tomorrow["reason"])
 
     def test_voluntary_easier_retry_is_allowed_without_passing_original_goal(self):
         r.record_result(self.root, self.data, self.task(), {"raw_note": "어려웠음", "difficulty": "hard"})
         easier = self.task(bpm=50)
-        self.assertEqual(r.suggestion(self.data, self.history())["task_id"], easier)
+        self.assertEqual(r.legacy_suggestion(self.data, self.history())["task_id"], easier)
         self.success(easier, actual_minutes=4)
         info = r.status(self.root, self.data)
         self.assertEqual(info["goals"][0]["state"], "attempted")
-        self.assertEqual(info["next"]["deferred_today"], [])
-        self.assertEqual((info["next"]["exercise_id"], info["next"]["bpm"]), ("E01", 60))
+        self.assertEqual(info["next"]["action"], "generate")
+        self.assertNotIn("bpm", info["next"])
         with self.assertRaises(ValueError):
             self.task("E03")
 
     def test_hard_but_successful_attempt_can_advance(self):
         self.success(self.task(), difficulty="hard")
-        next_task = r.suggestion(self.data, self.history())
+        next_task = r.legacy_suggestion(self.data, self.history())
         self.assertEqual(next_task["exercise_id"], "E02")
         self.assertEqual(next_task["deferred_today"], [])
 
     def test_deferral_is_key_specific(self):
         self.data["milestones"].insert(1, {"exercise_id": "E01", "key": "F", "bpm": 60})
         r.cancel(self.root, self.data, self.task(), "C는 오늘 스킵")
-        next_task = r.suggestion(self.data, self.history())
+        next_task = r.legacy_suggestion(self.data, self.history())
         self.assertEqual((next_task["exercise_id"], next_task["key"]), ("E01", "F"))
 
     def test_correction_recomputes_deferral_without_erasing_history(self):
         task_id = self.task()
         note = "어려워서 중단"
         r.record_result(self.root, self.data, task_id, {"raw_note": note, "difficulty": "hard"})
-        self.assertEqual(r.suggestion(self.data, self.history())["exercise_id"], "E02")
+        self.assertEqual(r.legacy_suggestion(self.data, self.history())["exercise_id"], "E02")
         corrected = {**self.success_payload(), "difficulty": "easy", "actual_minutes": 3}
         r.record_result(self.root, self.data, task_id, corrected, True)
         info = r.status(self.root, self.data)
-        self.assertEqual(info["next"]["deferred_today"], [])
+        self.assertEqual(info["next"]["action"], "generate")
         self.assertEqual(info["goals"][0]["state"], "success")
         self.assertEqual(info["today"]["reported_attempts"], 1)
         self.assertEqual(info["today"]["known_minutes"], 3)
@@ -292,10 +292,10 @@ class PracticeTests(unittest.TestCase):
         r.record_result(self.root, self.data, earlier, {"raw_note": "어려웠음", "difficulty": "hard"})
         self.success(self.task())
         r.record_result(self.root, self.data, earlier, {"raw_note": "정정: 여전히 어려웠음", "difficulty": "hard"}, True)
-        self.assertEqual(r.suggestion(self.data, self.history())["deferred_today"], [])
+        self.assertEqual(r.legacy_suggestion(self.data, self.history())["deferred_today"], [])
         r.cancel(self.root, self.data, self.task(), "이제 그만")
         r.record_result(self.root, self.data, earlier, self.success_payload(), True)
-        self.assertEqual(len(r.suggestion(self.data, self.history())["deferred_today"]), 1)
+        self.assertEqual(len(r.legacy_suggestion(self.data, self.history())["deferred_today"]), 1)
 
     def test_old_report_corrected_today_does_not_defer_today(self):
         task_id = self.task()
@@ -306,7 +306,7 @@ class PracticeTests(unittest.TestCase):
         events[0]["recorded_at"] = earlier + "T10:00:00+00:00"
         events[1]["practice_date"] = events[2]["practice_date"] = earlier
         tasks = r.records(events)
-        next_task = r.suggestion(self.data, tasks)
+        next_task = r.legacy_suggestion(self.data, tasks)
         self.assertEqual(next_task["exercise_id"], "E01")
         self.assertEqual(next_task["deferred_today"], [])
         self.assertEqual(r.daily_summary(self.data, tasks, {})["reported_attempts"], 0)
@@ -337,7 +337,7 @@ class PracticeTests(unittest.TestCase):
         r.cancel(self.root, self.data, self.task(), "오늘은 스킵")
         r.cancel(self.root, self.data, self.task("E02"), "이것도 스킵")
         report = Path(r.render_report(self.root, self.data)).read_text()
-        self.assertIn("Finish today or adjust a condition", report)
+        self.assertIn("Create a practice", report)
         self.assertNotIn("Connect what you have learned into music", report)
         self.assertIn("Reports today: 0", report)
         self.assertTrue(all(g["state"] == "unknown" for g in r.status(self.root, self.data)["goals"]))
@@ -418,7 +418,7 @@ class ReleaseTests(unittest.TestCase):
         tasks = r.records(r.read_events(self.practice))
         self.assertEqual(tasks[0]["target"]["curriculum_version"], self.version)
         self.assertEqual(tasks[0]["report"]["release"], self.version)
-        self.assertEqual(r.suggestion(new_data, tasks)["exercise_id"], "E02")
+        self.assertEqual(r.legacy_suggestion(new_data, tasks)["exercise_id"], "E02")
 
     def test_pending_release_can_activate_after_cancel_without_practice_credit(self):
         p.publish(self.source, self.practice, True)
@@ -430,7 +430,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(p.publish(self.source, self.practice, True)["active"], new_data["version"])
         info = r.status(self.practice, new_data)
         self.assertEqual(info["reported_attempts"], 0)
-        self.assertEqual(info["next"]["exercise_id"], "E02")
+        self.assertEqual(info["next"]["action"], "generate")
 
     def test_idempotent_publish_does_not_touch_evidence(self):
         p.publish(self.source, self.practice, True)
@@ -461,8 +461,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertIsNone(task['report'])
         self.assertEqual(r.outcome(task), 'unknown')
         self.assertEqual(r.status(self.practice, data)['reported_attempts'], 0)
-        self.assertEqual(r.suggestion(data, [task])['exercise_id'], 'E01')
-        self.assertEqual(r.suggestion(data, [task])['deferred_today'], [])
+        self.assertEqual(r.legacy_suggestion(data, [task])['exercise_id'], 'E01')
+        self.assertEqual(r.legacy_suggestion(data, [task])['deferred_today'], [])
         # Retirement neither earns prerequisite credit nor blocks a fresh task.
         with self.assertRaises(ValueError):
             r.assign(self.practice, data, 'E03')

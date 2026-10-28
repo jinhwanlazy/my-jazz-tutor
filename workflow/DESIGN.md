@@ -1,265 +1,98 @@
-# 설계 결정
+# 설계 결정 — 0.3.0
 
-## 확정된 사용자 요구
+## 추천의 역할
 
-- 피아노 기초 있음 / 재즈 처음 / 하루 30분. 대화는 사용자가 쓰는 언어로 응답한다.
-- 기본 README는 영어이며, 한국어 원본은 `README.ko.md`로 보존한다. 웹 UI는 영어를
-  기본으로 설정에서 영어·한국어를 전환하며, 선택은 브라우저에 저장한다. 전환 시
-  진행 중인 MIDI 수집과 미저장 결과 입력을 유지하고 개인 기록·원문은 번역하지 않는다.
-- Charlie Tran의 melody, rhythm, bass, voicing 어휘와 적용 방식을 참고한다.
-- 대화로 과제 제시 → 실제 연습 → 자연어 노트 → 다음 과제의 루프.
-- 하루에 여러 과제를 순서대로 진행한다. 체감 난이도로 반복/단순화/다음 과제를 고른다.
-  다음 연습을 여는 것과 숙련도 통과를 구분한다. 30분은 하루 전체의 기본 시간 예산이다.
-- 일일 연습 세션과 워크플로 편집 세션의 작업 디렉터리와 역할을 분리한다.
-- CLI와 같은 기록·기준을 사용하는 로컬 웹 연습실을 제공한다. 과제 제시, 결과 입력,
-  규칙 기반 피드백, 기록 조회와 정정, 메트로놈, 선택적 코드 패드를 한곳에서 사용한다.
-- Web MIDI가 연결되면 세션 동안의 원본 입력을 저장한다. 음악적 자동 분석은 후속 과제다.
+LLM이 실제 프로필, 과제 조건, 완료 기록, 난이도 라벨, 원문 메모, 스킵 사유를 검토하고
+지금 적절한 연습을 구성한다. E01–E06와 기존 커리큘럼은 예시 자료일 뿐 후보 목록이나
+필수 진도표가 아니다. 고정 선행 조건, 라벨별 BPM 증감, 고정 목표의 완료율로 추천하지
+않는다. 기존 규칙 추천은 과거 동작의 호환 테스트용 코드에 남지만 웹·CLI 추천 경로는
+사용하지 않는다. 과거 상세 자기보고의 평가는 그 당시 조건으로 보존한다.
 
-## 초기 범위
+## 실행 경계
 
-`my-jazz-tutor/` 하나의 Git monorepo에 `workflow/`와 `practice/`를 둔다.
-실제 CSV는 `practice/practice.csv` 하나에만 있다. 실행 버전의 이력은 Git 커밋·태그로
-보관한다. `practice/runtime.json`에 고정한 커밋을 `.runtime/<commit>/`에 캐시하고
-두 경로 모두 Git에서 제외한다. 편집 중인 소스가 현재 연습 세션에 즉시 섞이지 않는다.
-`practice/runtime-ref`는 새 작업 공간의 최초 기본값이며 기존 사용자의 고정 커밋을
-자동 갱신하지 않는다. 캐시 삭제 후에도 로컬 핀의 동일 커밋에서 재구성한다.
-예전 `practice/releases/` 복사본은 현재 트리에서 제거하고 기존 Git 이력에 보존한다.
-개인 CSV·프로필·MIDI·개선 메모·보고서·백업은 로컬에 보관하며 Git에서 제외한다.
-공유하는 프로필 예제에는 기본 설정만 두고 실제 사용자 관측은 넣지 않는다.
-새 과제는 활성 버전으로 발급하며, 발행 시 새 버전 활성화를 우선한다. 미완료 과제는
-호환되면 이어가고 비호환이면 원문·MIDI를 보존한 채 업데이트 사유로 종료한다.
-각 과제에 기준을 스냅샷으로 남겨 과거 판정을 새 커리큘럼으로 재해석하지 않는다.
+표준 라이브러리 loopback 서버가 `codex exec --sandbox read-only --ephemeral --json
+--output-schema ...`를 실행한다. 기존 CLI 인증을 재사용하며 별도 API_KEY가 필수는
+아니다. 실제 생성에는 Codex 설치·로그인·서비스 연결·사용 가능 한도가 필요하다.
+`--ignore-user-config --ignore-rules`와 도구 기능 비활성화, 빈 임시 작업 디렉터리를 쓴다.
+원장과 소스는 Codex의 쓰기 대상이 아니다. 사용자 메모는 데이터로 취급한다.
 
-CSV는 append-only event log다. `assigned`, `completed`, `reported`, `corrected`,
-`discarded`, `cancelled`, `retired`
-사건을 task_id로 연결한다. 수정도 원문을 덮지 않고 새 사건으로 남긴다. 한 사용자
-보고에 여러 조건이 섞이면 한 조건의 결과로 뭉개지 말고 대표 결과를 명시하거나
-분리된 시도로 기록한다. 현재 버전은 한 과제에 하나의 최종 자기보고를 받는다.
+매 요청에 명시적인 맥락을 전달하며 대화 세션을 재사용하지 않는다. 최신 40개 과제의
+원래 조건, 완료, 최신 피드백/메모, 스킵/종료, 세션 측정 요약과 전체 수·생략 수를
+포함한다. 원본 MIDI는 전달하지 않는다. 맥락이 500 KB를 넘으면 실패를 표시한다.
+개인 자료는 Git에 넣지 않지만 추천에 제공한 맥락은 사용자의 Codex 인증 경로로 전송된다.
 
-동시에 미완료인 과제는 하나만 두지만 하루 과제 수에는 제한을 두지 않는다.
-완료·보고·넘김·취소 후 같은 날 다음 과제를 발급할 수 있다. 완료와 피드백 입력은
-분리하며, 선택 사유로 넘긴 항목은 연습 결과로 추정하지 않는다. 기존 취소 기록의
-미연습 의미를 유지하기 위해 새 넘김은 별도 `discarded` 사건으로 남긴다.
-취소한 항목과 기존 CLI의 `hard`로 보고한 미통과 항목은 그날 같은 항목·키의 자동 추천에서
-보류한다. 다른 과제도 선행 조건을 충족해야 하며, 후보가 없으면 마무리 또는 조건
-단순화를 안내한다. 명시적으로 재시도할 수 있고 새 결과가 있으면 그 결과가 우선한다.
-보류는 영구 제외가 아니며 다음 날 다시 후보가 된다. 취소일과 실제 연습일을 쓰고,
-과거 결과를 오늘 정정했다는 이유로 오늘의 시도로 재해석하지 않는다.
+구조화 결과는 근거 source_ids + 해석/확신, 미확인 사항, 목적/선택 이유, 실제 수행할
+조건과 순서, 필요한 악보, 선택적 코드 반주다. 앱이 JSON 필드·출처 ID·음역·마디 수·
+박의 연속성과 총합·쉼표·반주 일치 등을 검증한다. 음악적 적합성이나 자연어와 악보의
+의미적 일치를 완벽히 인증하는 검사는 아니다. 새 과제는 G- ID, 시도는 T- ID를 받는다.
 
-웹의 좋은 연습/너무 쉬움은 정확도 설문 없이 당일 다음 연습을 열 수 있다. 성공 기준과 후일
-재현 기준은 유지한다. 하루 시간은 과제별 보고를 합산하며 준비·듣기·기록도 예산에
-포함한다. 시간이 알려지지 않은 기록은 0분으로 바꾸지 않고 남은 시간을 미확인으로
-둔다. 알려진 시간만으로 예산에 도달하면 마무리를 권하지만 추가 연습을 차단하지 않는다.
+악보 v1은 4/4의 1–16마디, 손별 한 성부와 화음, 온/2분/4분/8분음표 및 쉼표,
+A0–C8과 단일 #/b를 지원한다. 타이·잇단음표·점음표는 지원하지 않는다. 자유 즉흥
+등 고정 악보가 부적합한 연습은 이유와 구체적 음·리듬 지시를 갖춘 글로 제시한다.
+목표 키·BPM은 예시 커리큘럼에 묶이지 않으며 생성 템포 범위는 20–240이다.
 
-통과는 고정 조건에서 자기보고한 음·박자·무중단·연속 성공 횟수에 기반한다.
-근거가 없는 항목은 미평가다. 후일 재현은 같은 과제 조건의 성공을 2일 이상
-간격으로 다시 보고했을 때만 표시한다. 이 기준은 앱 운영 정의이며 음악 능력의
-객관적 인증이 아니다. 전이 추정은 하지 않고 실제로 시도한 키를 구분해 보여준다.
+추천은 비동기 작업이다. `.recommendations/R-….json`에 입력 맥락, 결과, 상태,
+출처와 사용량을 보존한다. 별도 파일 잠금으로 다중 서버의 중복 생성을 막는다.
+동일 요청 ID의 재전송은 항목을 중복 생성하지 않는다. 종료 후 재시작 시 저장된
+항목으로 복구하거나 중단 오류로 전환한다. 생성하는 사이 기록·프로필·세션 또는
+활성 버전이 바뀌면 저장을 거부한다. 로그인·한도·시간 초과·잘못된 출력은 사용자에게
+구분해서 표시하며 고정 과제로 대체하지 않는다. 대화형 코칭도 같은 맥락·스키마·검증기와
+CSV를 쓰고 `accept-recommendation`으로만 생성 결과를 저장한다.
 
-초기 커리큘럼은 자체 제작 연습 6개와 C 키의 대표 목표 6개다. F/Bb는 이후 전이
-확인에 쓸 수 있으나 모든 조합을 필수 진도로 간주하지 않는다. 스탠더드 곡의 악보,
-판본, 키가 아직 정해지지 않았으므로 Autumn Leaves의 마디·멜로디를 창작하지 않는다.
-전체 수년 로드맵과 '재즈 마스터' 점수는 아직 설계하지 않았다.
+## 연습 UI
 
-## 평가와 시각화
+첫 화면은 날짜별 목록이며 내용·상태·결과 라벨·메모·스킵 사유가 보인다. ‘새 연습’은
+분석과 생성을 요청하고 진행 상태를 표시한다. 검증된 항목을 추가해도 자동 진입하지
+않는다. 사용자가 항목을 직접 열고 연습한다. 현재 미완료 항목은 하나만 허용한다.
+‘연습 완료’는 녹음과 측정을 저장하고 목록으로 돌아간다. ‘다음 연습’은 없다.
+완료 항목은 기록 상세로 열며 ‘다시 연습’은 별도 항목을 만든다.
 
-- 연습량: 실제 결과를 보고한 과제 수, 알려진 실제 연습 시간.
-- 범위: 시도한 항목과 키. 미평가와 실패를 구분.
-- 성공: 발급 조건 통과 / 후일 동일 조건 재현. 자기보고 기반 표시.
-- 고정 진도: 현재 버전의 대표 목표 목록. 변경 시 버전과 분모 변경을 표시.
-- 조건별 히트맵과 근거 기록을 제공한다. 방사형 면적을 실력/체적 점수로 쓰지 않는다.
+완료와 피드백은 분리한다. 완료한 항목에서 불가능/도전적이었음/좋은 연습이었음/
+너무 쉬워서 의미 없었음 중 라벨 하나와 선택 메모를 남기거나 수정한다. 피드백이 없어도
+완료 상태는 유지한다. 넘기기 사유는 선택이며 녹음 중이면 먼저 저장한다. 별도 연습
+기록 탭은 목록에 통합하고 진도 화면은 제공하지 않는다. 영어·한국어 UI 전환은 원문과
+진행 중 MIDI 수집·미저장 메모를 보존한다. 생성된 설명은 생성 당시 언어를 보존한다.
 
-## 다음에 검토할 것
+## 기록과 업데이트
 
-실제 2주 사용 후 기록 부담, 추천의 유용성, 후일 재현 여부를 검토한다.
-사용자 피드백 없이 청음/스윙 자동 채점, 모든 키, 방대한 과제 생성기로 확장하지 않는다.
-MIDI의 음·박자·스윙 분석과 자동 피드백 대체는 아직 설계하거나 구현하지 않는다.
+하나의 Git monorepo 안에 workflow(개발)와 practice(실사용)를 둔다. practice.csv는
+assigned/completed/reported/corrected/discarded/cancelled/retired 사건을 추가하는
+원장이다. 수정은 정정 사건이며 원문을 덮지 않는다. 세션의 원본 MIDI와 재생 사건은
+sessions.sqlite3에 보존한다. 조건 스냅샷은 불변이며 예전 기록을 새 설계로 재평가하지
+않는다. generated 과제는 자체 스키마 지원 여부로 호환성을 판단하며 커리큘럼 ID와
+대조하지 않는다. 기존 과제는 기존 조건 비교를 유지한다.
 
-## 웹 연습실 — 0.2.0
+Git 커밋·태그가 버전 이력이다. publish는 선택한 스냅샷을 캐시하고 새 버전을 우선
+활성화한다. 호환 미완료 과제는 원래 조건 그대로 이어가며 비호환 과제만 사유와 함께
+retired로 종료한다. 완료 기록·메모·MIDI는 유지한다. 종료는 실패·스킵·실적이 아니다.
+.runtime은 폐기 가능한 캐시이며 runtime.json 핀과 개인 자료·추천 맥락은 Git 제외다.
+테스트는 임시 디렉터리와 합성 자료만 사용한다. 실제 Codex 연결 테스트도 합성 자료다.
 
-Python 표준 라이브러리 서버를 127.0.0.1에만 열고, 브라우저는 같은 서버의 API로
-기존 발급·보고·정정·취소 함수를 사용한다. 외부 LLM 호출이나 호스팅은 없다.
-페이지를 여는 것만으로 과제가 발급되거나 연습 실적이 만들어지지 않는다.
-웹의 피드백은 명시적인 체감 난이도 라벨과 선택 메모다. 음악적 판정과 분리한다.
+## 사실과 해석
 
-Web Audio의 오디오 시계 하나로 메트로놈과 마디별 코드 패드를 예약한다. 패드는
-기본 꺼짐이며 과제의 코드 진행을 반복한다. 템포와 두 음량은 연습 중 변경할 수 있다.
-템포 변경은 아직 예약하지 않은 다음 박부터 적용하고 적용 시각을 기록한다.
-일시정지 후 재생은 첫 마디에서 다시 시작한다. 숨겨진 탭과 오디오 중단에서는
-재생을 멈춘다. 사용자가 시작·종료한 세션 구간 동안 MIDI 수집은 일시정지 중에도 유지한다.
+라벨은 주관적 난이도다. 완료·쉬움·MIDI 입력은 음/박/무중단/숙련도 통과 증거가 아니다.
+BPM은 메트로놈 설정이며 분석된 실제 연주 BPM으로 표현하지 않는다. 관측과 LLM의
+해석을 별도로 보여준다. 없는 관측은 미확인이고 실패나 0점이 아니다. 당일 결과,
+후일 재현, 전이는 다르며 전체 재즈 숙련도 백분율을 만들지 않는다. 생성 과제의
+기준은 연습 목적이지 자동 점수가 아니다. MIDI 음악 분석은 후속 작업이다.
 
-과제별 여러 재생 세션을 `practice/sessions.sqlite3`에 연결한다. 원본 MIDI bytes와
-세션 시작 기준 밀리초·입력 장치 번호를 BLOB 청크로 저장한다. 재생·일시정지·실제
-템포 적용·패드·장치 정보는 별도 이벤트다. CSV와 MIDI를 서로의 대체 근거로 쓰지 않는다.
-패드 출력은 MIDI 입력에 합성하지 않는다. 기본 선택은 연결된 모든 입력이며 사용자가
-특정 장치를 고를 수 있다. 장치 SysEx 권한은 요청하지 않는다.
+## 재생, 악보와 MIDI 보존
 
-3초마다 먼저 브라우저 IndexedDB에 저장한 뒤 서버에 전송한다. 세션 ID와 청크 순서로
-중복 전송을 구분하고 저장한 청크를 덮어쓰지 않는다. 서버 확인 후에만 브라우저의
-청크를 지운다. 재접속 시 잔여 청크를 전송하고 중단 상태를 남긴다. 마지막 체크포인트
-이후 브라우저가 강제 종료되면 미저장 입력은 복구할 수 없으므로 완전한 기록으로 표시하지 않는다.
+Web Audio의 오디오 시계로 메트로놈과 선택적 코드 패드를 예약한다. 템포 변경은
+아직 예약하지 않은 다음 박부터 적용하고 설정 이력을 저장한다. 일시정지 후 재개는
+첫 마디부터다. 탭 숨김·오디오 중단은 재생을 멈추고, MIDI 수집은 세션 종료 전까지
+유지한다. 패드 출력을 입력 MIDI에 합성하지 않는다. SysEx 권한은 요구하지 않는다.
 
-라벨을 저장할 때 서버가 자동 관측을 파생하며 사용자에게 재입력을 요구하지 않는다.
+3초마다 IndexedDB에 먼저 청크를 보관하고 서버에 전송한다. 세션 ID와 순서로 중복을
+구분하고 서버 확인 후에만 로컬 청크를 지운다. 강제 종료 시 마지막 체크포인트 이후
+입력은 손실될 수 있다. 복구된 중단 세션을 완전한 기록으로 표시하지 않는다.
+MIDI 구간은 첫 Note On부터 마지막 Note Off/해당 서스테인 해제까지며 중간 쉼도 포함한다.
+불완전한 입력이면 미확인이다. 정상 종료한 세션은 일시정지를 뺀 재생 시간을 대안으로
+쓴다. 연습일은 프로필 시간대로 세션별 분배한다. 원본은 자르지 않는다.
 
-- BPM: 마지막 Note On 시점의 메트로놈 설정. 입력이 없으면 마지막 재생 설정.
-  연주를 분석해 측정한 BPM이 아니다. 설정 변경 이력도 별도로 보존한다.
-- MIDI 구간: 첫 Note On부터 마지막 Note Off 또는 해당 서스테인 해제까지.
-  앞뒤의 무입력만 제외하며 중간 쉼은 포함한다. MIDI clock·제어 메시지만으로 늘리지 않는다.
-- Note Off 누락·장치 변경/끊김·수집 중단이면 MIDI 구간은 미확인이다.
-- MIDI 구간을 측정할 수 없으면 일시정지를 뺀 재생 시간을 대안으로 표시한다.
-  브라우저 복구로 종료한 세션은 전체 시간을 미확인으로 둔다. 준비·회고 시간을 추정하지 않는다.
-
-원본은 자르지 않으며 결과 정정도 녹음을 변경하지 않는다. 입력 유무만으로 성공 검사나
-연속 성공 횟수를 자동 채우지 않는다. 재생 정보는 기존 material과 분리해 저장하여
-같은 조건의 과거 성공을 무효화하지 않는다. 새 런타임은 기존 발행·활성화 경계를 따른다.
-
-## Score and live MIDI display — 0.2.6
-
-The score is a display derived from each assignment's own material and conditions.
-It does not use pad voicings, rewrite historical target snapshots, or change scoring.
-The six current exercises in C, F, and Bb have grand-staff notation; unsupported
-conditions show the existing written instructions instead of fabricated notation.
-Whole-note exercises, Charleston attacks on 1 and 2&, and the improvisation/rest
-structure remain distinct. The vamp specifies bass attacks but not their duration,
-so diamonds mark those onsets. Improvisation does not gain a prescribed melody.
-Charleston eighth notes illustrate short attacks; their exact displayed durations
-do not add a requirement beyond the assigned attack positions and short playing.
-
-A bounded beat timeline uses the scheduled audio clock, including tempo changes
-and loop positions. MIDI timestamps are mapped to that timeline using
-`AudioContext.getOutputTimestamp()` when available, with `currentTime` as fallback.
-The cursor and blue key-press marks share this mapping; timing is not quantized or
-scored. Physical device latency can still affect alignment. This is a visualization,
-not a timing-accuracy measurement or a replacement for the original recording.
-
-The live buffer shows the current pass, carries held notes across loop boundaries,
-and resets when playback resumes from bar 1. Pauses and disconnects truncate open
-tails with dashed lines. Tails end at key release, not pedal release. Input during
-pauses stays in raw capture but has no displayed beat position. Hand placement uses
-assigned pitches, then pitch range; it never claims to detect the player's hands.
-The live buffer is bounded and is not a history/replay format. History continues to
-retain the original binary MIDI and session events. Display-language switching keeps
-the active capture, live notes, and draft report intact.
-
-SVG rendering and a bundled, unmodified Bravura font need no external network or
-notation library at runtime. Attribution and source pin are in `THIRD_PARTY.md`.
-The notation assets are part of the immutable Git runtime and its hash manifest.
-
-## Continuous score and unified practice controls — 0.2.7
-
-Task instructions, assigned conditions, and success criteria precede the practice
-area. Written pitches and the chord progression are expandable; unsupported
-notation opens them automatically. Score, playback, and tempo controls share one
-card with a single start/pause/resume button and finish button. Sound and MIDI
-settings are expandable. Assigned target BPM remains separate from playback BPM.
-
-Every bar is rendered on one horizontal staff, with one linear beat-to-position
-mapping for targets, the cursor, and live input. Bar margins no longer create gaps
-in that mapping, and held-note tails remain continuous across bar boundaries.
-Four-bar page replacement is removed. Following computes a clamped scroll offset
-on each audio-driven animation frame: a fitting score stays fixed, while a wider
-score follows continuously until its end. Only a loop returns to the beginning.
-Following can be disabled for manual scrolling. Live buffers retain the existing
-loop, pause, disconnect, and language-switch semantics.
-
-The staff omits bar numbers and hand labels. Whole-note interiors are transparent
-so staff and ledger lines remain visible. These presentation changes do not change
-assigned material, success criteria, raw MIDI capture, or historical evidence.
-
-## Activation before unfinished tasks — 0.2.8
-
-Publication activates the selected committed release by default. `--cache-only`
-prepares a cache without changing the active pin or tasks; `--activate` remains an
-explicit alias for the default. Source edits and cache deletion do not switch the
-runtime. Restart a running practice server after publication.
-
-An unfinished task carries forward when its exercise, key, assigned BPM, playing
-conditions, material, criteria, and instructions remain supported. Compare its own
-assigned BPM, not the new default. Release numbers, presentation titles, daily
-budgets, and accompaniment changes do not make a task incompatible. Original target
-snapshots and reports are never rewritten, including reports submitted after an update.
-
-Incompatible unfinished tasks receive a `retired` event with the update reason.
-They leave the pending queue without inferring a result, counting practice, earning
-prerequisite credit, or creating a same-day skip. Completed reports, notes, and raw
-MIDI remain intact. Open recordings can still upload pending checkpoints and be
-closed through recovery on the new runtime, even when their task was retired.
-
-Publication validates the selected snapshot and its ability to read the resulting
-event history before changing local records. Retirement and pin changes share the
-practice write lock; a failed write rolls back that transition. Repeating publication
-does not duplicate retirements. An older runtime that cannot read the history is
-rejected without changing the active pin or records.
-
-## 출처와 구분
-
-- 원영상과 제작자의 설명: https://www.youtube.com/watch?v=RiCQYWPEhjc
-- 제작자: https://www.novujazzacademy.com/
-- 참고한 상세 요약: https://videohighlight.com/v/RiCQYWPEhjc?aiFormatted=false&language=en&mediaType=youtube&summaryId=5Pp1mFQnQA6R0IL2GJ5X&summaryType=default
-- Codex 지침 발견: https://learn.chatgpt.com/docs/agent-configuration/agents-md
-- 현재 수행/학습 판단 차이의 참고 실험(재즈 교육 실험은 아님): https://pubmed.ncbi.nlm.nih.gov/11486923/
-
-전체 원영상 자막을 확보하지 못했다. 이 커리큘럼, 수치 기준, 분리 구조는 대화에서
-만든 설계이며 Charlie Tran의 공식 강의나 원영상의 완전한 전사가 아니다.
-
-## One-tap practice feedback — 0.2.9
-
-Version 0.2.9 introduced one explicit label: `impossible`, `challenging`, `good`, or
-`too_easy`. A tap saves immediately; a memo is optional. Version 0.2.10 moves this
-editor into the practice list after explicit completion and removes Next practice. There are no manual date, tempo, duration, correctness,
-continuity, condition-confirmation, or run-count controls. Missing evidence does
-not produce a questionnaire after saving. Legacy observations remain in history.
-
-The CSV schema stays unchanged. New reports use the existing `difficulty` column;
-`raw_note` may be empty for these four values. Actual conditions/checks stay empty,
-and no success count is inferred. Report `reason` contains a tagged
-`session-reflection-v1` JSON snapshot of session IDs, duration sources, last
-metronome setting, timezone, practice date and daily totals. Metronome BPM is never
-written as analyzed playing BPM. Complete sessions use the MIDI span, or playback
-time without pauses; interrupted sessions leave the total unknown. Dates use each
-session's first input/start in the profile timezone. A midnight-crossing session
-belongs to its starting day; multiple sessions on different dates are allocated
-separately. With no sessions, the saving date is explicitly a recording date.
-
-The latest compatible good/too-easy feedback opens ordinary practice prerequisites
-in the same key. It never changes success/retention calculations or review/transfer
-requirements. Impossible lowers tempo by 10 BPM within bounds; challenging repeats
-at the observed metronome setting (assigned tempo if unknown). Positive labels
-prefer the next eligible exercise; with all exercises comfortable, too-easy raises
-tempo by 10 BPM. Existing success-based retention reviews remain due as before.
-
-Label/memo changes append corrections while preserving prior dates, measurements,
-explicit legacy performance evidence and raw input. Revision tokens reject stale
-edits, and identical retries do not append duplicate reports. Tests and previews
-use temporary workspaces only.
-
-## Practice list, explicit completion, and review reminders — 0.2.10
-
-The landing screen is a date-grouped practice list, showing content, status,
-feedback, notes and skip reasons inline. Navigation has only Practice list and
-Settings. New practice opens a chooser, then adds one ready item; entering the
-room requires an explicit item click. Completed items open saved details; Practice
-again creates another item. Creating, loading and recovering never auto-enter the
-room. Returning to the list saves capture but keeps the assignment unfinished.
-
-Complete practice saves capture, appends an idempotent `completed` event, and returns
-to the list. The completion stores automatic date/time provenance with unknown
-conditions/checks and no rating. It closes the assignment independently of feedback;
-first feedback appends `reported`, later edits append `corrected`, preserving the
-completion's measurement snapshot. Totals and attempted coverage count the task
-once. Success and retention still require their original evidence. Completed tasks
-awaiting feedback are not pending and cannot be discarded, restarted, or retired
-by an update. A failed save keeps the task retryable. Client-created assignment IDs
-make lost add responses safe to retry without generating duplicate list entries.
-
-`discarded` preserves a structured optional choice and the exact free-text reason.
-Existing cancel/retire semantics stay distinct. Input is saved before discard;
-open server recordings must be recovered first. Explicit already_practiced/too_easy
-choices can open compatible same-key ordinary practice without performance credit.
-A blank reason has no skill meaning. Discards are deferred for the current day.
-
-Review scheduling uses the latest compatible completed/reported attempt in the same
-exercise/key, not only the old success date. Today's finished review therefore
-resets the reminder even before feedback; this does not certify retention. Positive
-feedback can then recommend later exercises. Historical notes and recordings are
-not rewritten, and incompatible old runtimes are rejected by publication validation.
+악보는 과제 자체의 음 데이터로 그리며 패드 보이싱과 구분한다. 악보 전체를 하나의
+수평 시간축에 놓고 오디오 시계로 커서·입력 흔적·스크롤을 연속 이동한다. Bravura를
+번들하며 악보 라이브러리나 네트워크는 렌더링에 필요 없다. 온음표/2분음표 머리는
+속이 투명하다. 라이브 흔적은 키를 누른 시점·길이이며 페달 sustain이나 정확도 판정이
+아니다. 손 구분은 과제 음역을 사용하며 실제 손 감지가 아니다. 기기 지연이 존재할
+수 있다. 라이브 버퍼는 현재 패스의 표시일 뿐 원본 녹음이나 재생 형식의 대체가 아니다.

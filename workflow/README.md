@@ -1,6 +1,6 @@
 # Workflow development
 
-[English](README.md) · [Korean original](README.ko.md)
+[English](README.md) · [한국어](README.ko.md)
 
 This is the workflow development area of the `my-jazz-tutor/` monorepo. Sessions
 opened here edit coaching rules, curriculum, and software. Daily practice belongs
@@ -27,14 +27,14 @@ uv run python review.py report --output build/preview.html
 Source edits do not immediately affect practice. After a release, any change to
 code, curriculum, or COACH requires a new version in both `curriculum.yaml` and
 `pyproject.toml`, followed by `uv lock` and tests. Historical tasks are evaluated
-against their assigned criteria. Current milestones count only successes with
-compatible criteria, material, and playing conditions.
+against their original conditions. Generated exercises have immutable self-contained
+contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.2.10`; create a new tag for later releases instead of moving an old tag:
+selects `v0.3.0`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.2.10
+uv run python publish.py --ref v0.3.0
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -70,10 +70,11 @@ tests.
 
 ## Web practice room
 
-Runtime 0.2.0 introduced browser-based assignments, practice, result entry,
-rule-based feedback, history, and corrections. It uses a Python standard-library
-server and Web Audio, with no external LLM API key or Node runtime. Conversational
-AI coaching and musical MIDI analysis are outside the web interface's current scope.
+Version 0.3.0 connects **New practice** to local Codex analysis and generation. The
+Python standard-library server remains loopback-only; playback and MIDI capture use
+Web Audio/Web MIDI. Generation needs the installed Codex CLI, an existing login,
+network access and available usage allowance. No separate API key is required.
+It does not fall back to rule-selected exercises when Codex fails.
 The interface defaults to English. **Settings → Display language** switches between
 English and Korean and remembers the choice in this browser at the same address
 and port. Switching preserves active capture and unfinished report inputs. Agents
@@ -85,8 +86,9 @@ exercise, key and target tempo, ready/in-progress/completed/skipped status, feed
 memo and optional skip reason. The navigation contains Practice list and Settings.
 The former history tab is part of this list; the progress dashboard is removed.
 
-**New practice → Add to list** creates an assignment without opening the room or
-starting playback. Click the new item to enter. Only one unfinished assignment is
+**New practice** analyzes the explicit profile, recent records, feedback, notes and
+skip reasons, shows generation status, then adds a validated item without opening
+the room or starting playback. Click the new item to enter. Only one unfinished assignment is
 allowed; return to that item to continue or skip it before adding another.
 **Complete practice** saves input, closes the task, and returns to the list. Add
 feedback in the completed item: 😈 Impossible, 💪 Challenging, 🙂 Good practice,
@@ -137,17 +139,20 @@ preserves input attached to retired tasks without creating a performance report.
   unknown musical correctness; it is not an unfinished assignment.
 - **Discard task:** close an unfinished item with an optional reason. The room saves
   any active recording first. A failed save leaves the task open for retry. Existing
-  input is preserved. Already familiar / Too easy can open later ordinary practice
-  in the same key, without creating a performance report or mastery credit. A blank
-  or free-text reason does not infer familiarity. The skipped item is deferred today.
+  input is preserved. The optional reason is context for future coaching, not a
+  performance report or mastery credit. An empty reason stays unknown.
 - **Saved details:** inspect the original conditions, notes, edits and raw MIDI.
   Corrections preserve earlier reports. Feedback is also visible directly in the list.
 
-Recommendations are presented when adding a practice. A completed compatible
-attempt resets the review reminder for that exercise and key, without asserting
-retention success. Today's easy feedback therefore cannot be overridden endlessly
-by a review due from an older success. Impossible/challenging can still explicitly
-recommend repetition, with the reason shown in the new-practice dialog.
+Each generated exercise includes its purpose, selection reason, section, key, target
+BPM, hand roles, specific notes/rhythm, steps and proposed practice time. **Why this
+practice?** separates the coach's interpretations and source IDs from unknowns;
+the original context is available locally. The existing curriculum is optional
+reference material, not a candidate list, required sequence, or set of unlocked keys.
+New tasks can use any key and 20–240 BPM. The current notation contract supports
+1–16 bars of 4/4, one voice per hand including chords, and whole/half/quarter/eighth
+notes and rests. It has no ties, tuplets or dotted notes. Open improvisation can use
+specific written instructions with an explicit reason for omitting fixed notation.
 
 MIDI is optional. In a browser supporting Web MIDI on a local address, choose
 **MIDI input → Connect** and grant permission. All connected inputs are selected
@@ -217,7 +222,7 @@ individual recording does not complete the task. The explicit Complete practice
 operation appends completion; feedback can be added separately afterward.
 
 Git does not preserve personal records. Stop the server before backing up the CSV,
-SQLite database, profile, feedback notes, and `runtime.json` together to a private
+SQLite database, profile, feedback notes, `.recommendations/`, and `runtime.json` together to a private
 location. The cache can be rebuilt, but retain the pinned commit in Git history.
 Use `git bundle create <private-backup-path> --all` to back up repository history.
 The ignored `practice/backups/` directory is not a substitute for a backup on a
@@ -260,65 +265,79 @@ input preservation and timing, tempo/pad playback, reports, corrections, skips,
 offline recovery, and mobile layout. Synthetic MIDI tests do not verify a physical
 keyboard connection or speaker quality.
 
-## Assignment and reporting CLI
+## Codex recommendations and conversational coaching
 
-Several tasks can be practiced sequentially in one day, with only one pending
-assignment at a time. Complete, report, discard or cancel it before assigning another.
-The default 30 minutes covers the whole day. `status.today` includes reported task count,
-known time, completed attempts with unknown duration, and remaining budget.
-For compatibility, `reported_attempts` now counts each completed/reported task once.
-Remaining time is `null` when a report lacks duration, unless known time already exhausts the budget,
-in which case it is zero. The budget never blocks additional practice.
+Verify the local CLI with `codex --version` and `codex login status`. If necessary,
+run `codex login` in a terminal. The app locates `codex` on PATH, then
+`~/.local/bin/codex`; `JAZZ_CODEX_BIN` can select another executable. It runs
+`codex exec --sandbox read-only --ephemeral --json --output-schema ...` from an empty
+temporary directory, ignores user configuration/rules, and disables shell, plugins,
+hooks, browser and delegation tools. Existing CLI authentication is reused. It does
+not resume a chat or assume any shared conversation memory.
 
-The web labels `impossible`, `challenging`, `good`, and `too_easy` guide practice
-choices separately from mastery. Only compatible reports in the same key can open
-prerequisites for ordinary practice; review/transfer still require success evidence.
-Legacy detailed CLI reports retain their rules: `difficulty: easy` alone does not
-pass. Unsuccessful tasks reported as `difficulty: hard` and cancelled tasks are deferred for the same exercise and key that day.
-`suggest.deferred_today` preserves original notes and task IDs. Other candidates
-must still meet prerequisites. With no candidate, `action: pause` suggests stopping
-or simplifying a condition. Deferred tasks return the next day and may be explicitly
-retried the same day. A new result takes precedence over an earlier deferral.
+Each explicit request supplies COACH.md, profile provenance, optional request text,
+the latest 40 assignments with their original conditions, completion/latest feedback,
+notes/skip/retirement events, and session measurement summaries. Older omitted task
+counts are explicit. Raw MIDI is not sent. Context over 500 KB is rejected. Context
+sent to Codex uses the account's remote model service; local files are not model
+write targets. Login expiry, quota, connection, four-minute timeout and invalid
+output are visible failures, with no substitute fixed recommendation.
 
-Legacy `cancel` retains its unattempted-task semantics and required reason.
-`discard` closes an unfinished assignment while preserving any recording; `--reason`
-is optional. `--choice already_practiced` or `--choice too_easy` records explicit
-familiarity for practice selection. Free text is preserved verbatim and never parsed
-as skill evidence. Keep criteria, original notes, and assigned conditions;
-same-day success is not evidence of later retention or unattempted skills.
+The app checks the JSON schema, evidence references, piano pitches, bar counts,
+ordered note/rest coverage and matching accompaniment. This verifies representation,
+not the musical quality or complete semantic agreement of prose and score. Model
+interpretations remain labeled. A G- ID identifies generated conditions and a T- ID
+identifies an attempt. Immutable conditions are stored in `practice.csv`; the exact
+input/result/provenance are private `.recommendations/R-….json` artifacts. Requests
+are idempotent and single-flight across servers. A changed profile, record, session
+or runtime invalidates an in-flight result. Restarted jobs recover saved items or
+show an interrupted error. Restart the server after activating a release.
 
-Run these from the repository root **only when the user actually starts practice**.
-Reading this README does not authorize sample writes to the real log:
+From the repository root, when the user requests a new practice:
 
 ```sh
-uv run --project practice jazz assign E01 --key C --bpm 60 --reason 'Check the starting point for left-hand roots and pulse'
-uv run --project practice jazz record T-ASSIGNED_ID --input /tmp/jazz-result.json
-uv run --project practice jazz correct T-ASSIGNED_ID --input /tmp/jazz-corrected-result.json
-uv run --project practice jazz cancel T-ASSIGNED_ID --reason 'This task was not practiced'
-uv run --project practice jazz discard T-ASSIGNED_ID --reason 'Optional original reason'
+uv run --project practice jazz recommend --language en
+# suggest is an alias: it also generates AND stores a new item.
 ```
 
-Example result format, not user evidence. Fill only information the user supplied;
-omit unknown numbers and checks or leave them `null`:
+A conversational coach can perform the analysis itself using the same protocol:
 
-```json
-{
-  "practice_date": "YYYY-MM-DD",
-  "followed_target": false,
-  "actual": {"key": "C", "bpm": 50, "arrangement": "right-melody-only"},
-  "checks": {"notes_correct": true, "steady_pulse": null, "no_stops": false},
-  "clean_runs": null,
-  "actual_minutes": 20,
-  "difficulty": "hard",
-  "raw_note": "Preserve the user's original note here",
-  "hypothesis": "Keep the coach's interpretation separate from reported facts."
-}
+```sh
+uv run --project practice jazz recommend-context --output /tmp/jazz-context.json
+uv run --project practice jazz recommendation-schema
+# Write one matching recommendation JSON to a temporary file, then validate/save:
+uv run --project practice jazz accept-recommendation --context /tmp/jazz-context.json --input /tmp/jazz-recommendation.json
 ```
 
-Use `followed_target: true` only when the user explicitly confirms the assigned
-conditions. Copying conditions does not automatically mark checks or run counts
-as successful. `correct` takes a complete replacement report; the earlier event
-remains in the CSV.
+These commands use the same records, guidelines, schema, validator and storage as
+the web app. Acceptance verifies that the context has not been edited or become
+stale. Do not edit the CSV or installed sources directly. Generated criteria describe
+the practice goal and do not manufacture success checks. Labels and notes are user
+feedback, and metronome settings are never analyzed playing tempo.
+
+`status` only reads navigation and records; it does not call Codex. `report` exports
+local records without creating a recommendation. The explicit legacy `assign E01`,
+`record`, `correct`, and `cancel` commands remain for historical compatibility;
+they do not define the new recommendation route. `discard TASK --reason ...` accepts
+an optional reason and preserves recordings. `reflection TASK --input /tmp/feedback.json`
+uses the same four labels and optional note as the web: `{"rating":"good","note":""}`.
+When editing, include the current `expected_event_id`. Actual observations and old
+notes are preserved. Never fill unknown checks from a difficulty label.
+
+Manual real-connection test (synthetic context and temporary records only):
+
+```sh
+uv run python tests/codex_smoke.py --run
+```
+
+This consumes the logged-in account's Codex allowance. Normal unit and browser tests
+use an explicitly injected synthetic provider and never require an account or network.
+The provider is not available as a production fallback.
+
+CLI reference: [noninteractive mode](https://learn.chatgpt.com/docs/non-interactive-mode),
+[authentication](https://learn.chatgpt.com/docs/auth). A persistent
+[app-server integration](https://learn.chatgpt.com/docs/app-server) is not needed for
+these single requests.
 
 ## CSV structure
 

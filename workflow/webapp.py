@@ -14,6 +14,7 @@ import webbrowser
 import review as r
 from notation import score_for
 from sessions import SessionStore, reflection_measurements
+from recommendation import Recommendations, ERRORS, repeat
 
 ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "text/javascript",
           "audio.mjs": "text/javascript", "capture.mjs": "text/javascript",
@@ -23,7 +24,7 @@ ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "te
 
 
 def display_target(target, language):
-    return r.display_builtin(target, language) | {"notation": score_for(target)}
+    return (target if target.get("kind") == "generated" else r.display_builtin(target, language)) | {"notation": score_for(target)}
 
 
 def feedback(task, language="en"):
@@ -67,7 +68,7 @@ def feedback(task, language="en"):
 
 
 class Application:
-    def __init__(self, root, data, source=r.HERE):
+    def __init__(self, root, data, source=r.HERE, recommender=None):
         self.root, self.source, self.data = Path(root).resolve(), Path(source).resolve(), data
         if (self.source / "publish.py").exists():
             r.require(not self.root.is_relative_to((self.source.parent / "practice").resolve()),
@@ -78,6 +79,7 @@ class Application:
         self.store = SessionStore(self.root)
         self.token = secrets.token_urlsafe(32)
         self.mutations = threading.RLock()
+        self.recommendations = Recommendations(self.root, data, recommender)
 
     def assert_active(self):
         if not self.preview:
@@ -91,14 +93,6 @@ class Application:
         profile_path = self.root / "profile.json"
         profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
         sessions = self.store.list()
-        lessons = []
-        for lesson in self.data["exercises"]:
-            eligible = [key for key in self.data["allowed_keys"]
-                        if all(r.practice_ready(self.data, tasks, parent, key)
-                               for parent in lesson["prerequisites"])]
-            lessons.append({**r.display_builtin(lesson, language), "eligible_keys": eligible,
-                            "targets": {key: display_target(r.target_for(self.data, lesson["id"], key), language)
-                                        for key in self.data["allowed_keys"]}})
         history = []
         for task in reversed(tasks):
             report = task["report"]
@@ -120,17 +114,25 @@ class Application:
             status["next"]["target"] = display_target(status["next"]["target"], language)
         status["next"]["reason"] = r.web_text(status["next"]["reason"], language)
         status["evidence"] = r.web_text(status["evidence"], language)
+        job = self.recommendations.latest()
+        if job and job.get("error_code"):
+            job["error"] = r.web_text(ERRORS[job["error_code"]], language)
         return {"csrf_token": self.token, "preview": self.preview, "language": language,
                 "workspace_id": hashlib.sha256(str(self.root).encode()).hexdigest()[:16],
-                "status": status, "exercises": lessons,
-                "keys": self.data["allowed_keys"], "minimum_bpm": self.data["minimum_bpm"],
-                "maximum_bpm": self.data["maximum_bpm"], "arrangements": r.display_builtin(r.ARRANGEMENTS, language),
+                "status": status, "recommendation": job,
+                "minimum_bpm": 20, "maximum_bpm": 240, "arrangements": r.display_builtin(r.ARRANGEMENTS, language),
                 "history": history, "sessions": sessions}
 
     def post(self, path, payload, language="en"):
         r.require(isinstance(payload, dict), "The request must be a JSON object.")
         with self.mutations:
             self.assert_active()
+            if path == "/api/recommend":
+                r.require(set(payload) <= {"request_id", "request"}, "The recommendation request contains unknown fields.")
+                return self.recommendations.start(payload["request_id"], language, payload.get("request", ""))
+            if path == "/api/repeat":
+                r.require(set(payload) == {"source_task_id", "task_id"}, "Invalid repeat request.")
+                return repeat(self.root, self.data, payload["source_task_id"], payload["task_id"])
             if path == "/api/assign":
                 return r.assign(self.root, self.data, payload["exercise_id"], payload.get("key"),
                                 payload.get("bpm"), "practice", payload.get("reason", "Practice selected in the web app"), payload.get("task_id"))
@@ -165,9 +167,9 @@ class Application:
             raise KeyError("Unknown API path.")
 
 
-def make_server(root, data, port=8765, source=r.HERE):
+def make_server(root, data, port=8765, source=r.HERE, recommender=None):
     r.require(type(port) is int and 0 <= port <= 65535, "The port must be between 0 and 65535.")
-    app = Application(root, data, source)
+    app = Application(root, data, source, recommender)
 
     class Handler(BaseHTTPRequestHandler):
         def language(self):
@@ -210,6 +212,10 @@ def make_server(root, data, port=8765, source=r.HERE):
                 path = urlsplit(self.path).path
                 if path == "/api/state":
                     self.respond(200, app.state(self.language()))
+                elif path.startswith("/api/recommendations/"):
+                    request_id = path.removeprefix("/api/recommendations/")
+                    artifact = app.recommendations._path(request_id)
+                    self.respond(200, json.loads(artifact.read_text()), filename=request_id + ".json")
                 elif path.startswith("/api/recordings/"):
                     parts = path.split("/")
                     r.require(len(parts) == 5 and r.re.fullmatch(r"S-[a-f0-9]{32}", parts[3]), "Recording not found.")
