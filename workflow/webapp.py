@@ -102,13 +102,17 @@ class Application:
         history = []
         for task in reversed(tasks):
             report = task["report"]
+            task_sessions = [s for s in sessions if s["task_id"] == task["assignment"]["task_id"]]
+            started = any(s["status"] == "recording" or s["summary"] and (s["summary"]["active_ms"] > 0 or s["summary"]["note_ons"]) for s in task_sessions)
             history.append({"id": task["assignment"]["task_id"], "exercise_id": task["assignment"]["exercise_id"],
                             "assigned_at": task["assignment"]["recorded_at"], "target": display_target(task["target"], language),
-                            "cancelled": task["cancelled"], "retired": task["retired"],
-                            "reason": (task["cancellation"] or task["assignment"])["reason"],
+                            "cancelled": task["cancelled"], "retired": task["retired"], "discarded": task["discarded"],
+                            "discard_choice": r.discard_details(task)["choice"],
+                            "reason": r.discard_details(task)["note"] if task["discarded"] else (task["cancellation"] or task["assignment"])["reason"],
                             "report": report, "outcome": r.outcome(task), "feedback": feedback(task, language),
-                            "observations": r.reflection_observations(report) if report else reflection_measurements(
-                                [s for s in sessions if s["task_id"] == task["assignment"]["task_id"]], profile),
+                            "completion": task["completion"], "completed": bool(r.practice_record(task)),
+                            "started": bool(started), "pending": r.is_pending(task),
+                            "observations": r.reflection_observations(r.practice_record(task)) if r.practice_record(task) else reflection_measurements(task_sessions, profile),
                             "revisions": [e for e in events if e["task_id"] == task["assignment"]["task_id"]
                                           and e["event_type"] in ("reported", "corrected")]})
         status = r.status(self.root, self.data)
@@ -129,11 +133,16 @@ class Application:
             self.assert_active()
             if path == "/api/assign":
                 return r.assign(self.root, self.data, payload["exercise_id"], payload.get("key"),
-                                payload.get("bpm"), "practice", payload.get("reason", "Practice selected in the web app"))
+                                payload.get("bpm"), "practice", payload.get("reason", "Practice selected in the web app"), payload.get("task_id"))
+            if path == "/api/complete":
+                return self.store.complete(self.data, payload["task_id"])
             if path == "/api/reflection":
                 r.require(set(payload) <= {"task_id", "rating", "note", "expected_event_id"}, "The feedback contains unknown fields.")
                 return self.store.reflect(self.data, payload["task_id"], payload.get("rating"),
                                           payload.get("note", ""), payload.get("expected_event_id"))
+            if path == "/api/discard":
+                r.require(set(payload) <= {"task_id", "reason", "choice"}, "The discard request contains unknown fields.")
+                return r.discard(self.root, self.data, payload["task_id"], payload.get("reason", ""), payload.get("choice", ""))
             if path in ("/api/report", "/api/cancel"):
                 task_id = payload["task_id"]
                 sessions = self.store.list(task_id)

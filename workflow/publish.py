@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from review import append_event, curriculum, incompatible_target_fields, log_lock, new_event, read_events, records, require
+from review import append_event, curriculum, incompatible_target_fields, is_pending, log_lock, new_event, read_events, records, require
 from launcher.src.jazz_practice import runtime
 
 SOURCE = Path(__file__).resolve().parent
@@ -32,7 +32,7 @@ def publish(source, practice, activate=True, ref="HEAD"):
         pin = runtime.read_pin(practice)
         marker = practice / "active-version"
         current = pin["version"] if pin else marker.read_text().strip() if marker.exists() else None
-        pending = [t for t in tasks if not t["report"] and not t["cancelled"]]
+        pending = [t for t in tasks if is_pending(t)]
         retirements, carried = [], []
         if activate:
             for task in pending:

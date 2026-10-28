@@ -4,19 +4,20 @@ import {Capture, Outbox, uploadPending} from './capture.mjs';
 import {ScoreView} from './score.mjs';
 
 const $ = id => document.getElementById(id);
-const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, reflectionSaving: false, ports: new Map()};
+const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, openedTaskId: null, view: 'list', reflectionSaving: false, ports: new Map()};
 let outbox, midiAccess, midiSelection = 'all', timer, detailTask;
 const labels = {success: 'Criteria met', unmet: 'Target not met', unknown: 'Assessment pending'};
 const ratings = {impossible: 'Impossible', challenging: 'Challenging', good: 'Good practice', too_easy: 'Too easy to be useful'};
+const discardChoices = {already_practiced: 'Already familiar', too_easy: 'Too easy'};
 const ratingEmoji = {impossible: '😈', challenging: '💪', good: '🙂', too_easy: '🙄'};
 const ratingText = rating => `${ratingEmoji[rating]} ${tr(ratings[rating])}`;
-const states = {unknown: 'Unassessed', attempted: 'Attempted', success: 'Same-day success', retained: 'Later retention'};
 function el(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 function option(value, text, disabled = false) { const node = el('option', text); node.value = value; node.disabled = disabled; return node; }
 function clock(ms) { const s = Math.max(0, Math.floor((ms || 0) / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
 function fail(error) { ui.error = error; $('error').textContent = tr(error.message || String(error)); $('error').hidden = false; }
 function clearError() { ui.error = null; $('error').hidden = true; }
-function pending() { return ui.data?.history.find(t => !t.report && !t.cancelled); }
+function pending() { return ui.data?.history.find(t => t.pending); }
+function openedTask() { return ui.data?.history.find(t => t.id === ui.openedTaskId && t.pending); }
 function openSessions() { return ui.data?.sessions.filter(s => s.status === 'recording' && s.id !== ui.capture?.session.id) || []; }
 function taskSessions(id) { return ui.data.sessions.filter(s => s.task_id === id); }
 
@@ -54,12 +55,13 @@ const transport = new Transport({
 });
 
 async function refresh(keep = false) {
-  const previous = pending()?.id;
+  const previous = openedTask()?.id;
   const data = await api('/api/state');
   if (data.language !== locale()) return; // A newer language selection superseded this response.
   ui.data = data;
   outbox ||= new Outbox(ui.data.workspace_id);
   const current = pending();
+  if (ui.openedTaskId && !openedTask()) { ui.openedTaskId = null; if (ui.view === 'practice') switchView('list'); }
   const next = ui.data.status.next;
   if (!keep || !ui.selected) {
     const lesson = ui.data.exercises.find(x => x.id === (current?.exercise_id || next.exercise_id)) || ui.data.exercises[0];
@@ -71,29 +73,32 @@ async function refresh(keep = false) {
   $('today-date').textContent = tr`${ui.data.status.today.date.replaceAll('-', '. ')} / DAILY PRACTICE`;
   const daily = ui.data.status.today;
   $('daily-time').replaceChildren(document.createTextNode(Number(daily.known_minutes.toFixed(1)).toString()), el('span', tr` / ${daily.budget_minutes} min`));
-  $('daily-count').textContent = tr`${daily.reported_attempts} reports${daily.minutes_unknown ? tr` · duration unknown: ${daily.minutes_unknown}` : daily.budget_reached ? tr(' · good work today') : ''}`;
+  $('daily-count').textContent = tr`${daily.reported_attempts} completed${daily.minutes_unknown ? tr` · duration unknown: ${daily.minutes_unknown}` : daily.budget_reached ? tr(' · good work today') : ''}`;
   $('suggestion-note').textContent = daily.budget_reached ? tr('You have reached your daily time budget. You can finish here or keep practicing if you like.') : next.reason;
   renderChoices();
-  renderLesson(!keep || previous !== current?.id);
+  renderLesson(!keep || previous !== openedTask()?.id);
   renderHistory();
-  renderGoals();
   renderRecordText();
-  renderFeedback();
   $('recovery').hidden = openSessions().length === 0;
   updateTransport();
 }
 
 function renderChoices() {
-  const lock = Boolean(pending());
+  const lock = Boolean(pending()) || ui.busy;
   $('exercise-select').replaceChildren(...ui.data.exercises.map(x => option(x.id, `${x.id} · ${x.title}`)));
   $('exercise-select').value = ui.selected.exercise;
   $('key-select').replaceChildren(...ui.data.keys.map(key => option(key, key)));
   $('key-select').value = ui.selected.key;
   $('goal-bpm').value = ui.selected.bpm;
   for (const id of ['goal-bpm', 'tempo', 'tempo-range']) { $(id).min = ui.data.minimum_bpm; $(id).max = ui.data.maximum_bpm; }
-  ['exercise-select', 'key-select', 'goal-bpm'].forEach(id => $(id).disabled = lock);
+  ['exercise-select', 'key-select', 'goal-bpm', 'add-practice'].forEach(id => $(id).disabled = lock);
+  $('new-practice').disabled = lock || Boolean(ui.capture) || openSessions().length > 0;
+  $('pending-hint').textContent = pending() ? tr('Open your unfinished practice below to continue or skip it.') : '';
   const lesson = ui.data.exercises.find(x => x.id === ui.selected.exercise);
-  $('eligibility').textContent = lock ? tr('The assigned conditions stay fixed. You can change them for the next task.') : lesson.eligible_keys.includes(ui.selected.key) ? tr('Starting practice assigns this task with the selected conditions.') : tr`First complete the prerequisites in this key: ${lesson.prerequisites.join(', ')}.`;
+  const eligible = lesson.eligible_keys.includes(ui.selected.key);
+  $('eligibility').textContent = eligible ? tr('This adds an item to your list. Open it when you are ready.') : tr`First complete the prerequisites in this key: ${lesson.prerequisites.join(', ')}.`;
+  $('add-practice').disabled = lock || !eligible;
+  $('new-description').textContent = lesson.targets[ui.selected.key].instructions;
   const exerciseFilter = $('filter-exercise').value, keyFilter = $('filter-key').value;
   $('filter-exercise').replaceChildren(option('', tr('All exercises')), ...ui.data.exercises.map(x => option(x.id, `${x.id} · ${x.title}`)));
   $('filter-key').replaceChildren(option('', tr('All keys')), ...ui.data.keys.map(k => option(k, k)));
@@ -101,14 +106,10 @@ function renderChoices() {
   $('filter-key').value = keyFilter;
 }
 
-function target() {
-  const current = pending();
-  if (current) return current.target;
-  const lesson = ui.data.exercises.find(x => x.id === ui.selected.exercise);
-  return {...lesson.targets[ui.selected.key], bpm: ui.selected.bpm};
-}
+function target() { return openedTask()?.target; }
 function renderLesson(resetTempo = false) {
-  const current = pending(), t = target();
+  const current = openedTask(), t = target();
+  if (!current) return;
   score.setScore(t.notation);
   if (!t.notation) $('lesson-material').open = true;
   const lesson = ui.data.exercises.find(x => x.id === (current?.exercise_id || ui.selected.exercise));
@@ -131,8 +132,7 @@ function renderLesson(resetTempo = false) {
   for (const [label, text] of rows) { const row = el('div', undefined, 'hand-row'); row.append(el('span', label), el('strong', text)); $('hand-notes').append(row); }
   $('lesson-instructions').textContent = tr`${t.instructions} C4 is middle C.`;
   $('criterion-text').textContent = tr`Play ${t.criteria.min_clean_runs} consecutive runs with correct notes, a steady pulse, and no stops under the assigned conditions.`;
-  $('skip-btn').hidden = current ? taskSessions(current.id).some(s => s.status === 'recording' || s.summary?.active_ms > 0 || s.summary?.note_ons > 0) : !lesson.eligible_keys.includes(ui.selected.key);
-  $('manual-record-btn').hidden = !current;
+  $('discard-btn').hidden = !current && !lesson.eligible_keys.includes(ui.selected.key);
   $('pad-toggle').disabled = !t.playback;
   if (!t.playback) { $('pad-toggle').checked = false; transport.setPad(false); }
   if (resetTempo && !ui.capture) setTempo(t.bpm);
@@ -145,14 +145,14 @@ function setTempo(value) {
 function updateTransport() {
   if (!ui.data) return;
   const recording = ui.capture, recovery = openSessions().length > 0;
-  const eligible = pending() || ui.data.exercises.find(x => x.id === ui.selected.exercise).eligible_keys.includes(ui.selected.key);
+  const eligible = Boolean(openedTask());
   $('practice-btn').disabled = ui.busy || recovery || !eligible || Boolean(recording?.ended);
   $('practice-btn').textContent = recording ? transport.playing ? tr('Pause') : recording.ended ? tr('Waiting to save') : tr('Resume') : tr('Start practice');
-  $('finish-btn').disabled = ui.busy || !recording;
-  $('finish-btn').textContent = recording?.ended ? tr('Retry save') : tr('Finish');
+  $('finish-btn').disabled = ui.busy || recovery || !eligible || (!recording && !openedTask()?.started);
+  $('finish-btn').textContent = recording?.ended ? tr('Retry save') : tr('Complete practice');
   $('transport-state').textContent = recording ? transport.playing ? tr('Practicing') : recording.ended ? tr('Waiting to save') : tr('Paused') : tr('Ready');
-  $('manual-record-btn').disabled = Boolean(recording) || recovery || ui.busy;
-  $('skip-btn').disabled = Boolean(recording) || recovery || ui.busy;
+  $('discard-btn').disabled = recovery || ui.busy || ui.reflectionSaving || !eligible;
+  $('back-list').disabled = ui.busy;
 }
 
 function registerPort(port) {
@@ -191,6 +191,7 @@ function midiBindings() {
 }
 
 async function startOrPause() {
+  if (!openedTask() || ui.busy) return;
   clearError();
   if (ui.capture && transport.playing) {
     transport.pause(); ui.capture.event('pause'); updateTransport(); return;
@@ -201,12 +202,7 @@ async function startOrPause() {
     await transport.unlock(); // User gesture, before a network round trip.
     if (!ui.capture) {
       await outbox.database();
-      if (!pending()) {
-        await api('/api/assign', {exercise_id: ui.selected.exercise, key: ui.selected.key, bpm: ui.selected.bpm});
-        await refresh(true);
-        setTempo(requestedTempo);
-      }
-      const session = await api('/api/sessions/start', {task_id: pending().id, session_id: 'S-' + crypto.randomUUID().replaceAll('-', '')});
+      const session = await api('/api/sessions/start', {task_id: openedTask().id, session_id: 'S-' + crypto.randomUUID().replaceAll('-', '')});
       const capture = new Capture(session, outbox, api, (text, warning) => {
         ui.saveStatus = text; $('save-status').textContent = tr(text);
         $('save-status').classList.toggle('save-warning', warning);
@@ -220,11 +216,12 @@ async function startOrPause() {
       clearInterval(timer);
       timer = setInterval(() => { if (ui.capture) $('elapsed').textContent = clock((ui.capture.endAt || performance.now()) - ui.capture.origin); }, 250);
     }
-    $('record-panel').hidden = $('feedback-panel').hidden = true;
+    $('record-panel').hidden = true;
     transport.click = $('click-toggle').checked;
     transport.setPad($('pad-toggle').checked);
     ui.capture.event('play', {bpm: Number($('tempo').value)});
     transport.start(target().playback, Number($('tempo').value));
+    openedTask().started = true;
     ui.saveStatus = 'Recording · autosaving every 3 seconds';
     $('save-status').textContent = tr(ui.saveStatus);
   } catch (error) {
@@ -233,20 +230,46 @@ async function startOrPause() {
   }
   finally { ui.busy = false; updateTransport(); }
 }
-async function finish() {
+async function stopCapture() {
   if (!ui.capture) return;
+  if (transport.playing) { transport.pause(); ui.capture.event('pause'); }
+  const saved = await ui.capture.stop();
+  const index = ui.data.sessions.findIndex(session => session.id === saved.id);
+  if (index < 0) ui.data.sessions.push(saved);
+  else ui.data.sessions[index] = saved;
+  ui.capture = null; clearInterval(timer);
+  ui.saveStatus = 'Practice saved'; $('save-status').textContent = tr(ui.saveStatus);
+}
+async function finish() {
+  const task = openedTask();
+  if (!task || ui.busy) return;
   clearError(); ui.busy = true; updateTransport();
-  const id = ui.capture.session.task_id;
   try {
-    if (transport.playing) { transport.pause(); ui.capture.event('pause'); }
-    await ui.capture.stop();
-    ui.capture = null; clearInterval(timer);
-    ui.saveStatus = 'Practice saved';
-    $('save-status').textContent = tr(ui.saveStatus);
-    await refresh(true);
-    showRecord(ui.data.history.find(t => t.id === id));
+    await stopCapture();
+    await api('/api/complete', {task_id: task.id});
+    ui.openedTaskId = null;
+    await refresh();
+    switchView('list');
+    clearFilters(); renderHistory();
+    showRecord(ui.data.history.find(t => t.id === task.id));
   } catch (error) { fail(error); }
-  finally { ui.busy = false; updateTransport(); }
+  finally { ui.busy = false; updateTransport(); renderChoices(); }
+}
+async function goToList() {
+  if (ui.busy) return;
+  clearError(); ui.busy = true; updateTransport();
+  try {
+    await stopCapture();
+    ui.openedTaskId = null;
+    await refresh(true); switchView('list');
+  } catch (error) { fail(error); }
+  finally { ui.busy = false; updateTransport(); renderChoices(); }
+}
+function openPractice(task) {
+  if (!task?.pending || ui.busy || (ui.capture && ui.capture.session.task_id !== task.id)) return;
+  ui.openedTaskId = task.id;
+  renderLesson(true); switchView('practice'); updateTransport();
+  window.scrollTo({top: 0, behavior: 'instant'});
 }
 
 async function recover() {
@@ -262,9 +285,9 @@ async function recover() {
       await outbox.removeDraft(session.id);
     }
     await refresh(true);
-    if (pending()) showRecord(pending());
+    switchView('list');
   } catch (error) { fail(error); }
-  finally { ui.busy = false; $('recover-btn').disabled = false; updateTransport(); }
+  finally { ui.busy = false; $('recover-btn').disabled = false; updateTransport(); renderChoices(); }
 }
 
 function renderRecordText() {
@@ -280,10 +303,7 @@ function renderRecordText() {
   $('reflection-status').textContent = tr(ui.reflectionSaving ? 'Saving…' : ratings[rating] ? 'Practice saved' : '');
   $('save-note').disabled = Boolean(ui.reflectionSaving) || !ratings[rating];
   $('raw-note').disabled = Boolean(ui.reflectionSaving);
-  $('next-btn').disabled = Boolean(ui.reflectionSaving);
   $('close-record').disabled = Boolean(ui.reflectionSaving);
-  $('close-record').hidden = Boolean(task.report);
-  $('feedback-panel').hidden = !task.report;
   $('measurements').replaceChildren();
   const measured = task.observations;
   if (measured) {
@@ -294,12 +314,8 @@ function renderRecordText() {
   }
 }
 
-function renderFeedback() {
-  if (ui.recordTask?.report) $('feedback-next').textContent = ui.data.status.next.reason;
-}
-
 function showRecord(task) {
-  if (!task || ui.capture || openSessions().length) return;
+  if (!task?.completed || ui.capture || openSessions().length) return;
   if (ui.recordTask?.id !== task.id) {
     $('record-form').reset();
     $('raw-note').value = task.report?.raw_note || '';
@@ -308,7 +324,7 @@ function showRecord(task) {
   }
   ui.recordTask = task;
   $('record-panel').hidden = false;
-  renderRecordText(); renderFeedback();
+  renderHistory(); renderRecordText();
   $('record-panel').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 async function saveReflection(rating) {
@@ -320,45 +336,72 @@ async function saveReflection(rating) {
     // Keep the revision token even if the subsequent refresh loses its response.
     ui.reflectionEventId = saved.event_id;
     ui.recordTask.report = {...ui.recordTask.report, event_id: saved.event_id, difficulty: rating, raw_note: $('raw-note').value};
-    await refresh();
+    await refresh(true);
     return true;
   } catch (error) { fail(error); return false; }
-  finally { ui.reflectionSaving = false; renderRecordText(); renderFeedback(); }
+  finally { ui.reflectionSaving = false; renderRecordText(); }
 }
 
 function switchView(name) {
+  ui.view = name;
   document.querySelectorAll('.view').forEach(view => view.hidden = view.id !== `view-${name}`);
   document.querySelectorAll('[data-view]').forEach(button => { button.classList.toggle('active', button.dataset.view === name); button.setAttribute('aria-current', button.dataset.view === name ? 'page' : 'false'); });
 }
+function clearFilters() {
+  for (const id of ['filter-exercise', 'filter-key', 'filter-from', 'filter-to']) $(id).value = '';
+}
 function renderHistory() {
   const exercise = $('filter-exercise').value, key = $('filter-key').value, from = $('filter-from').value, to = $('filter-to').value;
+  const dayOf = task => (task.report || task.completion)?.practice_date || task.assigned_at.slice(0, 10);
   const tasks = ui.data.history.filter(task => {
-    const day = task.report?.practice_date || task.assigned_at.slice(0, 10);
+    const day = dayOf(task);
     const actualKey = task.report ? JSON.parse(task.report.actual_json).key || task.target.key : task.target.key;
     return (!exercise || task.exercise_id === exercise) && (!key || actualKey === key) && (!from || day >= from) && (!to || day <= to);
-  });
+  }).sort((a,b) => dayOf(b).localeCompare(dayOf(a)) || b.assigned_at.localeCompare(a.assigned_at));
+  // Reuse the editor node so refresh and language changes keep unsaved text intact.
+  $('view-list').append($('record-panel'));
   $('history-list').replaceChildren();
-  if (!tasks.length) { const empty = el('div', undefined, 'empty-state'); empty.append(el('h3', tr('A fresh page in your journal.')), el('p', tr('Your practice conditions and notes will appear here.'))); $('history-list').append(empty); }
-  for (const task of tasks) {
-    const button = el('button', undefined, 'history-item'), left = el('div');
-    const day = task.report?.practice_date || task.assigned_at.slice(0, 10);
-    left.append(el('small', `${day} / ${task.exercise_id}`), el('h3', task.target.title), el('p', tr`${task.target.key} · Target ${task.target.bpm} BPM${task.report?.actual_minutes ? tr` · ${Number(Number(task.report.actual_minutes).toFixed(2))} min` : ''}`));
-    button.append(left, el('span', task.retired ? tr('Retired on update') : task.cancelled ? tr('Skipped') : task.report ? (ratings[task.report.difficulty] ? ratingText(task.report.difficulty) : tr(labels[task.outcome])) : tr('In progress'), `tag ${task.outcome}`));
-    button.addEventListener('click', () => showDetail(task));
-    $('history-list').append(button);
+  if (!tasks.length) {
+    const empty = el('div', undefined, 'empty-state');
+    empty.append(el('h3', tr('Your practice starts here.')), el('p', tr('Add an exercise to begin. Completed and skipped practices will stay in this list.')));
+    $('history-list').append(empty);
   }
-}
-function renderGoals() {
-  $('goals').replaceChildren(...ui.data.status.goals.map(goal => {
-    const lesson = ui.data.exercises.find(x => x.id === goal.exercise_id), card = el('div', undefined, 'card goal-card');
-    const top = el('div', undefined, 'section-top'); top.append(el('span', goal.exercise_id, 'eyebrow'), el('span', tr(states[goal.state]), `tag ${['success','retained'].includes(goal.state) ? 'success' : 'unknown'}`));
-    card.append(top, el('h3', lesson.title), el('p', tr`${goal.key} · ${goal.bpm} BPM · ${goal.attempts} reports${goal.last_success ? tr` · last success ${goal.last_success}` : ''}`));
-    return card;
-  }));
+  let day;
+  for (const task of tasks) {
+    if (dayOf(task) !== day) { day = dayOf(task); $('history-list').append(el('h2', day, 'practice-day')); }
+    const card = el('article', undefined, 'practice-item'); card.dataset.taskId = task.id;
+    const button = el('button', undefined, 'history-item'), left = el('div');
+    const record = task.report || task.completion;
+    const minutes = record?.actual_minutes !== '' && record?.actual_minutes != null ? tr` · ${Number(Number(record.actual_minutes).toFixed(2))} min` : '';
+    left.append(el('small', `${task.assigned_at.slice(11,16)} / ${task.exercise_id}`), el('h3', task.target.title), el('p', tr`${task.target.key} · Target ${task.target.bpm} BPM${minutes}`));
+    const status = task.retired ? tr('Retired on update') : task.discarded ? tr('Discarded') : task.cancelled ? tr('Skipped') : task.completed ? tr('Completed') : task.started || ui.capture?.session.task_id === task.id ? tr('In progress') : tr('Ready to practice');
+    button.append(left, el('span', status, `tag ${task.completed ? 'success' : 'unknown'}`));
+    button.addEventListener('click', () => task.pending ? openPractice(task) : showDetail(task));
+    card.append(button, el('p', task.target.instructions, 'practice-content'));
+    const result = ratings[task.report?.difficulty] ? ratingText(task.report.difficulty) : task.report ? tr(labels[task.outcome]) : task.completed ? tr('Feedback not added yet') : '';
+    if (result) card.append(el('p', result, 'practice-result'));
+    if (task.discard_choice) card.append(el('p', tr(discardChoices[task.discard_choice]), 'practice-result'));
+    const note = task.report?.raw_note || (task.cancelled ? task.reason : '');
+    if (note) card.append(el('p', note, 'practice-note'));
+    const actions = el('div', undefined, 'row-actions');
+    if (task.pending) {
+      const open = el('button', tr(task.started ? 'Continue practice' : 'Open practice room'), 'text-button');
+      open.disabled = ui.busy;
+      open.addEventListener('click', () => openPractice(task)); actions.append(open);
+    }
+    if (task.completed) {
+      const edit = el('button', tr(task.report ? 'Edit feedback' : 'Add feedback'), 'text-button');
+      edit.disabled = Boolean(ui.capture) || openSessions().length > 0;
+      edit.addEventListener('click', () => showRecord(task)); actions.append(edit);
+    }
+    card.append(actions);
+    if (ui.recordTask?.id === task.id) card.append($('record-panel'));
+    $('history-list').append(card);
+  }
 }
 function showDetail(task) {
   detailTask = task;
-  const box = $('history-detail'); box.replaceChildren(el('h2', task.target.title), el('p', `${task.exercise_id} · ${task.report?.practice_date || task.assigned_at.slice(0, 10)}`, 'subtle'));
+  const box = $('history-detail'); box.replaceChildren(el('h2', task.target.title), el('p', `${task.exercise_id} · ${(task.report || task.completion)?.practice_date || task.assigned_at.slice(0, 10)}`, 'subtle'));
   const grid = el('div', undefined, 'detail-grid');
   const intended = el('div'); intended.append(el('h3', tr('Assigned conditions')), el('div', tr`${task.target.key} · ${task.target.bpm} BPM · ${task.target.bars} bars`), el('div', ui.data.arrangements[task.target.arrangement] || task.target.arrangement));
   const actualBox = el('div'); actualBox.append(el('h3', tr('Reported performance')));
@@ -370,16 +413,12 @@ function showDetail(task) {
   } else if (task.report) {
     const a = JSON.parse(task.report.actual_json);
     actualBox.append(el('div', tr`${a.key || tr('Key unknown')} · ${a.bpm ?? tr('Unknown')} BPM · ${a.bars ?? tr('Unknown')} bars`), el('div', ui.data.arrangements[a.arrangement] || tr('Hand arrangement unknown')), el('div', tr`${tr(labels[task.outcome])} · Consecutive successful runs: ${task.report.clean_runs || tr('Unknown')}`));
-  } else actualBox.append(el('div', task.retired ? tr('Closed by an update. No practice result was inferred.') : task.cancelled ? tr('Cancelled before practice') : tr('No result reported yet')));
+  } else if (task.completed) actualBox.append(el('div', tr('Completed')), el('div', tr('Feedback not added yet')));
+  else actualBox.append(el('div', task.retired ? tr('Closed by an update. No practice result was inferred.') : task.discarded ? tr('Task closed. Saved recordings are kept below.') : task.cancelled ? tr('Cancelled before practice') : tr('No result reported yet')));
   grid.append(intended, actualBox); box.append(grid);
+  if (task.discard_choice) box.append(el('p', tr(discardChoices[task.discard_choice]), 'discard-choice'));
   const note = task.report ? task.report.raw_note : task.reason;
   if (note) box.append(el('p', note, 'raw-note'));
-  if (task.report && !ratings[task.report.difficulty]) {
-    const assessment = el('section', undefined, 'assessment-details');
-    const details = el('ul'); details.append(...task.feedback.details.map(text => el('li', text)));
-    assessment.append(el('h3', tr('Assessment')), el('p', task.feedback.title), details);
-    box.append(assessment);
-  }
   for (const session of taskSessions(task.id)) {
     const row = el('div', undefined, 'session-row');
     row.append(el('div', tr`Practice ${session.created_at.slice(0, 16).replace('T', ' ')} · ${session.status === 'recording' ? tr('Saving') : session.status === 'interrupted' ? tr('Interrupted') : tr('Saved')}`));
@@ -395,23 +434,19 @@ function showDetail(task) {
     for (const revision of task.revisions) { details.append(el('small', `${revision.recorded_at.slice(0, 16).replace('T', ' ')} · ${revision.event_type === 'reported' ? tr('Original report') : tr('Correction')}`), el('p', [ratings[revision.difficulty] ? ratingText(revision.difficulty) : '', revision.raw_note].filter(Boolean).join('\n'))); }
     box.append(details);
   }
-  $('correct-btn').hidden = !task.report;
+  $('correct-btn').hidden = !task.completed;
+  $('repeat-btn').hidden = task.pending;
+  $('repeat-btn').disabled = Boolean(pending()) || Boolean(ui.capture) || openSessions().length > 0;
   $('correct-btn').disabled = Boolean(ui.capture) || openSessions().length > 0;
   if (!$('history-dialog').open) $('history-dialog').showModal();
 }
 
 $('practice-btn').addEventListener('click', startOrPause);
-$('finish-btn').addEventListener('click', finish);
+$('finish-btn').addEventListener('click', () => finish());
 $('recover-btn').addEventListener('click', recover);
-$('manual-record-btn').addEventListener('click', () => showRecord(pending()));
 document.querySelectorAll('[data-rating]').forEach(button => button.addEventListener('click', () => saveReflection(button.dataset.rating)));
 $('record-form').addEventListener('submit', event => { event.preventDefault(); saveReflection(ui.recordTask?.report?.difficulty); });
-$('close-record').addEventListener('click', () => $('record-panel').hidden = true);
-$('next-btn').addEventListener('click', async () => {
-  if ($('raw-note').value !== ui.recordTask?.report?.raw_note && !await saveReflection(ui.recordTask?.report?.difficulty)) return;
-  $('record-panel').hidden = true; ui.recordTask = null;
-  window.scrollTo({top: 0, behavior: 'smooth'});
-});
+$('close-record').addEventListener('click', () => { $('record-panel').hidden = true; ui.recordTask = null; });
 $('tempo').addEventListener('change', event => setTempo(event.target.value));
 $('tempo-range').addEventListener('input', event => setTempo(event.target.value));
 $('tempo-down').addEventListener('click', () => setTempo(Number($('tempo').value) - 5));
@@ -420,10 +455,34 @@ $('click-toggle').addEventListener('change', event => { transport.click = event.
 $('pad-toggle').addEventListener('change', event => { transport.setPad(event.target.checked); ui.capture?.event('pad', {enabled: event.target.checked}); });
 for (const id of ['click-volume', 'pad-volume']) $(id).addEventListener('input', () => transport.setVolumes(Number($('click-volume').value), Number($('pad-volume').value)));
 for (const id of ['exercise-select', 'key-select', 'goal-bpm']) $(id).addEventListener('change', () => {
-  if (pending()) return;
   ui.selected = {exercise: $('exercise-select').value, key: $('key-select').value, bpm: Math.min(ui.data.maximum_bpm, Math.max(ui.data.minimum_bpm, Number($('goal-bpm').value) || 60))};
-  renderChoices(); renderLesson(true); updateTransport();
+  renderChoices();
 });
+function newPractice(source) {
+  if (pending() || ui.busy || ui.capture || openSessions().length) return;
+  const next = ui.data.status.next;
+  ui.selected = source ? {exercise: source.exercise_id, key: source.target.key, bpm: source.target.bpm} :
+    {exercise: next.exercise_id || ui.data.exercises[0].id, key: next.key || ui.data.keys[0], bpm: next.bpm || 60};
+  ui.newTaskId = 'T-' + crypto.randomUUID().replaceAll('-', '').slice(0,10);
+  $('new-error').hidden = true;
+  renderChoices(); $('new-dialog').showModal();
+}
+$('new-practice').addEventListener('click', () => newPractice());
+$('new-close').addEventListener('click', () => $('new-dialog').close());
+$('new-dialog').addEventListener('cancel', event => { if (ui.busy) event.preventDefault(); });
+$('new-form').addEventListener('submit', async event => {
+  event.preventDefault(); if (ui.busy) return;
+  ui.busy = true; renderChoices(); $('new-close').disabled = true;
+  try {
+    await api('/api/assign', {task_id: ui.newTaskId, exercise_id: ui.selected.exercise, key: ui.selected.key, bpm: ui.selected.bpm});
+    await refresh(true); clearFilters(); renderHistory();
+    $('new-dialog').close(); switchView('list');
+    document.querySelector(`[data-task-id="${ui.newTaskId}"]`)?.scrollIntoView({behavior:'smooth', block:'center'});
+  } catch (error) { $('new-error').textContent = tr(error.message); $('new-error').hidden = false; }
+  finally { ui.busy = false; $('new-close').disabled = false; renderChoices(); updateTransport(); }
+});
+$('back-list').addEventListener('click', goToList);
+$('repeat-btn').addEventListener('click', () => { $('history-dialog').close(); newPractice(detailTask); });
 $('midi-connect').addEventListener('click', async () => {
   clearError();
   if (!navigator.requestMIDIAccess) { ui.midiNotice = 'This browser does not support Web MIDI. Practice without MIDI or connect using a supported browser.'; $('midi-status').textContent = tr(ui.midiNotice); return; }
@@ -444,25 +503,54 @@ $('midi-input').addEventListener('change', event => {
   if (ui.capture && midiSelection !== event.target.value) ui.capture.event('disconnect', {reason: 'Recording input changed'});
   midiSelection = event.target.value; midiBindings();
 });
-$('skip-btn').addEventListener('click', () => { $('skip-reason').value = ''; $('skip-dialog').showModal(); });
-$('skip-close').addEventListener('click', () => $('skip-dialog').close());
-$('skip-form').addEventListener('submit', async event => {
-  event.preventDefault(); clearError();
+$('discard-btn').addEventListener('click', () => {
+  if (transport.playing) { transport.pause(); ui.capture?.event('pause'); updateTransport(); }
+  ui.discardTaskId = openedTask()?.id || null;
+  ui.discardChoice = '';
+  $('discard-reason').value = ui.recordTask?.id === ui.discardTaskId ? $('raw-note').value : '';
+  $('discard-error').hidden = true;
+  document.querySelectorAll('[data-discard-choice]').forEach(button => button.setAttribute('aria-pressed', 'false'));
+  $('discard-dialog').showModal();
+});
+document.querySelectorAll('[data-discard-choice]').forEach(button => button.addEventListener('click', () => {
+  ui.discardChoice = ui.discardChoice === button.dataset.discardChoice ? '' : button.dataset.discardChoice;
+  document.querySelectorAll('[data-discard-choice]').forEach(choice => choice.setAttribute('aria-pressed', String(choice.dataset.discardChoice === ui.discardChoice)));
+}));
+$('discard-close').addEventListener('click', () => $('discard-dialog').close());
+$('discard-dialog').addEventListener('cancel', event => { if (ui.discarding) event.preventDefault(); });
+$('discard-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (ui.discarding) return;
+  clearError(); $('discard-error').hidden = true;
+  ui.discarding = true; ui.busy = true; updateTransport();
+  const reason = $('discard-reason').value, choice = ui.discardChoice;
+  $('discard-form').querySelectorAll('button, textarea').forEach(control => control.disabled = true);
   try {
-    if (!pending()) {
-      await api('/api/assign', {exercise_id: ui.selected.exercise, key: ui.selected.key, bpm: ui.selected.bpm});
-      await refresh(true);
-    }
-    await api('/api/cancel', {task_id: pending().id, reason: $('skip-reason').value});
-    $('skip-dialog').close(); $('record-panel').hidden = true; await refresh();
+    // Finish the local capture before closing the task; failed uploads remain retryable.
+    await stopCapture();
+    ui.busy = true; updateTransport();
+    await api('/api/discard', {task_id: ui.discardTaskId, reason, choice});
+    $('discard-dialog').close(); $('record-panel').hidden = true; ui.recordTask = null; ui.openedTaskId = null;
+    await refresh(); switchView('list');
+  } catch (error) {
+    fail(error);
+    $('discard-error').textContent = tr(error.message || String(error));
+    $('discard-error').hidden = false;
+  } finally {
+    ui.discarding = false; ui.busy = false;
+    $('discard-form').querySelectorAll('button, textarea').forEach(control => control.disabled = false);
+    updateTransport(); renderChoices();
   }
-  catch (error) { $('skip-dialog').close(); fail(error); }
 });
 $('dialog-close').addEventListener('click', () => $('history-dialog').close());
-$('correct-btn').addEventListener('click', () => { $('history-dialog').close(); switchView('practice'); showRecord(detailTask); });
+$('correct-btn').addEventListener('click', () => { $('history-dialog').close(); switchView('list'); clearFilters(); showRecord(detailTask); });
 for (const id of ['filter-exercise', 'filter-key', 'filter-from', 'filter-to']) $(id).addEventListener('change', renderHistory);
-document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', async () => { switchView(button.dataset.view); if (!ui.capture) { try { await refresh(true); } catch (error) { fail(error); } } }));
-document.querySelector('.brand').addEventListener('click', () => switchView('practice'));
+document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', async () => {
+  if (button.dataset.view === 'list') return goToList();
+  switchView(button.dataset.view);
+  if (!ui.capture) { try { await refresh(true); } catch (error) { fail(error); } }
+}));
+document.querySelector('.brand').addEventListener('click', event => { event.preventDefault(); goToList(); });
 document.addEventListener('visibilitychange', () => {
   ui.capture?.event('visibility', {hidden: document.hidden});
   if (document.hidden && transport.playing) { transport.pause(); ui.capture?.event('pause'); updateTransport(); }
@@ -485,6 +573,7 @@ async function changeLanguage() {
   } catch (error) { fail(error); }
 }
 $('language-select').value = locale();
+$('settings-back').addEventListener('click', () => switchView(openedTask() ? 'practice' : 'list'));
 $('language-select').addEventListener('change', changeLanguage);
 loadTranslations().then(() => { translatePage(); return refresh(); }).catch(error => {
   $('connection').textContent = tr('Check connection'); fail(error);

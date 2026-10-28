@@ -191,7 +191,7 @@ class SessionStore:
                 return self.public(existing)
             task = next((t for t in r.records(r.read_events(self.root))
                          if t["assignment"]["task_id"] == task_id), None)
-            r.require(task is not None and not task["report"] and not task["cancelled"], "An active task is required.")
+            r.require(task is not None and r.is_pending(task), "An active task is required.")
             r.require(not db.execute("SELECT 1 FROM sessions WHERE task_id=? AND status='recording'",
                                      (task_id,)).fetchone(), "This task already has an open session. Recover the saved practice first.")
             db.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?,NULL)",
@@ -238,10 +238,11 @@ class SessionStore:
                       "This feedback has changed. Refresh before editing it.")
             event = r.new_event("corrected" if previous else "reported", task_id, data,
                                 task["assignment"]["exercise_id"], task["assignment"]["purpose"])
-            if previous:
+            source = previous or task["completion"]
+            if source:
                 # A label or memo edit must never discard older performance evidence.
                 for field in ("practice_date", "actual_json", "checks_json", "clean_runs", "actual_minutes", "hypothesis", "reason"):
-                    event[field] = previous[field]
+                    event[field] = source[field]
             else:
                 profile_path = self.root / "profile.json"
                 profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
@@ -251,6 +252,28 @@ class SessionStore:
                              reason=r.jdump(measured))
             event.update(release=task["assignment"]["release"], difficulty=rating, raw_note=note,
                          supersedes=previous["event_id"] if previous else "")
+            r.records(events + [event])
+            r.append_event(self.root, event)
+        return {"task_id": task_id, "event_id": event["event_id"]}
+
+    def complete(self, data, task_id):
+        with r.log_lock(self.root):
+            events = r.read_events(self.root)
+            task = next((t for t in r.records(events) if t["assignment"]["task_id"] == task_id), None)
+            r.require(task is not None and not task["cancelled"], "Active task ID not found.")
+            if r.practice_record(task):
+                return {"task_id": task_id, "event_id": r.practice_record(task)["event_id"]}
+            sessions = self.list(task_id)
+            r.require(not any(s["status"] == "recording" for s in sessions), "Finish and save the current practice session first.")
+            r.require(any(s["summary"] and (s["summary"]["active_ms"] > 0 or s["summary"]["note_ons"] > 0) for s in sessions),
+                      "Start practicing before completing this task, or skip it.")
+            profile_path = self.root / "profile.json"
+            profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
+            measured = reflection_measurements(sessions, profile)
+            event = r.new_event("completed", task_id, data, task["assignment"]["exercise_id"], task["assignment"]["purpose"])
+            event.update(release=task["assignment"]["release"], practice_date=measured["practice_date"],
+                         actual_json="{}", checks_json="{}", reason=r.jdump(measured),
+                         actual_minutes="" if measured["minutes"] is None else str(measured["minutes"]))
             r.records(events + [event])
             r.append_event(self.root, event)
         return {"task_id": task_id, "event_id": event["event_id"]}

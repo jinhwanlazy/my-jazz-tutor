@@ -31,10 +31,10 @@ against their assigned criteria. Current milestones count only successes with
 compatible criteria, material, and playing conditions.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.2.9`; create a new tag for later releases instead of moving an old tag:
+selects `v0.2.10`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.2.9
+uv run python publish.py --ref v0.2.10
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -80,13 +80,23 @@ and port. Switching preserves active capture and unfinished report inputs. Agent
 follow the user's conversation language independently. Original notes and historical
 evidence retain their original wording.
 
-Choose one label after practicing: 😈 **Impossible**, 💪 **Challenging**,
-🙂 **Good practice**, or 🙄 **Too easy to be useful**. One tap saves it.
-**Add a note · optional** is the only text field; you can edit the label or memo
-later. Date, duration, and metronome settings are recorded automatically.
-Good/too-easy feedback can open the next practice exercise in the same key without
-claiming correct notes, steady timing, mastery, or retention. No accuracy survey
-or missing-evidence prompts are required to continue.
+The first screen is your **Practice list**, grouped by date. Each item shows its
+exercise, key and target tempo, ready/in-progress/completed/skipped status, feedback,
+memo and optional skip reason. The navigation contains Practice list and Settings.
+The former history tab is part of this list; the progress dashboard is removed.
+
+**New practice → Add to list** creates an assignment without opening the room or
+starting playback. Click the new item to enter. Only one unfinished assignment is
+allowed; return to that item to continue or skip it before adding another.
+**Complete practice** saves input, closes the task, and returns to the list. Add
+feedback in the completed item: 😈 Impossible, 💪 Challenging, 🙂 Good practice,
+or 🙄 Too easy to be useful. A tap saves it; a memo is optional. Completion does not
+wait for feedback, and adding or editing feedback never counts the practice twice.
+
+Completed items open their saved details. **Practice again** prepares a separate
+new assignment, which is added to the list before you enter it. Returning to the
+list during practice saves the current recording while leaving the task unfinished.
+No page load, item creation or recording recovery automatically enters the room.
 
 Once a web-capable version is active, run this from the repository root. `uv`
 prepares the environment; `jazz` with no arguments runs `serve --open`:
@@ -122,16 +132,22 @@ preserves input attached to retired tasks without creating a performance report.
   range, not detected hands. This view does not assess correctness or fill reports.
   Charleston eighth notes illustrate short attacks on 1 and 2&; the illustration
   does not add an exact hold-duration requirement to the assignment.
-- **Finish and record:** finishing saves input and opens four feedback labels.
-  Tap one to save, optionally add a memo, then choose **Next practice**. Impossible
-  suggests a slower tempo; challenging keeps the same tempo. Good/too-easy feedback
-  prioritizes the next eligible exercise. If all are comfortable, too-easy raises
-  the tempo within the curriculum's limits. These choices do not pass mastery criteria.
-- **Skip:** defer an unattempted task for today with a reason. The next task still
-  follows prerequisites. There is no daily task-count limit.
-- **History and progress:** filter by date, exercise, and key; compare original
-  notes and assigned versus actual conditions. Corrections preserve earlier
-  reports. Download raw MIDI and session metadata here.
+- **Complete practice:** save recording and measured time, close the task, and return
+  to the list. Feedback is editable there. A completed task without a label has
+  unknown musical correctness; it is not an unfinished assignment.
+- **Discard task:** close an unfinished item with an optional reason. The room saves
+  any active recording first. A failed save leaves the task open for retry. Existing
+  input is preserved. Already familiar / Too easy can open later ordinary practice
+  in the same key, without creating a performance report or mastery credit. A blank
+  or free-text reason does not infer familiarity. The skipped item is deferred today.
+- **Saved details:** inspect the original conditions, notes, edits and raw MIDI.
+  Corrections preserve earlier reports. Feedback is also visible directly in the list.
+
+Recommendations are presented when adding a practice. A completed compatible
+attempt resets the review reminder for that exercise and key, without asserting
+retention success. Today's easy feedback therefore cannot be overridden endlessly
+by a review due from an older success. Impossible/challenging can still explicitly
+recommend repetition, with the reason shown in the new-practice dialog.
 
 MIDI is optional. In a browser supporting Web MIDI on a local address, choose
 **MIDI input → Connect** and grant permission. All connected inputs are selected
@@ -196,8 +212,9 @@ scripts follow the [uv documentation](https://docs.astral.sh/uv/concepts/project
 ## MIDI storage and exports
 
 `practice/sessions.sqlite3` stores raw input and playback events. The CSV contains
-final self-reports, linked to sessions by `task_id`. Ending a recording does not
-submit a practice report.
+completion events and self-reports, linked to sessions by `task_id`. Ending an
+individual recording does not complete the task. The explicit Complete practice
+operation appends completion; feedback can be added separately afterward.
 
 Git does not preserve personal records. Stop the server before backing up the CSV,
 SQLite database, profile, feedback notes, and `runtime.json` together to a private
@@ -246,24 +263,28 @@ keyboard connection or speaker quality.
 ## Assignment and reporting CLI
 
 Several tasks can be practiced sequentially in one day, with only one pending
-assignment at a time. Report or cancel it before assigning another. The default
-30 minutes covers the whole day. `status.today` includes reported task count,
-known time, reports with unknown duration, and remaining budget. Remaining time is
-`null` when a report lacks duration, unless known time already exhausts the budget,
+assignment at a time. Complete, report, discard or cancel it before assigning another.
+The default 30 minutes covers the whole day. `status.today` includes reported task count,
+known time, completed attempts with unknown duration, and remaining budget.
+For compatibility, `reported_attempts` now counts each completed/reported task once.
+Remaining time is `null` when a report lacks duration, unless known time already exhausts the budget,
 in which case it is zero. The budget never blocks additional practice.
 
 The web labels `impossible`, `challenging`, `good`, and `too_easy` guide practice
 choices separately from mastery. Only compatible reports in the same key can open
 prerequisites for ordinary practice; review/transfer still require success evidence.
-Legacy detailed CLI reports retain their rules: `difficulty: easy` alone does not pass. Unsuccessful tasks reported as `difficulty: hard` and
-cancelled tasks are deferred for the same exercise and key that day.
+Legacy detailed CLI reports retain their rules: `difficulty: easy` alone does not
+pass. Unsuccessful tasks reported as `difficulty: hard` and cancelled tasks are deferred for the same exercise and key that day.
 `suggest.deferred_today` preserves original notes and task IDs. Other candidates
 must still meet prerequisites. With no candidate, `action: pause` suggests stopping
 or simplifying a condition. Deferred tasks return the next day and may be explicitly
 retried the same day. A new result takes precedence over an earlier deferral.
 
-Use `cancel` for an unattempted task and `record` if any practice occurred. Preserve
-the user's exact reason. Keep criteria, original notes, and assigned conditions;
+Legacy `cancel` retains its unattempted-task semantics and required reason.
+`discard` closes an unfinished assignment while preserving any recording; `--reason`
+is optional. `--choice already_practiced` or `--choice too_easy` records explicit
+familiarity for practice selection. Free text is preserved verbatim and never parsed
+as skill evidence. Keep criteria, original notes, and assigned conditions;
 same-day success is not evidence of later retention or unattempted skills.
 
 Run these from the repository root **only when the user actually starts practice**.
@@ -274,6 +295,7 @@ uv run --project practice jazz assign E01 --key C --bpm 60 --reason 'Check the s
 uv run --project practice jazz record T-ASSIGNED_ID --input /tmp/jazz-result.json
 uv run --project practice jazz correct T-ASSIGNED_ID --input /tmp/jazz-corrected-result.json
 uv run --project practice jazz cancel T-ASSIGNED_ID --reason 'This task was not practiced'
+uv run --project practice jazz discard T-ASSIGNED_ID --reason 'Optional original reason'
 ```
 
 Example result format, not user evidence. Fill only information the user supplied;
@@ -305,14 +327,14 @@ results; `event_id` identifies each event. Writes use a file lock.
 
 | Main column | Meaning |
 | --- | --- |
-| event_type | assigned / reported / cancelled / retired / corrected |
+| event_type | assigned / completed / reported / corrected / discarded / cancelled / retired |
 | target_json | Assigned key, BPM, hands, rhythm, bass, voicing, melody, material, and criteria |
 | actual_json | Conditions the user reports actually practicing |
 | checks_json | Notes, pulse, and uninterrupted playing: true / false / null |
 | clean_runs | Consecutive successful runs under the conditions; empty when unknown |
 | raw_note | Original user text, including commas and newlines; optional with a web label |
 | difficulty | Web labels: impossible / challenging / good / too_easy; legacy CLI values retained |
-| reason | Assignment/closure reason; web reports store a session-reflection-v1 JSON timing snapshot |
+| reason | Assignment/legacy closure text; completed/reflection events store a session-reflection-v1 timing snapshot; discarded events store choice + exact note JSON |
 | hypothesis | Coach interpretation, separate from the original note |
 | supersedes | ID of the previous result replaced by a correction |
 

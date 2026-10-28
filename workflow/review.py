@@ -32,6 +32,7 @@ SPEC = ["key", "bpm", "bars", "arrangement", "rhythm", "bass", "voicing", "melod
 CHECKS = ["notes_correct", "steady_pulse", "no_stops"]
 RATINGS = {"impossible": "Impossible", "challenging": "Challenging",
            "good": "Good practice", "too_easy": "Too easy to be useful"}
+DISCARD_CHOICES = {"already_practiced": "Already familiar", "too_easy": "Too easy"}
 STATES = {"unknown": "Unassessed", "attempted": "Attempted", "success": "Same-day success", "retained": "Later retention"}
 RESULTS = {"unknown": "Assessment pending", "unmet": "Target not met", "success": "Criteria met"}
 DOMAINS = {"melody": "Melody", "rhythm": "Rhythm", "bass": "Bass", "voicing": "Voicing"}
@@ -245,20 +246,30 @@ def records(events):
             number(target["bars"], "target bars", 1, 1000)
             require(target["criteria"].get("checks") == CHECKS, "Unknown task criteria.")
             number(target["criteria"]["min_clean_runs"], "min_clean_runs", 1, 20)
-            tasks[task_id] = {"assignment": event, "target": target, "report": None,
-                              "cancelled": False, "retired": False, "cancellation": None}
+            tasks[task_id] = {"assignment": event, "target": target, "report": None, "completion": None,
+                              "cancelled": False, "retired": False, "discarded": False, "cancellation": None}
             continue
         require(task_id in tasks, "This result has no matching assignment.")
         task = tasks[task_id]
         require(event["release"] == task["assignment"]["release"] and event["exercise_id"] == task["assignment"]["exercise_id"], "The task version or exercise ID has changed.")
-        if kind in ("cancelled", "retired"):
-            require(not task["report"] and not task["cancelled"], "A resolved task cannot be cancelled.")
+        if kind in ("cancelled", "retired", "discarded"):
+            require(is_pending(task), "A resolved task cannot be cancelled.")
+            if kind == "discarded":
+                details = json.loads(event["reason"])
+                require(isinstance(details, dict) and set(details) == {"choice", "note"}, "Invalid discard reason.")
+                validate_discard_reason(details["choice"], details["note"])
             task["cancelled"] = True
             task["retired"] = kind == "retired"
+            task["discarded"] = kind == "discarded"
             task["cancellation"] = event
-        elif kind in ("reported", "corrected"):
+        elif kind in ("reported", "corrected", "completed"):
             require(not task["cancelled"], "A cancelled task cannot receive a report.")
-            if kind == "reported":
+            if kind == "completed":
+                require(is_pending(task) and not event["supersedes"], "This task is already resolved.")
+                require(reflection_observations(event) is not None and event["actual_json"] == "{}"
+                        and event["checks_json"] == "{}" and not event["clean_runs"] and not event["difficulty"],
+                        "Completion cannot infer performance or feedback.")
+            elif kind == "reported":
                 require(task["report"] is None and not event["supersedes"], "A result already exists. Use correct to revise it.")
             else:
                 require(task["report"] and event["supersedes"] == task["report"]["event_id"], "The correction does not refer to the latest report.")
@@ -267,7 +278,7 @@ def records(events):
             assigned_at = datetime.fromisoformat(task["assignment"]["recorded_at"])
             assigned_day = assigned_at.astimezone(ZoneInfo(observations["timezone"])).date() if observations else assigned_at.date()
             require(practice_day >= assigned_day, "The practice date is earlier than the assignment date.")
-            require(event["raw_note"].strip() or event["difficulty"] in RATINGS, "The original user note is required.")
+            require(kind == "completed" or event["raw_note"].strip() or event["difficulty"] in RATINGS, "The original user note is required.")
             actual = json.loads(event["actual_json"])
             checks = json.loads(event["checks_json"])
             validate_observations(actual, checks)
@@ -278,21 +289,52 @@ def records(events):
                     number(float(event[field]), field, 0, high)
             if event["clean_runs"]:
                 require(float(event["clean_runs"]).is_integer(), "Consecutive successful runs must be an integer.")
-            task["report"] = event
+            task["completion" if kind == "completed" else "report"] = event
         else:
             raise ValueError(f"Unsupported event_type: {kind}")
     return list(tasks.values())
 
 
+def is_pending(task):
+    return not task["report"] and not task["completion"] and not task["cancelled"]
+
+
+def practice_record(task):
+    return task["report"] or task["completion"]
+
+
 def reflection_observations(report):
     """Automatic timing snapshot; legacy reports retain their original observations."""
-    if not report or report["difficulty"] not in RATINGS or not report["reason"].startswith('{'):
+    if not report or (report["difficulty"] not in RATINGS and report["event_type"] != "completed") or not report["reason"].startswith('{'):
         return None
     try:
         value = json.loads(report["reason"])
     except ValueError:
         return None
     return value if isinstance(value, dict) and value.get("source") == "session-reflection-v1" else None
+
+
+def validate_discard_reason(choice, note):
+    require(isinstance(choice, str) and (choice == "" or choice in DISCARD_CHOICES), "Invalid discard choice.")
+    require(isinstance(note, str), "The reason must be text.")
+
+
+def discard_details(task):
+    return json.loads(task["cancellation"]["reason"]) if task["discarded"] else {"choice": "", "note": ""}
+
+
+def practice_preference(task):
+    """An explicit familiarity choice opens practice, without creating performance evidence."""
+    if task["report"]:
+        return task["report"]["difficulty"]
+    choice = discard_details(task)["choice"]
+    return {"already_practiced": "good", "too_easy": "too_easy"}.get(choice)
+
+
+def activity_day(task):
+    if practice_record(task):
+        return iso_day(practice_record(task)["practice_date"])
+    return datetime.fromisoformat(task["cancellation"]["recorded_at"]).date()
 
 
 def validate_observations(actual, checks):
@@ -364,19 +406,20 @@ def practice_ready(data, tasks, exercise_id, key):
     """Comfort can open practice choices, but never supplies success or retention evidence."""
     if goal_successes(data, tasks, exercise_id, key, data["default_bpm"]):
         return True
-    reports = [t for t in tasks if t["report"] and t["assignment"]["exercise_id"] == exercise_id
+    reports = [t for t in tasks if (t["report"] or discard_details(t)["choice"]) and t["assignment"]["exercise_id"] == exercise_id
                and t["target"]["key"] == key and not incompatible_target_fields(data, t)]
-    latest = max(enumerate(reports), key=lambda pair: (pair[1]["report"]["practice_date"], pair[0]), default=(0, None))[1]
-    return bool(latest and latest["report"]["difficulty"] in ("good", "too_easy"))
+    latest = max(enumerate(reports), key=lambda pair: (activity_day(pair[1]), pair[0]), default=(0, None))[1]
+    return bool(latest and practice_preference(latest) in ("good", "too_easy"))
 
 
-def reflection_suggestion(data, tasks, latest, deferred):
-    recent = [t for _, t in latest.values() if t["report"] and t["report"]["difficulty"] in RATINGS
+def preference_suggestion(data, tasks, today, deferred):
+    experiences = latest_activity([t for t in tasks if t["report"] or discard_details(t)["choice"]], today)
+    recent = [t for _, t in experiences.values() if practice_preference(t) in RATINGS
               and not incompatible_target_fields(data, t)]
     if not recent:
         return None
-    task = max(recent, key=lambda t: (t["report"]["practice_date"], t["assignment"]["recorded_at"]))
-    target, rating = task["target"], task["report"]["difficulty"]
+    task = max(recent, key=lambda t: (activity_day(t), t["assignment"]["recorded_at"]))
+    target, rating = task["target"], practice_preference(task)
     exercise, key = task["assignment"]["exercise_id"], target["key"]
     observations = reflection_observations(task["report"])
     bpm = (observations or {}).get("metronome_bpm") or target["bpm"]
@@ -391,7 +434,7 @@ def reflection_suggestion(data, tasks, latest, deferred):
         if ((lesson["id"], key) not in deferred and not practice_ready(data, tasks, lesson["id"], key)
                 and all(practice_ready(data, tasks, parent, key) for parent in lesson["prerequisites"])):
             return {"action": "practice", "exercise_id": lesson["id"], "key": key, "bpm": bpm,
-                    "reason": "Try the next exercise based on how the practice felt."}
+                    "reason": "Try the next exercise based on your selection." if task["discarded"] else "Try the next exercise based on how the practice felt."}
     if (exercise, key) not in deferred and eligible:
         return {"action": "practice", "exercise_id": exercise, "key": key,
                 "bpm": min(data["maximum_bpm"], bpm + 10) if rating == "too_easy" else bpm,
@@ -402,8 +445,8 @@ def reflection_suggestion(data, tasks, latest, deferred):
 def cell(data, tasks, exercise_id, key, bpm=None):
     bpm = data["default_bpm"] if bpm is None else bpm
     successes = goal_successes(data, tasks, exercise_id, key, bpm)
-    attempted = [t for t in tasks if t["report"] and t["assignment"]["exercise_id"] == exercise_id
-                 and json.loads(t["report"]["actual_json"]).get("key", t["target"]["key"]) == key]
+    attempted = [t for t in tasks if practice_record(t) and t["assignment"]["exercise_id"] == exercise_id
+                 and json.loads(practice_record(t)["actual_json"]).get("key", t["target"]["key"]) == key]
     state = "retained" if retained(successes, data["retention_days"]) else "success" if successes else "attempted" if attempted else "unknown"
     return {"state": state, "attempts": len(attempted), "successes": len(successes),
             "last_success": max((t["report"]["practice_date"] for t in successes), default=None)}
@@ -415,12 +458,9 @@ def latest_activity(tasks, today):
     for task in tasks:
         if task["retired"]:
             continue  # A release transition is not a practice attempt or a skipped exercise.
-        if task["report"]:
-            day = iso_day(task["report"]["practice_date"])
-        elif task["cancellation"]:
-            day = datetime.fromisoformat(task["cancellation"]["recorded_at"]).date()
-        else:
+        if not practice_record(task) and not task["cancellation"]:
             continue
+        day = activity_day(task)
         token = (task["assignment"]["exercise_id"], task["target"]["key"])
         if day <= today and (token not in latest or day >= latest[token][0]):
             latest[token] = (day, task)
@@ -429,7 +469,7 @@ def latest_activity(tasks, today):
 
 def suggestion(data, tasks, today=None):
     today = today or date.today()
-    pending = [t for t in tasks if not t["report"] and not t["cancelled"]]
+    pending = [t for t in tasks if is_pending(t)]
     if pending:
         task = pending[0]
         return {"action": "resume", "task_id": task["assignment"]["task_id"], "target": task["target"], "reason": "You have an unfinished task. Continue it before starting another."}
@@ -439,23 +479,28 @@ def suggestion(data, tasks, today=None):
         if day != today:
             continue
         cancellation, report = task["cancellation"], task["report"]
-        if cancellation or (report["difficulty"] == "hard" and outcome(task) != "success"):
+        if cancellation or (report and report["difficulty"] == "hard" and outcome(task) != "success"):
             deferred[token] = {"exercise_id": token[0], "key": token[1],
                                "task_id": task["assignment"]["task_id"],
-                               "reason": cancellation["reason"] if cancellation else report["raw_note"]}
+                               "reason": discard_details(task)["note"] if task["discarded"] else cancellation["reason"] if cancellation else report["raw_note"]}
     context = {"deferred_today": list(deferred.values())}
     for milestone in data["milestones"]:
         if (milestone["exercise_id"], milestone["key"]) in deferred:
             continue
         info = cell(data, tasks, milestone["exercise_id"], milestone["key"], milestone["bpm"])
         delay = data["maintenance_days"] if info["state"] == "retained" else data["retention_days"]
-        if info["last_success"] and (today - iso_day(info["last_success"])).days >= delay:
+        # A finished review resets its reminder without claiming that retention passed.
+        attempts = [activity_day(t) for t in tasks if practice_record(t)
+                    and t["assignment"]["exercise_id"] == milestone["exercise_id"] and t["target"]["key"] == milestone["key"]
+                    and not incompatible_target_fields(data, t) and activity_day(t) <= today]
+        last_review = max(attempts, default=iso_day(info["last_success"]) if info["last_success"] else today)
+        if info["last_success"] and (today - last_review).days >= delay:
             successes = goal_successes(data, tasks, milestone["exercise_id"], milestone["key"], milestone["bpm"])
             latest_success = max(successes, key=lambda t: t["report"]["practice_date"])
             actual_bpm = json.loads(latest_success["report"]["actual_json"])["bpm"]
             return {"action": "review", **milestone, "bpm": actual_bpm, **context,
                     "reason": "It is time to check later retention at the tempo of your previous success."}
-    reflection_next = reflection_suggestion(data, tasks, latest, deferred)
+    reflection_next = preference_suggestion(data, tasks, today, deferred)
     if reflection_next:
         return reflection_next | context
     by_id = {x["id"]: x for x in data["exercises"]}
@@ -496,7 +541,7 @@ def daily_summary(data, tasks, profile, today=None):
     number(budget, "daily_minutes", 1, 1440)
     reports = []
     for task in tasks:
-        report = task["report"]
+        report = practice_record(task)
         if not report:
             continue
         observations = reflection_observations(report)
@@ -542,19 +587,24 @@ def new_event(kind, task_id, data, exercise_id, purpose="practice"):
     return event
 
 
-def assign(root, data, exercise_id, key=None, bpm=None, purpose="practice", reason=""):
+def assign(root, data, exercise_id, key=None, bpm=None, purpose="practice", reason="", task_id=None):
     require(purpose in ("practice", "diagnostic", "review", "transfer"), "Invalid purpose.")
     target = target_for(data, exercise_id, key, bpm)
+    require(task_id is None or isinstance(task_id, str) and re.fullmatch(r"T-[a-f0-9]{10}", task_id), "Invalid task ID.")
     with log_lock(root):
         events = read_events(root)
         tasks = records(events)
-        require(not any(not t["report"] and not t["cancelled"] for t in tasks), "Report or cancel the unfinished task first.")
+        existing = next((t for t in tasks if t["assignment"]["task_id"] == task_id), None)
+        if existing:
+            require(existing["target"] == target and existing["assignment"]["purpose"] == purpose, "This task ID already belongs to another assignment.")
+            return {"task_id": task_id, "target": existing["target"], "reason": existing["assignment"]["reason"]}
+        require(not any(is_pending(t) for t in tasks), "Report or cancel the unfinished task first.")
         lesson = next(x for x in data["exercises"] if x["id"] == exercise_id)
         if purpose != "diagnostic":
             for parent in lesson["prerequisites"]:
                 ready = practice_ready(data, tasks, parent, target["key"]) if purpose == "practice" else goal_successes(data, tasks, parent, target["key"], data["default_bpm"])
                 require(ready, f"First complete prerequisite {parent} in the same key. Use diagnostic explicitly for a diagnostic task.")
-        event = new_event("assigned", "T-" + uuid.uuid4().hex[:10], data, exercise_id, purpose)
+        event = new_event("assigned", task_id or "T-" + uuid.uuid4().hex[:10], data, exercise_id, purpose)
         event.update(target_json=jdump(target), reason=reason)
         records(events + [event])
         append_event(root, event)
@@ -613,20 +663,43 @@ def cancel(root, data, task_id, reason):
     return {"cancelled": task_id}
 
 
+def discard(root, data, task_id, reason="", choice=""):
+    """Close an unfinished assignment without deleting input or inventing a result."""
+    from sessions import SessionStore
+
+    validate_discard_reason(choice, reason)
+    with log_lock(root):
+        events = read_events(root)
+        task = next((t for t in records(events) if t["assignment"]["task_id"] == task_id), None)
+        require(task is not None, "Task not found.")
+        details = {"choice": choice, "note": reason}
+        if task["discarded"]:
+            require(discard_details(task) == details, "This task was already discarded with a different reason.")
+            return {"discarded": task_id}
+        require(is_pending(task), "Only an unfinished task can be discarded.")
+        require(not any(s["status"] == "recording" for s in SessionStore(root).list(task_id)),
+                "Finish and save the current practice session first.")
+        event = new_event("discarded", task_id, data, task["assignment"]["exercise_id"], task["assignment"]["purpose"])
+        event.update(release=task["assignment"]["release"], reason=jdump(details))
+        records(events + [event])
+        append_event(root, event)
+    return {"discarded": task_id}
+
+
 def status(root, data):
     tasks = records(read_events(root))
     profile_path = Path(root) / "profile.json"
     profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
-    reported = [t for t in tasks if t["report"]]
+    reported = [t for t in tasks if practice_record(t)]
     goals = [{**m, **cell(data, tasks, **m)} for m in data["milestones"]]
     return {"version": data["version"], "profile": profile, "evidence": "Self-reported / unassessed does not mean failed",
-            **practice_totals([t["report"] for t in reported]),
+            **practice_totals([practice_record(t) for t in reported]),
             "today": daily_summary(data, tasks, profile),
             "goals": goals, "next": suggestion(data, tasks, datetime.now(ZoneInfo(profile.get("timezone", "UTC"))).date()),
             "recent": [{"task_id": t["assignment"]["task_id"], "exercise": t["assignment"]["exercise_id"],
-                        "date": t["report"]["practice_date"], "actual": json.loads(t["report"]["actual_json"]),
-                        "outcome": outcome(t), "difficulty": t["report"]["difficulty"],
-                        "raw_note": t["report"]["raw_note"], "hypothesis": t["report"]["hypothesis"]}
+                        "date": practice_record(t)["practice_date"], "actual": json.loads(practice_record(t)["actual_json"]),
+                        "outcome": outcome(t), "difficulty": practice_record(t)["difficulty"],
+                        "raw_note": practice_record(t)["raw_note"], "hypothesis": practice_record(t)["hypothesis"]}
                        for t in reported[-5:]]}
 
 
@@ -670,8 +743,8 @@ def render_report(root, data, output=None):
         width = 100 * count / len(relevant) if relevant else 0
         bars.append(f'<div class="domain"><span>{label}</span><div class="track"><div style="width:{width:.1f}%"></div></div><span>{count}/{len(relevant)}</span></div>')
     history = []
-    for task in reversed([t for t in tasks if t["report"]][-20:]):
-        r = task["report"]
+    for task in reversed([t for t in tasks if practice_record(t)][-20:]):
+        r = practice_record(task)
         actual = json.loads(r["actual_json"])
         history.append(f'<tr><td>{escape(r["practice_date"])}<small>{escape(r["task_id"])}</small></td><td>{escape(display_builtin(task["target"]["title"]))}</td>'
                        f'<td>{escape(task["target"]["key"])} / {task["target"]["bpm"]} BPM<small>{escape(ARRANGEMENTS.get(task["target"]["arrangement"], task["target"]["arrangement"]))}</small></td>'
@@ -746,13 +819,17 @@ def main(argv=None):
     cancelling = sub.add_parser("cancel")
     cancelling.add_argument("task_id")
     cancelling.add_argument("--reason", required=True)
+    discarding = sub.add_parser("discard", help="Close an unfinished task; preserve saved input")
+    discarding.add_argument("task_id")
+    discarding.add_argument("--reason", default="")
+    discarding.add_argument("--choice", choices=list(DISCARD_CHOICES), default="")
     args = parser.parse_args(argv)
     try:
         data = curriculum(args.curriculum)
         development_source = (HERE / "publish.py").exists()
         production_root = (HERE.parent / "practice").resolve()
         if development_source and args.practice_root.resolve() == production_root:
-            require(args.command not in ("assign", "record", "correct", "cancel", "serve"),
+            require(args.command not in ("assign", "record", "correct", "cancel", "discard", "serve"),
                     "Development source cannot write the real practice log. Use ./jazz in the practice project. For tests, set --practice-root to a temporary directory.")
             if args.command == "report":
                 require(args.output is not None and not args.output.resolve().is_relative_to(production_root),
@@ -779,6 +856,8 @@ def main(argv=None):
             result = record_result(args.practice_root, data, args.task_id, json.loads(args.input.read_text()), args.command == "correct")
         elif args.command == "cancel":
             result = cancel(args.practice_root, data, args.task_id, args.reason)
+        elif args.command == "discard":
+            result = discard(args.practice_root, data, args.task_id, args.reason, args.choice)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (ValueError, KeyError, OSError, TypeError, yaml.YAMLError) as exc:

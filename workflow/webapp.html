@@ -11,11 +11,9 @@
 </head>
 <body>
   <aside class="sidebar">
-    <a class="brand" href="#practice" aria-label="My Jazz Tutor practice room" data-i18n-aria-label="My Jazz Tutor practice room"><span class="brand-mark">j.</span><span>MY JAZZ TUTOR<small><span data-i18n="Your daily practice room">Your daily practice room</span></small></span></a>
+    <a class="brand" href="#list" aria-label="My Jazz Tutor practice room" data-i18n-aria-label="My Jazz Tutor practice room"><span class="brand-mark">j.</span><span>MY JAZZ TUTOR<small><span data-i18n="Your daily practice room">Your daily practice room</span></small></span></a>
     <nav aria-label="Main navigation" data-i18n-aria-label="Main navigation">
-      <button class="nav-button active" data-view="practice"><span aria-hidden="true">◉</span> <span data-i18n="Practice room">Practice room</span></button>
-      <button class="nav-button" data-view="history"><span aria-hidden="true">≡</span> <span data-i18n="Practice history">Practice history</span></button>
-      <button class="nav-button" data-view="progress"><span aria-hidden="true">▥</span> <span data-i18n="Progress">Progress</span></button>
+      <button class="nav-button active" data-view="list"><span aria-hidden="true">≡</span> <span data-i18n="Practice list">Practice list</span></button>
       <button class="nav-button" data-view="settings"><span aria-hidden="true">⚙</span> <span data-i18n="Settings">Settings</span></button>
     </nav>
     <div class="sidebar-bottom"><div class="piano-mini" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p><span data-i18n="Small steps.">Small steps.</span><br><span data-i18n="Music of your own.">Music of your own.</span></p><span id="version"><span data-i18n="Connecting">Connecting</span></span></div>
@@ -24,51 +22,15 @@
     <header class="topbar"><span class="eyebrow" id="today-date"><span data-i18n="MY DAILY PRACTICE">MY DAILY PRACTICE</span></span><div class="topbar-right"><span id="preview-badge" class="tag warning" hidden><span data-i18n="Preview · temporary records">Preview · temporary records</span></span><span id="connection" class="connection"><span data-i18n="Connecting">Connecting</span></span></div></header>
     <div id="error" class="notice error" role="alert" hidden></div>
     <div id="recovery" class="notice recovery" hidden><div><strong><span data-i18n="There is practice to recover.">There is practice to recover.</span></strong><p><span data-i18n="Upload input saved in this browser and close the interrupted session.">Upload input saved in this browser and close the interrupted session.</span></p></div><button id="recover-btn" class="button secondary"><span data-i18n="Recover practice">Recover practice</span></button></div>
-    <section id="view-practice" class="view">
-      <div class="page-heading"><div><p class="eyebrow"><span data-i18n="MAKE A LITTLE MUSIC">MAKE A LITTLE MUSIC</span></p><h1><span data-i18n="One bar at a time.">One bar at a time.</span></h1><p class="subtle"><span data-i18n="Find your flow. Build a jazz vocabulary of your own.">Find your flow. Build a jazz vocabulary of your own.</span></p></div><div class="daily-summary"><span><span data-i18n="Practice today">Practice today</span></span><strong id="daily-time">0<span> / 30 min</span></strong><small id="daily-count"><span data-i18n="No practice recorded yet">No practice recorded yet</span></small></div></div>
-      <div id="suggestion-note" class="suggestion-note"></div>
-      <section class="card lesson-card" aria-labelledby="lesson-title">
-        <div class="section-top"><span class="eyebrow" id="lesson-kind"><span data-i18n="Next task">Next task</span></span><span class="tag" id="lesson-phase"><span data-i18n="Starting point">Starting point</span></span></div>
-        <h2 id="lesson-title"><span data-i18n="Loading your exercise">Loading your exercise</span></h2>
-        <p id="lesson-purpose" class="lesson-purpose"></p>
-        <div id="target-meta" class="meta-row"></div>
-        <p id="lesson-instructions" class="instructions"></p>
-        <details id="lesson-material" class="lesson-material"><summary data-i18n="Notes and chord progression">Notes and chord progression</summary>
-        <div class="chord-label"><span><span data-i18n="CHORD PROGRESSION">CHORD PROGRESSION</span></span><span id="bar-position"><span data-i18n="One chord per bar">One chord per bar</span></span></div>
-        <div id="chords" class="chords"></div>
-        <div id="hand-notes" class="hand-notes"></div>
-        </details>
-        <div class="criterion"><span class="criterion-icon" aria-hidden="true">✓</span><div><strong><span data-i18n="Success criteria">Success criteria</span></strong><p id="criterion-text"></p></div></div>
-        <details id="chooser" class="chooser"><summary><span data-i18n="Choose another exercise">Choose another exercise</span></summary><div class="chooser-fields"><label><span data-i18n="Exercise">Exercise</span><select id="exercise-select"></select></label><label><span data-i18n="Key">Key</span><select id="key-select"></select></label><label><span data-i18n="Target BPM">Target BPM</span><input id="goal-bpm" type="number" min="40" max="120" value="60"></label></div><p id="eligibility" class="subtle"></p></details>
-        <div class="lesson-actions"><button id="skip-btn" class="text-button" hidden><span data-i18n="Not practiced · skip">Not practiced · skip</span></button><button id="manual-record-btn" class="text-button" hidden><span data-i18n="Already practiced · add report">Already practiced · add report</span></button></div>
-      </section>
-      <section class="card score-card" aria-labelledby="score-title">
-        <div class="section-top score-heading"><h2 id="score-title" data-i18n="Practice">Practice</h2><div class="score-legend"><span class="target-swatch" data-i18n="Assigned notes">Assigned notes</span><span class="input-swatch" data-i18n="Your MIDI input">Your MIDI input</span></div></div>
-        <div class="score-toolbar"><span id="score-position"></span><div><label class="check-line"><input id="score-follow" type="checkbox" checked><span data-i18n="Follow playback">Follow playback</span></label></div></div>
-        <div id="score-viewport" class="score-viewport" tabindex="0" role="region" aria-label="Scrollable practice score" data-i18n-aria-label="Scrollable practice score" aria-describedby="score-help"></div>
-        <div id="score-material-help"></div>
-        <div class="practice-controls" role="group" aria-label="Practice playback" data-i18n-aria-label="Practice playback">
-          <div class="playback-bar">
-            <div class="transport-buttons"><button id="practice-btn" class="button primary" disabled><span data-i18n="Start practice">Start practice</span></button><button id="finish-btn" class="button secondary" disabled><span data-i18n="Finish">Finish</span></button></div>
-            <div class="playback-tempo"><div class="tempo-control"><button id="tempo-down" class="round-button" aria-label="Decrease BPM by 5" data-i18n-aria-label="Decrease BPM by 5">−</button><div><input id="tempo" type="number" min="40" max="120" value="60" aria-label="Metronome BPM" data-i18n-aria-label="Metronome BPM"><span>BPM</span></div><button id="tempo-up" class="round-button" aria-label="Increase BPM by 5" data-i18n-aria-label="Increase BPM by 5">+</button></div><input id="tempo-range" class="tempo-range" type="range" min="40" max="120" value="60" aria-label="Metronome tempo slider" data-i18n-aria-label="Metronome tempo slider"></div>
-            <div class="playback-progress"><div id="beats" class="beats" aria-label="Current beat" data-i18n-aria-label="Current beat"><span>1</span><span>2</span><span>3</span><span>4</span></div><span id="elapsed">00:00</span><span id="transport-state" class="transport-status"><span data-i18n="Ready">Ready</span></span></div>
-          </div>
-          <p class="tempo-hint" data-i18n="Quarter-note beats · changes on the next beat">Quarter-note beats · changes on the next beat</p>
-          <details id="playback-settings" class="playback-settings"><summary data-i18n="Sound &amp; MIDI settings">Sound &amp; MIDI settings</summary><div class="playback-settings-grid">
-          <div class="sound-controls">
-            <div class="sound-row"><label class="switch-label"><input id="click-toggle" type="checkbox" checked><span class="switch"></span><span><span data-i18n="Metronome click">Metronome click</span></span></label><input id="click-volume" type="range" min="0" max="1" step="0.01" value="0.35" aria-label="Metronome volume" data-i18n-aria-label="Metronome volume"></div>
-            <div class="sound-row"><label class="switch-label"><input id="pad-toggle" type="checkbox"><span class="switch"></span><span><span data-i18n="Chord pad">Chord pad</span></span></label><input id="pad-volume" type="range" min="0" max="0.6" step="0.01" value="0.18" aria-label="Chord pad volume" data-i18n-aria-label="Chord pad volume"></div>
-            <p class="sound-hint"><span data-i18n="Soft chords follow the progression.">Soft chords follow the progression.</span></p>
-          </div>
-          <div class="midi-area"><div class="section-top"><div><span id="midi-light" class="midi-light"></span><strong><span data-i18n="MIDI input">MIDI input</span></strong></div><button id="midi-connect" class="midi-button"><span data-i18n="Connect">Connect</span></button></div><select id="midi-input" aria-label="MIDI input to record" hidden data-i18n-aria-label="MIDI input to record"></select><p id="midi-status"><span data-i18n="You can practice without a MIDI connection.">You can practice without a MIDI connection.</span></p></div>
-          </div></details>
-          <small id="save-status" class="save-status"><span data-i18n="Timing starts when you begin practice.">Timing starts when you begin practice.</span></small>
-        </div>
-        <p id="score-help" class="field-note" data-i18n="Blue marks show when you press keys during playback; tails show key holds, not pedal sustain. This is a live view of the current pass, not a score of your performance.">Blue marks show when you press keys during playback; tails show key holds, not pedal sustain. This is a live view of the current pass, not a score of your performance.</p>
-        <details class="score-details"><summary data-i18n="About the live display">About the live display</summary><p data-i18n="Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.">Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.</p></details>
-      </section>
+    <section id="view-list" class="view">
+      <div class="page-heading"><div><p class="eyebrow" data-i18n="PRACTICE JOURNAL">PRACTICE JOURNAL</p><h1 data-i18n="Your practice.">Your practice.</h1><p class="subtle" data-i18n="Add an exercise, then open it when you are ready.">Add an exercise, then open it when you are ready.</p></div><div class="daily-summary"><span data-i18n="Practice today">Practice today</span><strong id="daily-time">0<span> / 30 min</span></strong><small id="daily-count"></small></div></div>
+      <div class="list-toolbar"><button id="new-practice" class="button primary" data-i18n="New practice">New practice</button><p id="pending-hint" class="subtle"></p></div>
+      <details class="list-filters"><summary data-i18n="Filter practices">Filter practices</summary>
+      <div class="card filters"><label><span data-i18n="Exercise">Exercise</span><select id="filter-exercise"><option value="" data-i18n="All exercises">All exercises</option></select></label><label><span data-i18n="Key">Key</span><select id="filter-key"><option value="" data-i18n="All keys">All keys</option></select></label><label><span data-i18n="From">From</span><input id="filter-from" type="date"></label><label><span data-i18n="To">To</span><input id="filter-to" type="date"></label></div>
+      </details>
+      <div id="history-list" class="history-list"></div>
       <section id="record-panel" class="card record-card" hidden>
-        <p class="eyebrow" data-i18n="REFLECT &amp; CONTINUE">REFLECT &amp; CONTINUE</p>
+        <p class="eyebrow" data-i18n="PRACTICE FEEDBACK">PRACTICE FEEDBACK</p>
         <h2 id="record-title" data-i18n="How did your practice go?">How did your practice go?</h2>
         <p class="field-note" data-i18n="One tap saves your feedback. You can change it anytime.">One tap saves your feedback. You can change it anytime.</p>
         <div class="rating-options" role="group" aria-labelledby="record-title">
@@ -86,27 +48,84 @@
           </form>
         </details>
         <div id="measurements" class="measurements"></div>
-        <div id="feedback-panel" hidden><p id="feedback-next"></p><button id="next-btn" class="button primary" data-i18n="Next practice">Next practice</button></div>
-        <button id="close-record" type="button" class="text-button" data-i18n="Report later">Report later</button>
+
+        <button id="close-record" type="button" class="text-button" data-i18n="Close feedback">Close feedback</button>
       </section>
-      <div class="practice-footer"><span><span data-i18n="One task at a time. Several in a day.">One task at a time. Several in a day.</span></span><span><span data-i18n="Practice at a pace that feels right.">Practice at a pace that feels right.</span></span></div>
     </section>
-    <section id="view-history" class="view" hidden>
-      <div class="page-heading"><div><p class="eyebrow"><span data-i18n="PRACTICE JOURNAL">PRACTICE JOURNAL</span></p><h1><span data-i18n="Your practice journal.">Your practice journal.</span></h1><p class="subtle"><span data-i18n="Revisit the conditions and notes from each day.">Revisit the conditions and notes from each day.</span></p></div></div>
-      <div class="card filters"><label><span data-i18n="Exercise">Exercise</span><select id="filter-exercise"><option value="" data-i18n="All exercises">All exercises</option></select></label><label><span data-i18n="Key">Key</span><select id="filter-key"><option value="" data-i18n="All keys">All keys</option></select></label><label><span data-i18n="From">From</span><input id="filter-from" type="date"></label><label><span data-i18n="To">To</span><input id="filter-to" type="date"></label></div>
-      <div id="history-list" class="history-list"></div>
-    </section>
-    <section id="view-progress" class="view" hidden>
-      <div class="page-heading"><div><p class="eyebrow"><span data-i18n="SMALL STEPS, REAL PROGRESS">SMALL STEPS, REAL PROGRESS</span></p><h1><span data-i18n="Your growing vocabulary.">Your growing vocabulary.</span></h1><p class="subtle"><span data-i18n="These are milestones in this curriculum, not an overall jazz ability score.">These are milestones in this curriculum, not an overall jazz ability score.</span></p></div></div>
-      <div id="goals" class="goals"></div><p class="field-note"><span data-i18n="Same-day success and repeating the same conditions at least two days later are separate observations. All results are self-reported.">Same-day success and repeating the same conditions at least two days later are separate observations. All results are self-reported.</span></p>
+    <section id="view-practice" class="view" hidden>
+      <div class="room-heading"><button id="back-list" class="text-button" data-i18n="Back to practice list">Back to practice list</button><span class="eyebrow" data-i18n="Practice room">Practice room</span></div>
+      <section class="card lesson-card" aria-labelledby="lesson-title">
+        <div class="section-top"><span class="eyebrow" id="lesson-kind"><span data-i18n="Next task">Next task</span></span><span class="tag" id="lesson-phase"><span data-i18n="Starting point">Starting point</span></span></div>
+        <h2 id="lesson-title"><span data-i18n="Loading your exercise">Loading your exercise</span></h2>
+        <p id="lesson-purpose" class="lesson-purpose"></p>
+        <div id="target-meta" class="meta-row"></div>
+        <p id="lesson-instructions" class="instructions"></p>
+        <details id="lesson-material" class="lesson-material"><summary data-i18n="Notes and chord progression">Notes and chord progression</summary>
+        <div class="chord-label"><span><span data-i18n="CHORD PROGRESSION">CHORD PROGRESSION</span></span><span id="bar-position"><span data-i18n="One chord per bar">One chord per bar</span></span></div>
+        <div id="chords" class="chords"></div>
+        <div id="hand-notes" class="hand-notes"></div>
+        </details>
+        <div class="criterion"><span class="criterion-icon" aria-hidden="true">✓</span><div><strong><span data-i18n="Success criteria">Success criteria</span></strong><p id="criterion-text"></p></div></div>
+
+        <div class="lesson-actions"><button id="discard-btn" class="text-button" hidden><span data-i18n="Discard task">Discard task</span></button></div>
+      </section>
+      <section class="card score-card" aria-labelledby="score-title">
+        <div class="section-top score-heading"><h2 id="score-title" data-i18n="Practice">Practice</h2><div class="score-legend"><span class="target-swatch" data-i18n="Assigned notes">Assigned notes</span><span class="input-swatch" data-i18n="Your MIDI input">Your MIDI input</span></div></div>
+        <div class="score-toolbar"><span id="score-position"></span><div><label class="check-line"><input id="score-follow" type="checkbox" checked><span data-i18n="Follow playback">Follow playback</span></label></div></div>
+        <div id="score-viewport" class="score-viewport" tabindex="0" role="region" aria-label="Scrollable practice score" data-i18n-aria-label="Scrollable practice score" aria-describedby="score-help"></div>
+        <div id="score-material-help"></div>
+        <div class="practice-controls" role="group" aria-label="Practice playback" data-i18n-aria-label="Practice playback">
+          <div class="playback-bar">
+            <div class="transport-buttons"><button id="practice-btn" class="button primary" disabled><span data-i18n="Start practice">Start practice</span></button><button id="finish-btn" class="button secondary" disabled><span data-i18n="Complete practice">Complete practice</span></button></div>
+            <div class="playback-tempo"><div class="tempo-control"><button id="tempo-down" class="round-button" aria-label="Decrease BPM by 5" data-i18n-aria-label="Decrease BPM by 5">−</button><div><input id="tempo" type="number" min="40" max="120" value="60" aria-label="Metronome BPM" data-i18n-aria-label="Metronome BPM"><span>BPM</span></div><button id="tempo-up" class="round-button" aria-label="Increase BPM by 5" data-i18n-aria-label="Increase BPM by 5">+</button></div><input id="tempo-range" class="tempo-range" type="range" min="40" max="120" value="60" aria-label="Metronome tempo slider" data-i18n-aria-label="Metronome tempo slider"></div>
+            <div class="playback-progress"><div id="beats" class="beats" aria-label="Current beat" data-i18n-aria-label="Current beat"><span>1</span><span>2</span><span>3</span><span>4</span></div><span id="elapsed">00:00</span><span id="transport-state" class="transport-status"><span data-i18n="Ready">Ready</span></span></div>
+          </div>
+          <p class="tempo-hint" data-i18n="Quarter-note beats · changes on the next beat">Quarter-note beats · changes on the next beat</p>
+          <details id="playback-settings" class="playback-settings"><summary data-i18n="Sound &amp; MIDI settings">Sound &amp; MIDI settings</summary><div class="playback-settings-grid">
+          <div class="sound-controls">
+            <div class="sound-row"><label class="switch-label"><input id="click-toggle" type="checkbox" checked><span class="switch"></span><span><span data-i18n="Metronome click">Metronome click</span></span></label><input id="click-volume" type="range" min="0" max="1" step="0.01" value="0.35" aria-label="Metronome volume" data-i18n-aria-label="Metronome volume"></div>
+            <div class="sound-row"><label class="switch-label"><input id="pad-toggle" type="checkbox"><span class="switch"></span><span><span data-i18n="Chord pad">Chord pad</span></span></label><input id="pad-volume" type="range" min="0" max="0.6" step="0.01" value="0.18" aria-label="Chord pad volume" data-i18n-aria-label="Chord pad volume"></div>
+            <p class="sound-hint"><span data-i18n="Soft chords follow the progression.">Soft chords follow the progression.</span></p>
+          </div>
+          <div class="midi-area"><div class="section-top"><div><span id="midi-light" class="midi-light"></span><strong><span data-i18n="MIDI input">MIDI input</span></strong></div><button id="midi-connect" class="midi-button"><span data-i18n="Connect">Connect</span></button></div><select id="midi-input" aria-label="MIDI input to record" hidden data-i18n-aria-label="MIDI input to record"></select><p id="midi-status"><span data-i18n="You can practice without a MIDI connection.">You can practice without a MIDI connection.</span></p></div>
+          </div></details>
+          <small id="save-status" class="save-status"><span data-i18n="Timing starts when you begin practice.">Timing starts when you begin practice.</span></small>
+        </div>
+        <p id="score-help" class="field-note" data-i18n="Blue marks show when you press keys during playback; tails show key holds, not pedal sustain. This is a live view of the current pass, not a score of your performance.">Blue marks show when you press keys during playback; tails show key holds, not pedal sustain. This is a live view of the current pass, not a score of your performance.</p>
+        <details class="score-details"><summary data-i18n="About the live display">About the live display</summary><p data-i18n="Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.">Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.</p></details>
+      </section>
     </section>
     <section id="view-settings" class="view" hidden>
+      <button id="settings-back" class="text-button" data-i18n="Go back">Go back</button>
       <div class="page-heading"><div><h1><span data-i18n="Settings">Settings</span></h1><p class="subtle"><span data-i18n="Choose the language for the practice room.">Choose the language for the practice room.</span></p></div></div>
       <div class="card settings-card"><label><span data-i18n="Display language">Display language</span><select id="language-select"><option value="en">English</option><option value="ko">한국어</option></select></label><p id="language-note" class="field-note"><span data-i18n="Saved in this browser. Your notes stay in their original language.">Saved in this browser. Your notes stay in their original language.</span></p></div>
     </section>
     <footer class="site-footer"><span>MY JAZZ TUTOR / PRACTICE ROOM</span><span><span data-i18n="Keep playing. Enjoy the process.">Keep playing. Enjoy the process.</span></span></footer>
   </main>
-  <dialog id="history-dialog"><div class="dialog-top"><span class="eyebrow"><span data-i18n="SESSION NOTES">SESSION NOTES</span></span><button id="dialog-close" class="round-button" aria-label="Close session details" data-i18n-aria-label="Close session details">×</button></div><div id="history-detail"></div><div class="dialog-actions"><button id="correct-btn" class="button secondary"><span data-i18n="Correct this report">Correct this report</span></button></div></dialog>
-  <dialog id="skip-dialog"><h2><span data-i18n="Skip this task?">Skip this task?</span></h2><p><span data-i18n="Only cancel a task you have not practiced. It will be deferred from suggestions for today.">Only cancel a task you have not practiced. It will be deferred from suggestions for today.</span></p><form id="skip-form"><label><span data-i18n="Reason">Reason</span><textarea id="skip-reason" rows="2" required placeholder="I would like to start with another exercise today." data-i18n-placeholder="I would like to start with another exercise today."></textarea></label><div class="form-actions"><button type="submit" class="button primary"><span data-i18n="Save reason and skip">Save reason and skip</span></button><button type="button" id="skip-close" class="text-button"><span data-i18n="Go back">Go back</span></button></div></form></dialog>
+  <dialog id="history-dialog"><div class="dialog-top"><span class="eyebrow"><span data-i18n="SESSION NOTES">SESSION NOTES</span></span><button id="dialog-close" class="round-button" aria-label="Close session details" data-i18n-aria-label="Close session details">×</button></div><div id="history-detail"></div><div class="dialog-actions"><button id="correct-btn" class="button secondary"><span data-i18n="Correct this report">Correct this report</span></button><button id="repeat-btn" class="button secondary" data-i18n="Practice again">Practice again</button></div></dialog>
+  <dialog id="new-dialog" aria-labelledby="new-title">
+    <h2 id="new-title" data-i18n="New practice">New practice</h2>
+    <p id="suggestion-note" class="subtle"></p>
+    <form id="new-form">
+      <div class="chooser-fields"><label><span data-i18n="Exercise">Exercise</span><select id="exercise-select"></select></label><label><span data-i18n="Key">Key</span><select id="key-select"></select></label><label><span data-i18n="Target BPM">Target BPM</span><input id="goal-bpm" type="number" min="40" max="120" value="60" required></label></div>
+      <p id="new-description" class="instructions"></p><p id="eligibility" class="field-note"></p>
+      <p id="new-error" role="alert" hidden></p>
+      <div class="form-actions"><button id="add-practice" type="submit" class="button primary" data-i18n="Add to list">Add to list</button><button id="new-close" type="button" class="text-button" data-i18n="Go back">Go back</button></div>
+    </form>
+  </dialog>
+  <dialog id="discard-dialog" aria-labelledby="discard-title">
+    <h2 id="discard-title" data-i18n="Move on from this task?">Move on from this task?</h2>
+    <p data-i18n="Reasons are optional. Saved recordings stay in history.">Reasons are optional. Saved recordings stay in history.</p>
+    <form id="discard-form">
+      <div class="discard-choices" role="group" aria-label="Quick reasons" data-i18n-aria-label="Quick reasons">
+        <button type="button" data-discard-choice="already_practiced" aria-pressed="false" data-i18n="Already familiar">Already familiar</button>
+        <button type="button" data-discard-choice="too_easy" aria-pressed="false" data-i18n="Too easy">Too easy</button>
+      </div>
+      <label for="discard-reason" data-i18n="Reason · optional">Reason · optional</label>
+      <textarea id="discard-reason" rows="2" placeholder="Anything to add" data-i18n-placeholder="Anything to add"></textarea>
+      <p id="discard-error" role="alert" hidden></p>
+      <div class="form-actions"><button id="discard-submit" type="submit" class="button primary" data-i18n="Discard task">Discard task</button><button type="button" id="discard-close" class="text-button" data-i18n="Keep task">Keep task</button></div>
+    </form>
+  </dialog>
 </body>
 </html>

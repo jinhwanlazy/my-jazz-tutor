@@ -30,14 +30,16 @@
 호환되면 이어가고 비호환이면 원문·MIDI를 보존한 채 업데이트 사유로 종료한다.
 각 과제에 기준을 스냅샷으로 남겨 과거 판정을 새 커리큘럼으로 재해석하지 않는다.
 
-CSV는 append-only event log다. `assigned`, `reported`, `cancelled`, `retired`, `corrected`
+CSV는 append-only event log다. `assigned`, `completed`, `reported`, `corrected`,
+`discarded`, `cancelled`, `retired`
 사건을 task_id로 연결한다. 수정도 원문을 덮지 않고 새 사건으로 남긴다. 한 사용자
 보고에 여러 조건이 섞이면 한 조건의 결과로 뭉개지 말고 대표 결과를 명시하거나
 분리된 시도로 기록한다. 현재 버전은 한 과제에 하나의 최종 자기보고를 받는다.
 
 동시에 미완료인 과제는 하나만 두지만 하루 과제 수에는 제한을 두지 않는다.
-결과 기록 또는 취소 후 같은 날 다음 과제를 발급할 수 있다. 연습 전 스킵은 이유를
-남긴 취소, 연습 후 중단은 실제 조건과 원문을 남긴 결과 기록으로 구분한다.
+완료·보고·넘김·취소 후 같은 날 다음 과제를 발급할 수 있다. 완료와 피드백 입력은
+분리하며, 선택 사유로 넘긴 항목은 연습 결과로 추정하지 않는다. 기존 취소 기록의
+미연습 의미를 유지하기 위해 새 넘김은 별도 `discarded` 사건으로 남긴다.
 취소한 항목과 기존 CLI의 `hard`로 보고한 미통과 항목은 그날 같은 항목·키의 자동 추천에서
 보류한다. 다른 과제도 선행 조건을 충족해야 하며, 후보가 없으면 마무리 또는 조건
 단순화를 안내한다. 명시적으로 재시도할 수 있고 새 결과가 있으면 그 결과가 우선한다.
@@ -202,9 +204,9 @@ rejected without changing the active pin or records.
 
 ## One-tap practice feedback — 0.2.9
 
-The web accepts one explicit label: `impossible`, `challenging`, `good`, or
-`too_easy`. A tap saves immediately; a memo is optional and can be saved later or
-with Next practice. There are no manual date, tempo, duration, correctness,
+Version 0.2.9 introduced one explicit label: `impossible`, `challenging`, `good`, or
+`too_easy`. A tap saves immediately; a memo is optional. Version 0.2.10 moves this
+editor into the practice list after explicit completion and removes Next practice. There are no manual date, tempo, duration, correctness,
 continuity, condition-confirmation, or run-count controls. Missing evidence does
 not produce a questionnaire after saving. Legacy observations remain in history.
 
@@ -230,3 +232,34 @@ Label/memo changes append corrections while preserving prior dates, measurements
 explicit legacy performance evidence and raw input. Revision tokens reject stale
 edits, and identical retries do not append duplicate reports. Tests and previews
 use temporary workspaces only.
+
+## Practice list, explicit completion, and review reminders — 0.2.10
+
+The landing screen is a date-grouped practice list, showing content, status,
+feedback, notes and skip reasons inline. Navigation has only Practice list and
+Settings. New practice opens a chooser, then adds one ready item; entering the
+room requires an explicit item click. Completed items open saved details; Practice
+again creates another item. Creating, loading and recovering never auto-enter the
+room. Returning to the list saves capture but keeps the assignment unfinished.
+
+Complete practice saves capture, appends an idempotent `completed` event, and returns
+to the list. The completion stores automatic date/time provenance with unknown
+conditions/checks and no rating. It closes the assignment independently of feedback;
+first feedback appends `reported`, later edits append `corrected`, preserving the
+completion's measurement snapshot. Totals and attempted coverage count the task
+once. Success and retention still require their original evidence. Completed tasks
+awaiting feedback are not pending and cannot be discarded, restarted, or retired
+by an update. A failed save keeps the task retryable. Client-created assignment IDs
+make lost add responses safe to retry without generating duplicate list entries.
+
+`discarded` preserves a structured optional choice and the exact free-text reason.
+Existing cancel/retire semantics stay distinct. Input is saved before discard;
+open server recordings must be recovered first. Explicit already_practiced/too_easy
+choices can open compatible same-key ordinary practice without performance credit.
+A blank reason has no skill meaning. Discards are deferred for the current day.
+
+Review scheduling uses the latest compatible completed/reported attempt in the same
+exercise/key, not only the old success date. Today's finished review therefore
+resets the reminder even before feedback; this does not certify retention. Positive
+feedback can then recommend later exercises. Historical notes and recordings are
+not rewritten, and incompatible old runtimes are rejected by publication validation.
