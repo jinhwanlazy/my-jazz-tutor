@@ -1,6 +1,7 @@
 """Opt-in real Codex integration; temporary synthetic records, never user data."""
 import argparse
 import json
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -44,13 +45,36 @@ def main():
             state = json.load(urllib.request.urlopen(address+'/api/state'))
             payload = json.dumps({'request_id':'R-'+'c'*32,
                 'request':'Use the recorded feedback and skip reason to propose a useful next exercise. These are synthetic test records.'}).encode()
-            request = urllib.request.Request(address+'/api/recommend?lang=en', data=payload,
+            request = urllib.request.Request(address+'/api/recommend?lang=ko', data=payload,
                 headers={'Content-Type':'application/json','X-Jazz-Token':state['csrf_token']})
             job = json.load(urllib.request.urlopen(request))
             while job['state'] == 'running' and time.monotonic()-started < 260:
                 time.sleep(.5)
                 state = json.load(urllib.request.urlopen(address+'/api/state'))
                 job = state['recommendation']
+            if job['state'] != 'completed':
+                raise AssertionError(f'Real Codex failed: {job}')
+            canonical = r.records(r.read_events(root))[-1]['target']
+            assert canonical['generation']['source_language'] == 'en'
+            assert not re.search('[가-힣]',canonical['title']+canonical['instructions'])
+            ledger_before_translation = (root/'practice.csv').read_bytes()
+            translation_started = time.monotonic()
+            request = urllib.request.Request(address+'/api/translate?lang=ko',
+                data=json.dumps({'task_id':job['task_id']}).encode(),
+                headers={'Content-Type':'application/json','X-Jazz-Token':state['csrf_token']})
+            translation = json.load(urllib.request.urlopen(request))
+            while translation['state'] in ('running','missing') and time.monotonic()-translation_started < 260:
+                time.sleep(.5)
+                localized_state=json.load(urllib.request.urlopen(address+'/api/state?lang=ko'))
+                localized=next(task['target'] for task in localized_state['history'] if task['id']==job['task_id'])
+                translation=localized['translation']
+            if translation['state'] != 'completed':
+                raise AssertionError(f'Real Codex translation failed: {translation}')
+            assert re.search('[가-힣]',localized['title'])
+            for field in ('key','bpm','bars','notation','accompaniment'):
+                assert localized['exercise'][field] == canonical['exercise'][field]
+            assert (root/'practice.csv').read_bytes() == ledger_before_translation
+            translation_seconds=round(time.monotonic()-translation_started,1)
         finally:
             server.shutdown();server.server_close();thread.join()
 
@@ -66,7 +90,11 @@ def main():
         artifact=json.loads((root/target['generation']['context_file']).read_text())
         summary={'passed':True,'path':'HTTP /api/recommend -> asynchronous Codex -> validated assignment','seconds':elapsed,'history_tasks_analyzed':artifact['context']['history_window']['included_tasks'],
                  'title':target['title'],'key':target['key'],'bars':target['bars'],'source_ids':refs,
-                 'provenance':artifact['provenance'],'preserved_previous_events':len(before)}
+                 'provenance':artifact['provenance'],'preserved_previous_events':len(before),
+                 'requested_display_language':artifact['context']['display_language'],
+                 'source_language':target['generation']['source_language'],
+                 'korean_title':localized['title'],'translation_seconds':translation_seconds,
+                 'translation_preserved_snapshot_and_ledger':True}
         output=Path(__file__).resolve().parents[1]/'build/codex-smoke.json'
         output.parent.mkdir(exist_ok=True);output.write_text(json.dumps(summary,indent=2)+'\n')
         print(json.dumps(summary,indent=2))

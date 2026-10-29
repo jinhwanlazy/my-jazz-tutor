@@ -74,6 +74,8 @@ try {
   await page.goto(url);
   await page.waitForFunction(()=>document.querySelector('#connection').textContent==='Connected locally');
   await visible('#view-list'); await hidden('#view-practice');
+  assert.equal((await page.locator('[data-view="list"]').textContent()).trim(),'≡ Practice');
+  await visible('.sidebar #midi-connect');await visible('.sidebar #midi-status');
   assert.equal((await state()).history.length,0);
   assert.equal(await page.locator('[data-view="history"], [data-view="progress"], #next-btn').count(),0);
   assert.doesNotMatch(await page.locator('body').innerText(),/[가-힣]/);
@@ -177,7 +179,12 @@ try {
   await changeLanguage('ko');
   assert.equal((await state()).sessions[0].id,activeSession);
   assert.equal(await page.locator('#tempo').inputValue(),'65');
+  await page.waitForFunction(()=>document.querySelector('#lesson-title').textContent.startsWith('번역: '));
+  assert.match(await page.locator('#hand-notes').textContent(),/F#4\+A4/);
+  assert.equal((await state()).history[0].target.title,'D major voice leading');
+  await visible('.sidebar #midi-connect');
   await changeLanguage('en');
+  assert.equal(await page.locator('#lesson-title').textContent(),'D major voice leading');
   await page.waitForTimeout(150);
   await page.evaluate(()=>window.sendMidi([0x90,60,100]));
   await page.waitForFunction(()=>document.querySelectorAll('.score-live-note').length===1);
@@ -185,13 +192,17 @@ try {
   await page.waitForTimeout(100);
   assert.notEqual(await page.locator('.score-cursor').getAttribute('transform'),cursor);
   await page.evaluate(()=>{window.sendMidi([0xb0,64,127]);window.sendMidi([0x80,60,0]);});
-  await page.locator('#tempo').fill('80');await page.locator('#tempo').press('Tab');
+  for(const id of ['tempo','tempo-range','tempo-down','tempo-up']) assert.equal(await page.locator('#'+id).isDisabled(),true);
+  await page.locator('#tempo').evaluate(input=>{input.value='80';input.dispatchEvent(new Event('change'));});
+  assert.equal(await page.locator('#tempo').inputValue(),'65');
   await page.waitForTimeout(1200);
   await page.evaluate(()=>window.sendMidi([0x90,64,100]));
   await page.waitForTimeout(100);
   await page.evaluate(()=>{window.sendMidi([0x80,64,0]);window.sendMidi([0xb0,64,0]);});
   await page.locator('#practice-btn').click();
-  await page.locator('#tempo').fill('100');await page.locator('#tempo').press('Tab');
+  for(const id of ['tempo','tempo-range','tempo-down','tempo-up']) assert.equal(await page.locator('#'+id).isDisabled(),true);
+  await page.locator('#tempo-range').evaluate(input=>{input.value='100';input.dispatchEvent(new Event('input'));});
+  assert.equal(await page.locator('#tempo-range').inputValue(),'65');
   await page.locator('#practice-btn').click();
   await page.waitForTimeout(150);
   await page.route('**/api/complete*',async route=>{await route.fetch();await route.abort();});
@@ -210,8 +221,8 @@ try {
   assert.match(await item(first).textContent(),/Completed/);
   assert.equal(await page.locator('#actual-bpm,#actual-minutes,#practice-date,#notes-correct,#clean-runs').count(),0);
   const recording=data.sessions[0], sent=await page.evaluate(()=>window.sent);
-  assert.equal(recording.summary.last_note_bpm,80);
-  assert.equal(recording.summary.last_setting_bpm,100);
+  assert.equal(recording.summary.last_note_bpm,65);
+  assert.equal(recording.summary.last_setting_bpm,65);
   assert.equal(recording.summary.pad_used,true);
   const archive=await page.evaluate(async id=>Array.from(new Uint8Array(await (await fetch(`/api/recordings/${id}/midi`)).arrayBuffer())),recording.id);
   assert.deepEqual(archive.slice(0,4),[74,80,77,49]);
@@ -246,6 +257,8 @@ try {
   assert.equal(data.status.today.reported_attempts,1);
   // Leaving the room saves a recording but keeps the task open for a later return.
   const second=await add('E02');await enter(second);
+  for(const id of ['tempo','tempo-range','tempo-down','tempo-up']) assert.equal(await page.locator('#'+id).isEnabled(),true);
+  await page.locator('#tempo').fill('80');await page.locator('#tempo').dispatchEvent('change');
   await page.locator('#practice-btn').click();
   await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
   await page.waitForTimeout(100);
@@ -296,6 +309,10 @@ try {
     await page.setViewportSize({width:1440,height:1080});
     await page.screenshot({path:join(project,`build/browser/list-desktop-${language}.png`),fullPage:true});
     await page.setViewportSize({width:390,height:844});
+    await visible('.sidebar #midi-connect');
+    await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+    assert.ok(await page.locator('#midi-connect').evaluate(node=>{const rect=node.getBoundingClientRect();return rect.top>=0&&rect.bottom<=innerHeight;}));
+    await page.evaluate(()=>window.scrollTo(0,0));
     await page.screenshot({path:join(project,`build/browser/list-mobile-${language}.png`),fullPage:true});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
   }
@@ -311,8 +328,27 @@ try {
   await page.locator('#practice-btn').click();
   await page.screenshot({path:join(project,'build/browser/generated-score.png'),fullPage:true});
   await page.locator('#discard-btn').click();await page.locator('#discard-submit').click();await hidden('#discard-dialog');
+  // A failed translation stays on the original until explicitly retried; success is cached.
+  await page.locator('#recommendation-request').fill('simulate:translation-auth');
+  const translationTask=await add();
+  let translationRequests=0;
+  page.on('request',request=>{if(request.url().includes('/api/translate') && request.postDataJSON()?.task_id===translationTask) translationRequests++;});
+  const original=(await state()).history.find(task=>task.id===translationTask).target;
+  await changeLanguage('ko');
+  await item(translationTask).getByRole('button',{name:'번역 재시도'}).waitFor({state:'visible'});
+  assert.equal(translationRequests,1);
+  assert.match(await item(translationTask).textContent(),/Synthetic translation authentication failure/);
+  await item(translationTask).getByRole('button',{name:'번역 재시도'}).click();
+  await page.waitForFunction(id=>document.querySelector(`.practice-item[data-task-id="${id}"] h3`).textContent.startsWith('번역: '),translationTask);
+  assert.equal(translationRequests,2);
+  await page.reload();await visible('#view-list');
+  await page.waitForFunction(id=>document.querySelector(`.practice-item[data-task-id="${id}"] h3`)?.textContent.startsWith('번역: '),translationTask);
+  assert.equal(translationRequests,2);
+  const saved=(await state()).history.find(task=>task.id===translationTask).target;
+  assert.deepEqual(saved.exercise,original.exercise);
+  await page.screenshot({path:join(project,'build/browser/translation-recovered-mobile.png'),fullPage:true});
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,checks:['Codex job progress and authentication failure','response loss without duplicate generation','custom tasks outside the catalog','list landing without writes','explicit create and enter','pending resume after reload','completion before feedback','no duplicate counts','notes and skip reasons inline','repeat creates another item','score continuity and MIDI','failed save and recovery','active discard preserves recordings','languages and mobile layout'],screenshots:'workflow/build/browser'}));
+  console.log(JSON.stringify({passed:true,checks:['Codex job progress and authentication failure','response loss without duplicate generation','custom tasks outside the catalog','list landing without writes','explicit create and enter','pending resume after reload','completion before feedback','no duplicate counts','notes and skip reasons inline','repeat creates another item','score continuity and MIDI','failed save and recovery','active discard preserves recordings','languages and mobile layout','translation retry and reload cache','BPM locked during playing and pause','MIDI stays visible in sidebar and mobile header'],screenshots:'workflow/build/browser'}));
 } finally {
   if(browser)await browser.close();
   const exited=once(server,'exit');server.kill('SIGTERM');await exited;

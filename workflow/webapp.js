@@ -54,10 +54,11 @@ const transport = new Transport({
   }
 });
 
-async function refresh(keep = false) {
+async function refresh(keep = false, skipUnchanged = false) {
   const previous = openedTask()?.id;
   const data = await api('/api/state');
   if (data.language !== locale()) return; // A newer language selection superseded this response.
+  if (skipUnchanged && JSON.stringify(data) === JSON.stringify(ui.data)) return;
   ui.data = data;
   outbox ||= new Outbox(ui.data.workspace_id);
   const current = pending();
@@ -74,8 +75,51 @@ async function refresh(keep = false) {
   renderLesson(!keep || previous !== openedTask()?.id);
   renderHistory();
   renderRecordText();
+  if ($('history-dialog').open && detailTask) {
+    const task = ui.data.history.find(t => t.id === detailTask.id);
+    if (task) showDetail(task);
+  }
   $('recovery').hidden = openSessions().length === 0;
   updateTransport();
+  scheduleTranslations();
+}
+
+let translationTimer, translationPosting = false;
+const translationRetries = new Set();
+function scheduleTranslations() {
+  clearTimeout(translationTimer);
+  if (translationPosting || !ui.data || ui.data.language !== locale()) return;
+  const translating = ui.data.history.some(t => t.target.translation?.state === 'running');
+  const next = ui.data.history.find(t => t.target.translation?.state === 'missing' || translationRetries.has(t.target.translation?.id));
+  if (!translating && !next) return;
+  translationTimer = setTimeout(async () => {
+    translationPosting = true;
+    try {
+      if (!translating && next) {
+        const identity = next.target.translation.id;
+        const job = await api('/api/translate', {task_id: next.id, retry: translationRetries.has(identity)});
+        if (['running', 'completed', 'original'].includes(job.state)) translationRetries.delete(identity);
+      }
+      await refresh(true, true);
+    } catch (error) { fail(error); }
+    finally { translationPosting = false; scheduleTranslations(); }
+  }, 1500);
+}
+function translationNotice(task) {
+  const state = task.target.translation;
+  const box = el('div', undefined, 'translation-notice');
+  if (!state || ['original', 'completed'].includes(state.state)) return box;
+  box.setAttribute('role', 'status');
+  const retrying = translationRetries.has(state.id);
+  box.append(el('span', state.state === 'failed' && !retrying ? state.error : tr('Translating this practice… Showing the original while you wait.')));
+  if (state.state === 'failed' && !retrying) {
+    const retry = el('button', tr('Retry translation'), 'text-button');
+    retry.addEventListener('click', () => {
+      translationRetries.add(state.id); retry.disabled = true; scheduleTranslations();
+    });
+    box.append(retry);
+  }
+  return box;
 }
 
 let generationTimer;
@@ -112,9 +156,10 @@ function renderChoices() {
   $('filter-exercise').value = exercises.has(exerciseFilter) ? exerciseFilter : '';
   $('filter-key').value = keys.includes(keyFilter) ? keyFilter : '';
 }
-function appendAnalysis(parent, t) {
+function appendAnalysis(parent, t, open = false) {
   if (!t.analysis) return;
   const analysis = el('details', undefined, 'recommendation-analysis');
+  analysis.open = open;
   analysis.append(el('summary', tr('Why this practice?')));
   analysis.append(el('p', t.exercise.selection_reason));
   analysis.append(el('h4', tr('Coach interpretation · not measured performance')));
@@ -140,6 +185,7 @@ function renderLesson(resetTempo = false) {
   if (!t.notation) $('lesson-material').open = true;
   $('lesson-kind').textContent = tr('Current task');
   $('lesson-title').textContent = t.title;
+  $('lesson-translation').replaceChildren(translationNotice(current));
   $('lesson-phase').textContent = t.kind === 'generated' ? tr('Personal practice') : tr('Practice');
   $('lesson-purpose').textContent = t.exercise?.objective || t.material.title;
   $('lesson-section').textContent = t.exercise?.section || '';
@@ -160,13 +206,18 @@ function renderLesson(resetTempo = false) {
   $('lesson-instructions').textContent = tr`${t.instructions} C4 is middle C.`;
   $('criterion-text').textContent = t.exercise?.rhythm || tr`Play ${t.criteria.min_clean_runs} consecutive runs with correct notes, a steady pulse, and no stops under the assigned conditions.`;
   $('lesson-steps').replaceChildren(...(t.exercise?.steps || []).map(step => el('li', step)));
-  $('lesson-analysis').replaceChildren(); appendAnalysis($('lesson-analysis'), t);
+  const analysisOpen = $('lesson-analysis').querySelector('details')?.open;
+  $('lesson-analysis').replaceChildren(); appendAnalysis($('lesson-analysis'), t, analysisOpen);
   $('discard-btn').hidden = false;
   $('pad-toggle').disabled = !t.playback;
   if (!t.playback) { $('pad-toggle').checked = false; transport.setPad(false); }
   if (resetTempo && !ui.capture) setTempo(t.bpm);
 }
 function setTempo(value) {
+  if (ui.lockedBpm != null) {
+    $('tempo').value = $('tempo-range').value = ui.lockedBpm;
+    return;
+  }
   const numeric = Math.min(ui.data.maximum_bpm, Math.max(ui.data.minimum_bpm, Math.round(Number(value) || ui.data.minimum_bpm)));
   $('tempo').value = $('tempo-range').value = numeric;
   transport.setTempo(numeric);
@@ -175,6 +226,10 @@ function updateTransport() {
   if (!ui.data) return;
   const recording = ui.capture, recovery = openSessions().length > 0;
   const eligible = Boolean(openedTask());
+  const tempoLocked = Boolean(recording) || ui.busy || recovery;
+  for (const id of ['tempo', 'tempo-range', 'tempo-down', 'tempo-up']) $(id).disabled = tempoLocked;
+  if (ui.lockedBpm != null) $('tempo').value = $('tempo-range').value = ui.lockedBpm;
+  $('tempo-hint').textContent = tr(recording ? 'BPM is fixed for this recording, including pauses.' : 'Choose BPM before starting. It stays fixed until this recording ends.');
   $('practice-btn').disabled = ui.busy || recovery || !eligible || Boolean(recording?.ended);
   $('practice-btn').textContent = recording ? transport.playing ? tr('Pause') : recording.ended ? tr('Waiting to save') : tr('Resume') : tr('Start practice');
   $('finish-btn').disabled = ui.busy || recovery || !eligible || (!recording && !openedTask()?.started);
@@ -215,7 +270,7 @@ function midiBindings() {
   }
   ui.midiNotice = null;
   $('midi-light').classList.toggle('connected', selectedPorts().length > 0);
-  $('midi-status').textContent = selectedPorts().length ? tr`${selectedPorts().length} input(s) ready · raw input is recorded during practice.` : tr('No inputs connected. The metronome is still available.');
+  $('midi-status').textContent = midiSelection === 'none' ? tr('MIDI recording is off.') : selectedPorts().length ? tr`${selectedPorts().length} input(s) ready · raw input is recorded during practice.` : tr('No inputs connected. The metronome is still available.');
   $('midi-connect').textContent = tr('Refresh');
 }
 
@@ -225,8 +280,9 @@ async function startOrPause() {
   if (ui.capture && transport.playing) {
     transport.pause(); ui.capture.event('pause'); updateTransport(); return;
   }
+  setTempo($('tempo').value);
+  ui.lockedBpm ??= Number($('tempo').value);
   ui.busy = true; updateTransport();
-  const requestedTempo = Number($('tempo').value);
   try {
     await transport.unlock(); // User gesture, before a network round trip.
     if (!ui.capture) {
@@ -248,11 +304,11 @@ async function startOrPause() {
     $('record-panel').hidden = true;
     transport.click = $('click-toggle').checked;
     transport.setPad($('pad-toggle').checked);
-    ui.capture.event('play', {bpm: Number($('tempo').value)});
+    ui.capture.event('play', {bpm: ui.lockedBpm});
     const t = target();
     const playback = t.playback || {beats_per_bar: 4,
       bars: Array.from({length: t.bars}, (_, i) => ({chord: t.notation?.bars[i]?.chord || '', notes: []}))};
-    transport.start(playback, Number($('tempo').value));
+    transport.start(playback, ui.lockedBpm);
     openedTask().started = true;
     ui.saveStatus = 'Recording · autosaving every 3 seconds';
     $('save-status').textContent = tr(ui.saveStatus);
@@ -260,7 +316,7 @@ async function startOrPause() {
     fail(error);
     if (!ui.capture) { try { await refresh(true); } catch {} }
   }
-  finally { ui.busy = false; updateTransport(); }
+  finally { if (!ui.capture) ui.lockedBpm = null; ui.busy = false; updateTransport(); }
 }
 async function stopCapture() {
   if (!ui.capture) return;
@@ -269,7 +325,8 @@ async function stopCapture() {
   const index = ui.data.sessions.findIndex(session => session.id === saved.id);
   if (index < 0) ui.data.sessions.push(saved);
   else ui.data.sessions[index] = saved;
-  ui.capture = null; clearInterval(timer);
+  ui.capture = null; ui.lockedBpm = null; clearInterval(timer);
+  midiBindings();
   ui.saveStatus = 'Practice saved'; $('save-status').textContent = tr(ui.saveStatus);
 }
 async function finish() {
@@ -409,7 +466,7 @@ function renderHistory() {
     const status = task.retired ? tr('Retired on update') : task.discarded ? tr('Discarded') : task.cancelled ? tr('Skipped') : task.completed ? tr('Completed') : task.started || ui.capture?.session.task_id === task.id ? tr('In progress') : tr('Ready to practice');
     button.append(left, el('span', status, `tag ${task.completed ? 'success' : 'unknown'}`));
     button.addEventListener('click', () => task.pending ? openPractice(task) : showDetail(task));
-    card.append(button, el('p', task.target.instructions, 'practice-content'));
+    card.append(button, el('p', task.target.instructions, 'practice-content'), translationNotice(task));
     const result = ratings[task.report?.difficulty] ? ratingText(task.report.difficulty) : task.report ? tr(labels[task.outcome]) : task.completed ? tr('Feedback not added yet') : '';
     if (result) card.append(el('p', result, 'practice-result'));
     if (task.discard_choice) card.append(el('p', tr(discardChoices[task.discard_choice]), 'practice-result'));
@@ -432,8 +489,10 @@ function renderHistory() {
   }
 }
 function showDetail(task) {
+  const analysisOpen = detailTask?.id === task.id && $('history-detail').querySelector('.recommendation-analysis')?.open;
   detailTask = task;
   const box = $('history-detail'); box.replaceChildren(el('h2', task.target.title), el('p', `${task.exercise_id} · ${(task.report || task.completion)?.practice_date || task.assigned_at.slice(0, 10)}`, 'subtle'));
+  box.append(translationNotice(task));
   const grid = el('div', undefined, 'detail-grid');
   const intended = el('div'); intended.append(el('h3', tr('Assigned conditions')), el('div', tr`${task.target.key} · ${task.target.bpm} BPM · ${task.target.bars} bars`), el('div', ui.data.arrangements[task.target.arrangement] || task.target.arrangement));
   const actualBox = el('div'); actualBox.append(el('h3', tr('Reported performance')));
@@ -454,7 +513,7 @@ function showDetail(task) {
     box.append(el('p', e.section), el('p', e.notes), el('p', e.rhythm));
     const steps = el('ol'); steps.append(...e.steps.map(step => el('li', step))); box.append(steps);
   }
-  appendAnalysis(box, task.target);
+  appendAnalysis(box, task.target, analysisOpen);
   if (task.discard_choice) box.append(el('p', tr(discardChoices[task.discard_choice]), 'discard-choice'));
   const note = task.report ? task.report.raw_note : task.reason;
   if (note) box.append(el('p', note, 'raw-note'));

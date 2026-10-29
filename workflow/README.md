@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.3.1`; create a new tag for later releases instead of moving an old tag:
+selects `v0.3.2`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.3.1
+uv run python publish.py --ref v0.3.2
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -83,7 +83,7 @@ evidence retain their original wording.
 
 The first screen is your **Practice list**, grouped by date. Each item shows its
 exercise, key and target tempo, ready/in-progress/completed/skipped status, feedback,
-memo and optional skip reason. The navigation contains Practice list and Settings.
+memo and optional skip reason. The navigation contains Practice and Settings.
 The former history tab is part of this list; the progress dashboard is removed.
 
 **New practice** analyzes the explicit profile, recent records, feedback, notes and
@@ -135,8 +135,10 @@ origin, so recover any unsent input at its original address first.
 - **Practice room:** read the task instructions, target conditions, and success
   criteria first, then use the score and its single set of playback controls.
   **Notes and chord progression** expands the written parts. Target BPM and current
-  metronome BPM are separate. Adjust tempo beside the score; expand **Sound & MIDI
-  settings** for volume, chord pad, and MIDI devices. Click and pad share the same
+  metronome BPM are separate. Choose tempo before starting: the input, slider and
+  buttons stay locked until the recording ends, including pauses. Expand **Sound
+  settings** for volume and chord pad. MIDI connection, status and input selection
+  stay in the sidebar, or the sticky top area on mobile. Click and pad share the same
   beat clock. Resuming starts from the first bar; switching away from the tab
   pauses playback.
 - **Score and live input:** a grand staff shows the assigned parts, chord symbols,
@@ -243,7 +245,7 @@ individual recording does not complete the task. The explicit Complete practice
 operation appends completion; feedback can be added separately afterward.
 
 Git does not preserve personal records. Stop the server before backing up the CSV,
-SQLite database, profile, feedback notes, `.recommendations/`, and `runtime.json` together to a private
+SQLite database, profile, feedback notes, `.recommendations/`, `.translations/`, and `runtime.json` together to a private
 location. The cache can be rebuilt, but retain the pinned commit in Git history.
 Use `git bundle create <private-backup-path> --all` to back up repository history.
 The ignored `practice/backups/` directory is not a substitute for a backup on a
@@ -285,6 +287,8 @@ Screenshots go to `build/browser/`. Checks cover MIDI permission denial, synthet
 input preservation and timing, tempo/pad playback, reports, corrections, skips,
 offline recovery, and mobile layout. Synthetic MIDI tests do not verify a physical
 keyboard connection or speaker quality.
+Checks also cover translated descriptions during capture, fixed BPM while playing
+and paused, and the MIDI connection control remaining visible on mobile.
 
 The optional LAN browser check requires this computer's actual non-loopback IPv4
 address. It uses temporary synthetic records and verifies an ordinary HTTP origin,
@@ -324,6 +328,29 @@ are idempotent and single-flight across servers. A changed profile, record, sess
 or runtime invalidates an in-flight result. Restarted jobs recover saved items or
 show an interrupted error. Restart the server after activating a release.
 
+New recommendations always have an English original, regardless of the display
+language or profile language. `context.language` is `en`; `display_language` records
+the UI preference. This also applies to conversationally accepted recommendations.
+The `--language` option selects that preference, not the canonical prose language.
+
+When a Korean screen needs a generated practice, the browser requests its translation
+through `POST /api/translate`. The same Codex login and read-only structured-output
+runner translate the title, instructions, hand roles, notes/rhythm prose, steps,
+rationale, interpretations and unknowns. It receives those strings, not a new profile
+or history analysis. The app accepts only the expected prose fields, protects written
+numbers/pitches/chord names with placeholders, and copies structured music, source
+IDs and confidence unchanged. These checks do not prove complete semantic equivalence.
+
+Translations are cached locally in `practice/.translations/` by original snapshot,
+language and format. One worker translates items sequentially; repeats of the same
+snapshot reuse the cache. Reads never start model requests. While translating or
+after failure, the original stays available with status and an explicit retry button.
+Successful translations survive reloads and version updates with a compatible format.
+Historical snapshots and user notes are never rewritten. For older generated tasks,
+the source language comes from their original generation artifact if available; an
+unknown language is not inferred from the current profile. Built-in legacy tasks
+continue to use their existing presentation catalog.
+
 From the repository root, when the user requests a new practice:
 
 ```sh
@@ -355,7 +382,8 @@ uses the same four labels and optional note as the web: `{"rating":"good","note"
 When editing, include the current `expected_event_id`. Actual observations and old
 notes are preserved. Never fill unknown checks from a difficulty label.
 
-Manual real-connection test (synthetic context and temporary records only):
+Manual real-connection test (synthetic context and temporary records only; verifies
+English generation from a Korean request and a subsequent Korean translation):
 
 ```sh
 uv run python tests/codex_smoke.py --run

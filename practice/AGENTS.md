@@ -37,10 +37,15 @@ Never add sample/test sessions to the real log. Reports are derived, not evidenc
 Use temporary JSON files for multiline reports; do not interpolate raw notes into
 shell commands. Run `./jazz validate` after a record operation.
 
+New saved recommendation JSON uses English even when coaching in another language.
+The app creates Codex translations for display and caches them in `.translations/`.
+Do not rewrite historical conditions or user notes to change their display language.
+
 Personal CSV records, profiles, MIDI sessions, feedback notes, generated reports,
 recommendation context/results in `.recommendations/`, and backups are local-only and ignored by Git. Never force-add them or copy their
 contents into tracked documentation or test fixtures. A missing CSV means no
 recorded events; let the CLI create it when the user starts a real task.
+Generated display translations in `.translations/` are also local-only.
 
 The runtime commit is intentionally fixed in local `runtime.json`. Cache deletion
 does not switch it; Git reconstructs the same snapshot. Never force-add the cache

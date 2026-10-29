@@ -39,7 +39,13 @@ uv run --project practice jazz runtime
 `recommend`와 `suggest`는 같은 생성·저장 명령입니다. `status`는 읽기만 합니다.
 대화형 코칭의 공유 맥락·스키마·저장 명령은 활성 COACH.md와
 [개발 문서](../workflow/README.ko.md)를 따릅니다. 과제 조건과 실제 관측, LLM 해석은
-구분합니다. 생성된 설명과 원문 메모는 당시 언어를 유지합니다.
+구분합니다. 새 과제는 영어 원문으로 저장하고 한국어 화면에서는 Codex 번역본을 만들어
+재사용합니다. 제목·설명·방법·코칭 해석이 함께 번역되며 원래 조건과 사용자 메모는
+바꾸지 않습니다. 번역 중에는 원문을 표시하고 실패하면 재시도할 수 있습니다.
+
+사이드 메뉴는 Practice(연습)이며 MIDI 연결과 입력 선택이 항상 보입니다. 모바일에서는
+상단에 유지합니다. BPM은 시작 전에 선택하고 녹음이 끝날 때까지 잠깁니다. 일시정지
+중에도 변경할 수 없으며 다음 녹음을 시작하기 전에 다시 선택할 수 있습니다.
 
 기본 주소는 http://127.0.0.1:8765 입니다. 다른 포트는
 `uv run --project practice jazz serve --open --port 8768`로 시작합니다. 설정에서
@@ -56,6 +62,6 @@ uv run --project practice jazz runtime
 미완료 과제는 이어가며 비호환 과제만 사유와 함께 종료합니다. 업데이트 종료는 실패·
 스킵·연습 결과가 아닙니다. 새 버전 활성화 후 서버를 재시작합니다.
 
-개인 CSV, 프로필, sessions.sqlite3, .recommendations/, 메모, runtime.json은 Git에
+개인 CSV, 프로필, sessions.sqlite3, .recommendations/, .translations/, 메모, runtime.json은 Git에
 포함되지 않습니다. 서버를 중지하고 이 파일들을 별도 개인 백업에 보관하세요.
 .runtime/ 캐시는 Git으로 재생성할 수 있지만 개인 기록은 Git이 복원하지 않습니다.

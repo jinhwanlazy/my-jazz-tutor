@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import review as r
 from webapp import make_server
 from recommendation import RecommendationError
-from recommendation_fixture import SyntheticRunner
+from recommendation_fixture import SyntheticRunner, SyntheticTranslator
 
 
 class BrowserRunner(SyntheticRunner):
@@ -15,6 +15,8 @@ class BrowserRunner(SyntheticRunner):
         if context['request'] == 'simulate:auth':
             raise RecommendationError('auth')
         result, provenance = super().generate(context)
+        if context['request'] == 'simulate:translation-auth':
+            result['exercise']['instructions'] = 'Synthetic translation authentication failure; retry this fixture.'
         if context['request'] == 'simulate:no-pad':
             result['exercise']['accompaniment'] = None
             result['exercise']['rhythm'] = 'Two half notes per bar in 4/4.'
@@ -26,9 +28,18 @@ class BrowserRunner(SyntheticRunner):
         return result, provenance
 
 
+class BrowserTranslator(SyntheticTranslator):
+    def translate(self, context, schema):
+        time.sleep(.5)
+        if 'Synthetic translation authentication failure' in context['strings']['exercise.instructions'] and not getattr(self, 'failed_once', False):
+            self.failed_once = True
+            raise RecommendationError('auth')
+        return super().translate(context, schema)
+
+
 root = Path(sys.argv[1]).resolve()
 if not root.name.startswith('jazz-browser-'):
     raise ValueError('Browser tests require their own temporary directory.')
-server = make_server(root, r.curriculum(), 0, recommender=BrowserRunner(), host=sys.argv[2] if len(sys.argv) > 2 else '127.0.0.1')
+server = make_server(root, r.curriculum(), 0, recommender=BrowserRunner(), translator=BrowserTranslator(), host=sys.argv[2] if len(sys.argv) > 2 else '127.0.0.1')
 print(f'http://127.0.0.1:{server.server_port}', flush=True)
 server.serve_forever()

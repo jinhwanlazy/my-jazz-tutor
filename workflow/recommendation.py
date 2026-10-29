@@ -93,6 +93,8 @@ def validate_result(value, context=None):
         source_ids = {source['id'] for source in context['sources']}
         if any(ref not in source_ids for finding in value['evidence'] for ref in finding['source_ids']):
             raise ValueError('Recommendation cites evidence that was not supplied.')
+        if 'display_language' in context and any(re.search(r'[\u3131-\u318e\uac00-\ud7a3]', text) for text in prose_fields(value).values()):
+            raise ValueError('New practice descriptions must be written in English before translation.')
     exercise = value['exercise']
     score, accompaniment = exercise['notation'], exercise['accompaniment']
     if score:
@@ -122,6 +124,18 @@ def validate_result(value, context=None):
         if score and [b['chord'] for b in accompaniment['bars']] != [b['chord'] for b in score['bars']]:
             raise ValueError('Score and accompaniment chord labels differ.')
     return value
+
+
+def prose_fields(result):
+    """Only these display strings may be translated; music and source IDs are immutable."""
+    exercise = result['exercise']
+    fields = {'exercise.' + key: exercise[key] for key in
+              ('title', 'objective', 'selection_reason', 'section', 'left_hand', 'right_hand',
+               'notes', 'rhythm', 'instructions', 'notation_reason')}
+    fields.update({f'exercise.steps.{i}': text for i, text in enumerate(exercise['steps'])})
+    fields.update({f'evidence.{i}.interpretation': item['interpretation'] for i, item in enumerate(result['evidence'])})
+    fields.update({f'unknowns.{i}': text for i, text in enumerate(result['unknowns'])})
+    return fields
 
 
 def context_for(root, data, language=None, request=''):
@@ -165,7 +179,7 @@ def context_for(root, data, language=None, request=''):
     fingerprint = digest({'events': events, 'profile': profile, 'sessions': sessions, 'coach': coach,
                           'reference': reference, 'version': data['version'], 'schema': SCHEMA})
     context = {'schema_version': 1, 'fingerprint': fingerprint, 'runtime_version': data['version'],
-               'language': language or profile.get('language', 'en'), 'request': request,
+               'language': 'en', 'display_language': language or profile.get('language', 'en'), 'request': request,
                'history_window': {'included_tasks': len(recent), 'total_tasks': len(tasks),
                                   'omitted_older_tasks': max(0, len(tasks) - len(recent)),
                                   'policy': 'Latest 40 assignments with latest feedback and original completion; no inferred older mastery.'},
@@ -193,7 +207,9 @@ Create a concrete new exercise appropriate to this player, not an E01–E06 ID s
 inferences with source_ids and confidence; separate unknowns. Do not invent evidence or reinterpret old
 records. Respect profile provenance: defaults are not expressed preferences. Avoid blindly repeating a
 completed or skipped exercise; if repetition is justified, explain why from the supplied evidence.
-Write prose in context.language. Keep notes/pitch names in scientific notation (C4 = middle C).
+Always write the exercise and analysis in English, including paraphrases of non-English notes.
+context.display_language is only the UI preference; the app creates translations separately.
+Keep notes/pitch names in scientific notation (C4 = middle C).
 Give a precise section, key, quarter-note BPM, hand roles, actual notes and rhythms, and executable steps.
 Use original exercises unless an exact song source is supplied; do not invent a standard's score.
 Notation v1 supports 1–16 bars of 4/4, one voice of notes/chords or rests per hand, durations .5, 1, 2, 4
@@ -223,6 +239,14 @@ class CodexRunner:
         self.timeout = timeout
 
     def generate(self, context):
+        return self.complete(prompt_for(context), SCHEMA, lambda result: validate_result(result, context))
+
+    def translate(self, context, schema):
+        from localization import prompt_for as translation_prompt
+        return self.complete(translation_prompt(context), schema,
+                             lambda result: validate_shape(result, schema, 'translation'))
+
+    def complete(self, prompt, output_schema, validate):
         try:
             login = subprocess.run([self.executable, 'login', 'status'], capture_output=True, text=True, timeout=15)
         except FileNotFoundError:
@@ -235,7 +259,7 @@ class CodexRunner:
             # Empty isolated cwd, no inherited project config, plugins, hooks or tool access.
             work = Path(directory)
             schema = work / 'schema.json'
-            schema.write_text(json.dumps(SCHEMA))
+            schema.write_text(json.dumps(output_schema))
             output = work / 'result.json'
             args = [self.executable, 'exec', '--sandbox', 'read-only', '--ephemeral', '--json',
                     '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', '--cd', directory,
@@ -252,7 +276,7 @@ class CodexRunner:
                     process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr,
                                                text=True, cwd=directory, start_new_session=True)
                     try:
-                        process.communicate(prompt_for(context), timeout=self.timeout)
+                        process.communicate(prompt, timeout=self.timeout)
                     except subprocess.TimeoutExpired:
                         os.killpg(process.pid, signal.SIGKILL)
                         process.communicate()
@@ -277,7 +301,7 @@ class CodexRunner:
                 if not output.exists() or output.stat().st_size > 100_000:
                     raise ValueError('Missing or oversized result')
                 result = json.loads(output.read_text())
-                validate_result(result, context)
+                validate(result)
             except RecommendationError:
                 raise
             except (ValueError, TypeError, KeyError, IndexError):
@@ -341,11 +365,11 @@ def accept(root, data, context, result, request_id, provenance):
                       existing['target']['analysis'] == {k: result[k] for k in ('evidence', 'unknowns')},
                       'This request ID belongs to a different recommendation.')
             return {'task_id': existing['assignment']['task_id'], 'target': existing['target']}
-        current = context_for(root, data, context.get('language'), context.get('request', ''))
+        current = context_for(root, data, context.get('display_language', context.get('language')), context.get('request', ''))
         if digest(context) != digest(current) or any(r.is_pending(t) for t in tasks):
             raise RecommendationError('stale')
         generation = {**provenance, 'request_id': request_id, 'context_fingerprint': context['fingerprint'],
-                      'context_file': '.recommendations/' + request_id + '.json'}
+                      'context_file': '.recommendations/' + request_id + '.json', 'source_language': 'en'}
         target = make_target(result, data, generation)
         event = r.new_event('assigned', 'T-' + uuid.uuid4().hex[:10], data, target['exercise_id'])
         event.update(target_json=r.jdump(target), reason=result['exercise']['selection_reason'])
@@ -413,7 +437,7 @@ class Recommendations:
             path = self._path(request_id)
             if path.exists():
                 job = json.loads(path.read_text())
-                if job['context']['request'] != request or language and job['context']['language'] != language:
+                if job['context']['request'] != request:
                     raise ValueError('This request ID belongs to a different recommendation.')
                 self.latest()  # Recover abandoned jobs after a server restart.
                 return self.public(json.loads(path.read_text()))

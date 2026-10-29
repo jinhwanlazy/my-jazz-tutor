@@ -11,6 +11,7 @@ __pycache__/
 /practice/practice.csv
 /practice/profile.json
 /practice/.recommendations/
+/practice/.translations/
 /practice/workflow-feedback.md
 /practice/sessions.sqlite3
 /practice/reports/

@@ -557,6 +557,19 @@
     "Your records or active version changed during generation. Request a new recommendation.": "생성 중 기록이나 활성 버전이 바뀌었어요. 새 추천을 요청해 주세요.",
     "Another recommendation is being generated. Wait for it to finish.": "다른 추천을 생성하고 있어요. 완료될 때까지 기다려 주세요.",
     "The coaching context is too large or invalid. Check the profile and practice records.": "추천에 필요한 맥락이 너무 크거나 형식이 잘못됐어요. 프로필과 연습 기록을 확인해 주세요.",
-    "MIDI input requires HTTPS or localhost. You can still practice with the metronome.": "MIDI 입력은 HTTPS 또는 localhost에서 사용할 수 있어요. 메트로놈으로는 계속 연습할 수 있어요."
+    "MIDI input requires HTTPS or localhost. You can still practice with the metronome.": "MIDI 입력은 HTTPS 또는 localhost에서 사용할 수 있어요. 메트로놈으로는 계속 연습할 수 있어요.",
+    "MIDI connection": "MIDI 연결",
+    "MIDI not connected.": "MIDI가 연결되지 않았어요.",
+    "MIDI recording is off.": "MIDI 입력 기록이 꺼져 있어요.",
+    "Sound settings": "사운드 설정",
+    "Choose BPM before starting. It stays fixed until this recording ends.": "시작 전에 BPM을 선택하세요. 이번 녹음을 마칠 때까지 고정됩니다.",
+    "BPM is fixed for this recording, including pauses.": "이번 녹음의 BPM은 일시정지 중에도 고정됩니다.",
+    "Translating this practice… Showing the original while you wait.": "연습 설명을 번역하고 있어요. 기다리는 동안 원문을 표시합니다.",
+    "Retry translation": "번역 재시도",
+    "Translation took too long. The original practice is still available. Try again.": "번역 시간이 초과됐어요. 원문으로 연습하거나 다시 시도해 주세요.",
+    "The translation could not be validated. Showing the original practice.": "번역 내용을 검증하지 못했어요. 원문을 표시합니다.",
+    "Translation stopped when the server restarted. Try again.": "서버 재시작으로 번역이 중단됐어요. 다시 시도해 주세요.",
+    "The active version or original practice changed. Retry the translation.": "활성 버전이나 원문이 변경됐어요. 번역을 다시 시도해 주세요.",
+    "This practice is too large to translate.": "연습 내용이 너무 길어 번역할 수 없어요."
   }
 }

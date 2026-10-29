@@ -74,7 +74,13 @@ to enter measured BPM, time, date, or correctness checks again. **Why this pract
 shows the coach's interpretations, source IDs and unknowns separately.
 
 Settings switches English/Korean while preserving active input and unsaved memos.
-Your notes and generated conditions retain their original language. Recommendations
+New exercises are saved in English first. Korean screens request a Codex translation
+and reuse the cached copy afterward. Titles, descriptions, steps and coaching
+explanations switch languages; your notes and original conditions stay intact.
+Translation status and retry controls appear alongside the original when needed.
+The **Practice** sidebar also keeps MIDI connection and input selection visible.
+Choose BPM before starting; it remains locked through pauses until recording ends.
+Recommendations
 send explicit context through your Codex login; they never assume access to the
 current chat. Failures show retry instructions and do not create a fallback exercise.
 
@@ -98,21 +104,21 @@ cache location. First launch resolves `runtime-ref` to a commit in local
 `.runtime/` cache reconstructs the same commit from local Git history.
 
 Publishing activates the selected release even with unfinished tasks. From the
-repository root, run `uv run --project workflow python workflow/publish.py --ref v0.3.1`.
+repository root, run `uv run --project workflow python workflow/publish.py --ref v0.3.2`.
 Compatible tasks keep their original conditions; incompatible tasks are retired
 with a reason while preserving history and MIDI. Retirement is not a performance
 result or a skip. Use `--cache-only` to prepare without activating, and restart the
 practice server after activation. Launching alone follows the existing pin.
 
 `practice.csv`, `profile.json`, `workflow-feedback.md`, `sessions.sqlite3`,
-`runtime.json`, `active-version`, `.runtime/`, `.recommendations/`, `reports/`, and `backups/` are ignored
+`runtime.json`, `active-version`, `.runtime/`, `.recommendations/`, `.translations/`, `reports/`, and `backups/` are ignored
 by Git. `active-version` is for legacy compatibility; `runtime.json` selects the
 active code. The CSV is created when the first task is assigned, and MIDI storage
 when the first recording starts. Add local workflow feedback notes as needed.
 Missing files mean no data has been recorded; do not fill them with sample results.
 
 Git does not back up personal records. Stop the server, then copy the CSV, SQLite
-database, profile, feedback notes, `.recommendations/`, and `runtime.json` to a private backup location.
+database, profile, feedback notes, `.recommendations/`, `.translations/`, and `runtime.json` to a private backup location.
 The cache can be rebuilt, but its pinned commit must remain available in Git
 history. Use the ignored `backups/` directory for any backups kept here. Removing
 a file from tracking does not erase earlier committed copies from Git history.

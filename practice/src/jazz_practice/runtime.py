@@ -17,7 +17,7 @@ WEB = ['webapp.py', 'sessions.py', 'webapp.html', 'webapp.css', 'webapp.js', 'au
 LOCALIZATION = ['i18n.mjs', 'translations.json']
 NOTATION = ['notation.py', 'score.mjs', 'timeline.mjs', 'Bravura.woff2', 'Bravura-LICENSE.txt', 'THIRD_PARTY.md']
 RECOMMENDATION = ['recommendation.py', 'recommendation.schema.json']
-FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION
+FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + ['localization.py']
 PIN = 'runtime.json'
 CACHE = '.runtime'
 

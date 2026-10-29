@@ -27,3 +27,13 @@ def result():
 class SyntheticRunner:
     def generate(self, context):
         return copy.deepcopy(result()), {'provider': 'synthetic-test'}
+
+
+class SyntheticTranslator:
+    def __init__(self):
+        self.calls = 0
+
+    def translate(self, context, schema):
+        self.calls += 1
+        prefix = '번역: ' if context['target_language'] == 'Korean' else 'Translated: '
+        return {'strings': {key: prefix + text for key, text in context['strings'].items()}}, {'provider': 'synthetic-test'}

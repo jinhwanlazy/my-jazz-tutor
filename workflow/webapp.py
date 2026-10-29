@@ -16,6 +16,7 @@ import review as r
 from notation import score_for
 from sessions import SessionStore, reflection_measurements
 from recommendation import Recommendations, ERRORS, repeat
+from localization import Translations, ERRORS as TRANSLATION_ERRORS
 
 ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "text/javascript",
           "audio.mjs": "text/javascript", "capture.mjs": "text/javascript",
@@ -24,7 +25,12 @@ ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "te
           "Bravura.woff2": "font/woff2", "Bravura-LICENSE.txt": "text/plain"}
 
 
-def display_target(target, language):
+def display_target(target, language, translations=None):
+    if target.get("kind") == "generated" and translations is not None:
+        display, state = translations.view(target, language)
+        if state.get("error_code"):
+            state["error"] = r.web_text(TRANSLATION_ERRORS.get(state["error_code"], TRANSLATION_ERRORS["connection"]), language)
+        return display | {"notation": score_for(target), "translation": state}
     return (target if target.get("kind") == "generated" else r.display_builtin(target, language)) | {"notation": score_for(target)}
 
 
@@ -69,7 +75,7 @@ def feedback(task, language="en"):
 
 
 class Application:
-    def __init__(self, root, data, source=r.HERE, recommender=None):
+    def __init__(self, root, data, source=r.HERE, recommender=None, translator=None):
         self.root, self.source, self.data = Path(root).resolve(), Path(source).resolve(), data
         if (self.source / "publish.py").exists():
             r.require(not self.root.is_relative_to((self.source.parent / "practice").resolve()),
@@ -81,6 +87,7 @@ class Application:
         self.token = secrets.token_urlsafe(32)
         self.mutations = threading.RLock()
         self.recommendations = Recommendations(self.root, data, recommender)
+        self.translations = Translations(self.root, translator)
 
     def assert_active(self):
         if not self.preview:
@@ -100,7 +107,7 @@ class Application:
             task_sessions = [s for s in sessions if s["task_id"] == task["assignment"]["task_id"]]
             started = any(s["status"] == "recording" or s["summary"] and (s["summary"]["active_ms"] > 0 or s["summary"]["note_ons"]) for s in task_sessions)
             history.append({"id": task["assignment"]["task_id"], "exercise_id": task["assignment"]["exercise_id"],
-                            "assigned_at": task["assignment"]["recorded_at"], "target": display_target(task["target"], language),
+                            "assigned_at": task["assignment"]["recorded_at"], "target": display_target(task["target"], language, self.translations),
                             "cancelled": task["cancelled"], "retired": task["retired"], "discarded": task["discarded"],
                             "discard_choice": r.discard_details(task)["choice"],
                             "reason": r.discard_details(task)["note"] if task["discarded"] else (task["cancellation"] or task["assignment"])["reason"],
@@ -112,7 +119,7 @@ class Application:
                                           and e["event_type"] in ("reported", "corrected")]})
         status = r.status(self.root, self.data)
         if "target" in status["next"]:
-            status["next"]["target"] = display_target(status["next"]["target"], language)
+            status["next"]["target"] = display_target(status["next"]["target"], language, self.translations)
         status["next"]["reason"] = r.web_text(status["next"]["reason"], language)
         status["evidence"] = r.web_text(status["evidence"], language)
         job = self.recommendations.latest()
@@ -131,6 +138,9 @@ class Application:
             if path == "/api/recommend":
                 r.require(set(payload) <= {"request_id", "request"}, "The recommendation request contains unknown fields.")
                 return self.recommendations.start(payload["request_id"], language, payload.get("request", ""))
+            if path == "/api/translate":
+                r.require(set(payload) <= {"task_id", "retry"}, "The translation request contains unknown fields.")
+                return self.translations.start(payload["task_id"], language, payload.get("retry", False))
             if path == "/api/repeat":
                 r.require(set(payload) == {"source_task_id", "task_id"}, "Invalid repeat request.")
                 return repeat(self.root, self.data, payload["source_task_id"], payload["task_id"])
@@ -181,10 +191,10 @@ def listen_host(host):
     return str(address)
 
 
-def make_server(root, data, port=8765, source=r.HERE, recommender=None, host="127.0.0.1"):
+def make_server(root, data, port=8765, source=r.HERE, recommender=None, host="127.0.0.1", translator=None):
     r.require(type(port) is int and 0 <= port <= 65535, "The port must be between 0 and 65535.")
     host = listen_host(host)
-    app = Application(root, data, source, recommender)
+    app = Application(root, data, source, recommender, translator)
 
     class Handler(BaseHTTPRequestHandler):
         def language(self):

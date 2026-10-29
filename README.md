@@ -75,12 +75,16 @@ labels and an optional memo there. Feedback is editable independently of complet
 Skipped items retain optional reasons. Practice again creates a separate attempt.
 A continuous grand staff shows assigned notes and live input. Musical MIDI scoring
 is not implemented; recorded BPM values are metronome settings.
+MIDI connection stays visible in the sidebar (at the top on mobile). Choose BPM
+before recording; it stays fixed while playing and paused until that recording ends.
+New exercises are saved in English and translated by Codex for Korean display.
+Translations are cached separately; original conditions and user notes stay intact.
 
 Generation requires an installed Codex CLI, a working login (`codex login status`),
 network access and available usage allowance. No separate API key is required.
 Only the explicit coaching context is sent; there is no shared chat memory. Errors
 are shown instead of replacing a failed request with fixed-curriculum recommendations.
-Personal recommendation artifacts remain local and excluded from Git.
+Personal recommendation artifacts and translation caches remain local and excluded from Git.
 
 Raw MIDI is stored in `practice/sessions.sqlite3`. See the
 [workflow README](workflow/README.md#web-practice-room) for startup, activation,

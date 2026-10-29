@@ -13,9 +13,10 @@
   <aside class="sidebar">
     <a class="brand" href="#list" aria-label="My Jazz Tutor practice room" data-i18n-aria-label="My Jazz Tutor practice room"><span class="brand-mark">j.</span><span>MY JAZZ TUTOR<small><span data-i18n="Your daily practice room">Your daily practice room</span></small></span></a>
     <nav aria-label="Main navigation" data-i18n-aria-label="Main navigation">
-      <button class="nav-button active" data-view="list"><span aria-hidden="true">≡</span> <span data-i18n="Practice list">Practice list</span></button>
+      <button class="nav-button active" data-view="list"><span aria-hidden="true">≡</span> <span data-i18n="Practice">Practice</span></button>
       <button class="nav-button" data-view="settings"><span aria-hidden="true">⚙</span> <span data-i18n="Settings">Settings</span></button>
     </nav>
+    <section class="midi-area" aria-label="MIDI connection" data-i18n-aria-label="MIDI connection"><div class="section-top"><div><span id="midi-light" class="midi-light"></span><strong data-i18n="MIDI input">MIDI input</strong></div><button id="midi-connect" class="midi-button" data-i18n="Connect">Connect</button></div><select id="midi-input" aria-label="MIDI input to record" hidden data-i18n-aria-label="MIDI input to record"></select><p id="midi-status" data-i18n="MIDI not connected.">MIDI not connected.</p></section>
     <div class="sidebar-bottom"><div class="piano-mini" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p><span data-i18n="Small steps.">Small steps.</span><br><span data-i18n="Music of your own.">Music of your own.</span></p><span id="version"><span data-i18n="Connecting">Connecting</span></span></div>
   </aside>
   <main>
@@ -59,6 +60,7 @@
       <section class="card lesson-card" aria-labelledby="lesson-title">
         <div class="section-top"><span class="eyebrow" id="lesson-kind"><span data-i18n="Next task">Next task</span></span><span class="tag" id="lesson-phase"><span data-i18n="Starting point">Starting point</span></span></div>
         <h2 id="lesson-title"><span data-i18n="Loading your exercise">Loading your exercise</span></h2>
+        <div id="lesson-translation"></div>
         <p id="lesson-purpose" class="lesson-purpose"></p>
         <div id="target-meta" class="meta-row"></div>
         <p id="lesson-section" class="subtle"></p><p id="lesson-instructions" class="instructions"></p>
@@ -82,14 +84,13 @@
             <div class="playback-tempo"><div class="tempo-control"><button id="tempo-down" class="round-button" aria-label="Decrease BPM by 5" data-i18n-aria-label="Decrease BPM by 5">−</button><div><input id="tempo" type="number" min="40" max="120" value="60" aria-label="Metronome BPM" data-i18n-aria-label="Metronome BPM"><span>BPM</span></div><button id="tempo-up" class="round-button" aria-label="Increase BPM by 5" data-i18n-aria-label="Increase BPM by 5">+</button></div><input id="tempo-range" class="tempo-range" type="range" min="40" max="120" value="60" aria-label="Metronome tempo slider" data-i18n-aria-label="Metronome tempo slider"></div>
             <div class="playback-progress"><div id="beats" class="beats" aria-label="Current beat" data-i18n-aria-label="Current beat"><span>1</span><span>2</span><span>3</span><span>4</span></div><span id="elapsed">00:00</span><span id="transport-state" class="transport-status"><span data-i18n="Ready">Ready</span></span></div>
           </div>
-          <p class="tempo-hint" data-i18n="Quarter-note beats · changes on the next beat">Quarter-note beats · changes on the next beat</p>
-          <details id="playback-settings" class="playback-settings"><summary data-i18n="Sound &amp; MIDI settings">Sound &amp; MIDI settings</summary><div class="playback-settings-grid">
+          <p id="tempo-hint" class="tempo-hint" data-i18n="Choose BPM before starting. It stays fixed until this recording ends.">Choose BPM before starting. It stays fixed until this recording ends.</p>
+          <details id="playback-settings" class="playback-settings"><summary data-i18n="Sound settings">Sound settings</summary><div class="playback-settings-grid">
           <div class="sound-controls">
             <div class="sound-row"><label class="switch-label"><input id="click-toggle" type="checkbox" checked><span class="switch"></span><span><span data-i18n="Metronome click">Metronome click</span></span></label><input id="click-volume" type="range" min="0" max="1" step="0.01" value="0.35" aria-label="Metronome volume" data-i18n-aria-label="Metronome volume"></div>
             <div class="sound-row"><label class="switch-label"><input id="pad-toggle" type="checkbox"><span class="switch"></span><span><span data-i18n="Chord pad">Chord pad</span></span></label><input id="pad-volume" type="range" min="0" max="0.6" step="0.01" value="0.18" aria-label="Chord pad volume" data-i18n-aria-label="Chord pad volume"></div>
             <p class="sound-hint"><span data-i18n="Soft chords follow the progression.">Soft chords follow the progression.</span></p>
           </div>
-          <div class="midi-area"><div class="section-top"><div><span id="midi-light" class="midi-light"></span><strong><span data-i18n="MIDI input">MIDI input</span></strong></div><button id="midi-connect" class="midi-button"><span data-i18n="Connect">Connect</span></button></div><select id="midi-input" aria-label="MIDI input to record" hidden data-i18n-aria-label="MIDI input to record"></select><p id="midi-status"><span data-i18n="You can practice without a MIDI connection.">You can practice without a MIDI connection.</span></p></div>
           </div></details>
           <small id="save-status" class="save-status"><span data-i18n="Timing starts when you begin practice.">Timing starts when you begin practice.</span></small>
         </div>

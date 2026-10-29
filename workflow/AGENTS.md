@@ -38,6 +38,8 @@ user requests implementation. Read `DESIGN.md`, `README.md`, `curriculum.yaml`, 
   loopback; explicit `serve --host` binding supports trusted LAN use without login.
   Recommendations use local Codex CLI authentication; no separate API key is required.
   Codex returns structured recommendations; the app validates and writes records.
+  New saved recommendations use English; translated display copies stay in local
+  `.translations/` and never replace original conditions, notes or music data.
   Test real connections only with synthetic context, never production personal data.
 - If code/curriculum/coach instructions change after release, use a new version.
 

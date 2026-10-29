@@ -239,6 +239,23 @@ print(json.dumps({{'type':'turn.completed','usage':{{'input_tokens':5}}}}))
             rec.CodexRunner(str(self.root/'missing')).generate(self.context)
         self.assertEqual(error.exception.code,'not_installed')
 
+    def test_translation_reuses_cli_protocol_with_a_prose_only_schema(self):
+        import localization as loc
+        target=rec.make_target(result(),r.curriculum(),{'source_language':'en'})
+        context,_=loc.translation_input(target,'ko','en')
+        output={'strings':context['strings']}
+        body=f'''if sys.argv[1:]==['login','status']: sys.exit(0)
+args=sys.argv[1:]
+schema=json.loads(pathlib.Path(args[args.index('--output-schema')+1]).read_text())
+assert set(schema['properties'])=={{'strings'}}
+assert 'Translate the supplied jazz piano practice' in sys.stdin.read()
+pathlib.Path(args[args.index('--output-last-message')+1]).write_text({json.dumps(output)!r})
+print(json.dumps({{'type':'turn.completed'}}))
+'''
+        translated,provenance=self.script(body).translate(context,loc.output_schema(context))
+        self.assertEqual(translated,output)
+        self.assertEqual(provenance['authentication'],'existing-cli-login')
+
 
 class GeneratedReleaseTests(unittest.TestCase):
     def test_publish_carries_generated_snapshot_outside_reference_limits_and_keeps_midi(self):
