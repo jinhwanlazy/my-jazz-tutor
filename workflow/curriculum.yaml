@@ -1,5 +1,5 @@
 schema_version: 1
-version: "0.3.2"
+version: "0.3.3"
 # Reference examples only: no required sequence, candidate restriction, or mastery plan.
 # Canonical material and criteria strings remain stable for historical comparisons.
 # review.display_builtin supplies English presentation without rewriting evidence.

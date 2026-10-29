@@ -104,7 +104,7 @@ cache location. First launch resolves `runtime-ref` to a commit in local
 `.runtime/` cache reconstructs the same commit from local Git history.
 
 Publishing activates the selected release even with unfinished tasks. From the
-repository root, run `uv run --project workflow python workflow/publish.py --ref v0.3.2`.
+repository root, run `uv run --project workflow python workflow/publish.py --ref v0.3.3`.
 Compatible tasks keep their original conditions; incompatible tasks are retired
 with a reason while preserving history and MIDI. Retirement is not a performance
 result or a skip. Use `--cache-only` to prepare without activating, and restart the

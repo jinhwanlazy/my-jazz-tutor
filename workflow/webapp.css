@@ -340,7 +340,8 @@ dialog{padding:23px 20px}
 .assessment-details p{margin-bottom:8px}
 @media(max-width:580px){.sidebar{flex-wrap:wrap;gap:10px}.sidebar nav{flex:1;justify-content:flex-end}.nav-button{padding:8px 7px;font-size:10px}}
 /* Practice journal is the entry point; the room opens only for a selected task. */
-.list-toolbar{display:flex;align-items:center;gap:20px;margin-bottom:22px}
+.new-practice-area{margin-bottom:24px}
+.list-toolbar{display:flex;align-items:center;gap:20px}
 .list-toolbar p{font-size:12px;margin:0;line-height:1.7}
 .list-filters{margin-bottom:20px}
 .list-filters>summary{cursor:pointer;font-size:12px;color:var(--muted);padding:8px 0}
@@ -360,10 +361,11 @@ dialog{padding:23px 20px}
 #settings-back{margin-top:24px}
 .dialog-actions{display:flex;gap:12px;flex-wrap:wrap}
 @media(max-width:580px){.list-toolbar{align-items:flex-start;flex-direction:column;gap:12px}.practice-item .history-item{padding:18px 17px 12px;gap:10px}.practice-content,.practice-result,.practice-note{margin-left:17px;margin-right:17px}.row-actions{padding-left:17px;padding-right:17px}.practice-item .history-item h3{font-size:16px}.practice-item .tag{font-size:10px;white-space:nowrap}.room-heading{padding-top:18px}#new-dialog .chooser-fields{grid-template-columns:1fr}}
-.recommendation-focus{margin:16px 0;color:var(--muted);font-size:13px}
+.recommendation-focus{margin:0 0 14px;color:var(--muted);font-size:13px}
+.recommendation-focus>summary{cursor:pointer;padding:8px 0}
 .recommendation-focus label{display:block;margin:12px 0 6px}
 .recommendation-focus textarea{width:100%;max-width:720px}
-.generation-panel{margin:18px 0;border-left:3px solid var(--green)}
+.generation-panel{margin:16px 0 0;border-left:3px solid var(--green)}
 .generation-panel[aria-busy="true"] strong::before{content:"";display:inline-block;width:10px;height:10px;margin-right:10px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:generating 1s linear infinite}
 @keyframes generating{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.generation-panel[aria-busy="true"] strong::before{animation:none}}

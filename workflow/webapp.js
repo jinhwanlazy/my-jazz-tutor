@@ -128,12 +128,16 @@ async function pollGeneration() {
   catch (error) { fail(error); generationTimer = setTimeout(pollGeneration, 3000); }
 }
 function renderGeneration() {
-  const job = ui.data.recommendation;
+  const job = ui.creating ? {state: 'running', has_request: Boolean(ui.submittedFocus?.trim())} : ui.data.recommendation;
   $('generation-panel').hidden = !job || (job.state === 'completed' && !ui.data.history.some(t => t.id === job.task_id && t.pending));
   if (job) {
     $('generation-panel').setAttribute('aria-busy', String(job.state === 'running'));
     $('generation-title').textContent = tr(job.state === 'running' ? 'Creating your practice…' : job.state === 'completed' ? 'Your new practice is in the list.' : 'Could not create a practice');
-    $('generation-message').textContent = job.state === 'running' ? tr('Codex is reviewing your profile, practice records, feedback, and notes. You can stay on this page; this may take a few minutes.') : job.state === 'failed' ? job.error : tr('Open the item when you are ready to practice.');
+    $('generation-message').textContent = job.state === 'running' ? tr(job.has_request ? 'Your focus is included. Codex is reviewing it with your profile and practice records. This may take a few minutes.' : 'Codex is reviewing your profile, practice records, feedback, and notes. You can stay on this page; this may take a few minutes.') : job.state === 'failed' ? job.error : tr('Open the item when you are ready to practice.');
+    if (job.state === 'completed' && job.id === ui.submittedRequestId) {
+      if ($('recommendation-request').value === ui.submittedFocus) $('recommendation-request').value = '';
+      ui.submittedRequestId = null;
+    }
     $('retry-recommendation').hidden = job.state !== 'failed';
     if (job.state !== 'running') ui.newRequestId = null;
   }
@@ -141,12 +145,13 @@ function renderGeneration() {
   if (job?.state === 'running') generationTimer = setTimeout(pollGeneration, 1500);
 }
 function renderChoices() {
-  const generating = ui.data.recommendation?.state === 'running';
+  const generating = ui.creating || ui.data.recommendation?.state === 'running';
   const lock = Boolean(pending()) || ui.busy || generating;
   for (const id of ['tempo', 'tempo-range']) { $(id).min = ui.data.minimum_bpm; $(id).max = ui.data.maximum_bpm; }
   $('new-practice').disabled = lock || Boolean(ui.capture) || openSessions().length > 0;
   $('retry-recommendation').disabled = $('new-practice').disabled;
   $('recommendation-request').disabled = generating || ui.busy;
+  $('recommendation-focus').hidden = Boolean(generating);
   $('pending-hint').textContent = pending() ? tr('Open your unfinished practice below to continue or skip it.') : '';
   const exerciseFilter = $('filter-exercise').value, keyFilter = $('filter-key').value;
   const exercises = new Map(ui.data.history.map(t => [t.exercise_id, t.target.title]));
@@ -554,21 +559,19 @@ $('pad-toggle').addEventListener('change', event => { transport.setPad(event.tar
 for (const id of ['click-volume', 'pad-volume']) $(id).addEventListener('input', () => transport.setVolumes(Number($('click-volume').value), Number($('pad-volume').value)));
 async function newPractice() {
   if (pending() || ui.busy || ui.capture || openSessions().length || ui.data.recommendation?.state === 'running') return;
-  clearError(); ui.busy = true; renderChoices();
+  clearError(); ui.busy = true; ui.creating = true;
   ui.newRequestId ||= 'R-' + randomHex();
-  $('generation-panel').hidden = false;
-  $('generation-panel').setAttribute('aria-busy', 'true');
-  $('generation-title').textContent = tr('Creating your practice…');
-  $('generation-message').textContent = tr('Codex is reviewing your profile, practice records, feedback, and notes. You can stay on this page; this may take a few minutes.');
-  $('retry-recommendation').hidden = true;
+  ui.submittedRequestId = ui.newRequestId;
+  ui.submittedFocus = $('recommendation-request').value;
+  renderChoices(); renderGeneration();
   try {
-    await api('/api/recommend', {request_id: ui.newRequestId, request: $('recommendation-request').value});
+    await api('/api/recommend', {request_id: ui.newRequestId, request: ui.submittedFocus});
     clearFilters(); await refresh(true);
   } catch (error) {
     fail(error);
     // If only the response was lost, pick up the durable job instead of creating another.
     try { await refresh(true); } catch {}
-  } finally { ui.busy = false; renderChoices(); }
+  } finally { ui.busy = false; ui.creating = false; renderGeneration(); renderChoices(); }
 }
 $('new-practice').addEventListener('click', newPractice);
 $('retry-recommendation').addEventListener('click', newPractice);

@@ -25,12 +25,14 @@
     <div id="recovery" class="notice recovery" hidden><div><strong><span data-i18n="There is practice to recover.">There is practice to recover.</span></strong><p><span data-i18n="Upload input saved in this browser and close the interrupted session.">Upload input saved in this browser and close the interrupted session.</span></p></div><button id="recover-btn" class="button secondary"><span data-i18n="Recover practice">Recover practice</span></button></div>
     <section id="view-list" class="view">
       <div class="page-heading"><div><p class="eyebrow" data-i18n="PRACTICE JOURNAL">PRACTICE JOURNAL</p><h1 data-i18n="Your practice.">Your practice.</h1><p class="subtle" data-i18n="Add an exercise, then open it when you are ready.">Add an exercise, then open it when you are ready.</p></div><div class="daily-summary"><span data-i18n="Practice today">Practice today</span><strong id="daily-time">0<span> / 30 min</span></strong><small id="daily-count"></small></div></div>
-      <div class="list-toolbar"><button id="new-practice" class="button primary" data-i18n="New practice">New practice</button><p id="pending-hint" class="subtle"></p></div>
+      <div class="new-practice-area">
+        <details id="recommendation-focus" class="recommendation-focus"><summary data-i18n="Focus for the next practice · optional">Focus for the next practice · optional</summary><label for="recommendation-request" data-i18n="Anything you want to work on?">Anything you want to work on?</label><textarea id="recommendation-request" rows="2" maxlength="2000"></textarea></details>
+        <div class="list-toolbar"><button id="new-practice" class="button primary" data-i18n="New practice">New practice</button><p id="pending-hint" class="subtle"></p></div>
+        <div id="generation-panel" class="card generation-panel" role="status" aria-live="polite" hidden><strong id="generation-title"></strong><p id="generation-message"></p><button id="retry-recommendation" class="button secondary" data-i18n="Try again" hidden>Try again</button></div>
+      </div>
       <details class="list-filters"><summary data-i18n="Filter practices">Filter practices</summary>
       <div class="card filters"><label><span data-i18n="Exercise">Exercise</span><select id="filter-exercise"><option value="" data-i18n="All exercises">All exercises</option></select></label><label><span data-i18n="Key">Key</span><select id="filter-key"><option value="" data-i18n="All keys">All keys</option></select></label><label><span data-i18n="From">From</span><input id="filter-from" type="date"></label><label><span data-i18n="To">To</span><input id="filter-to" type="date"></label></div>
       </details>
-      <details class="recommendation-focus"><summary data-i18n="Focus for the next practice · optional">Focus for the next practice · optional</summary><label for="recommendation-request" data-i18n="Anything you want to work on?">Anything you want to work on?</label><textarea id="recommendation-request" rows="2" maxlength="2000"></textarea></details>
-      <div id="generation-panel" class="card generation-panel" role="status" aria-live="polite" hidden><strong id="generation-title"></strong><p id="generation-message"></p><button id="retry-recommendation" class="button secondary" data-i18n="Try again" hidden>Try again</button></div>
       <div id="history-list" class="history-list"></div>
       <section id="record-panel" class="card record-card" hidden>
         <p class="eyebrow" data-i18n="PRACTICE FEEDBACK">PRACTICE FEEDBACK</p>

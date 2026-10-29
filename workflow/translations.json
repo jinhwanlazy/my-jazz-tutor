@@ -570,6 +570,7 @@
     "The translation could not be validated. Showing the original practice.": "번역 내용을 검증하지 못했어요. 원문을 표시합니다.",
     "Translation stopped when the server restarted. Try again.": "서버 재시작으로 번역이 중단됐어요. 다시 시도해 주세요.",
     "The active version or original practice changed. Retry the translation.": "활성 버전이나 원문이 변경됐어요. 번역을 다시 시도해 주세요.",
-    "This practice is too large to translate.": "연습 내용이 너무 길어 번역할 수 없어요."
+    "This practice is too large to translate.": "연습 내용이 너무 길어 번역할 수 없어요.",
+    "Your focus is included. Codex is reviewing it with your profile and practice records. This may take a few minutes.": "입력한 희망 사항을 프로필과 연습 기록에 함께 반영해 검토하고 있어요. 몇 분 정도 걸릴 수 있습니다."
   }
 }

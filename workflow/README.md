@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.3.2`; create a new tag for later releases instead of moving an old tag:
+selects `v0.3.3`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.3.2
+uv run python publish.py --ref v0.3.3
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -90,6 +90,10 @@ The former history tab is part of this list; the progress dashboard is removed.
 skip reasons, shows generation status, then adds a validated item without opening
 the room or starting playback. Click the new item to enter. Only one unfinished assignment is
 allowed; return to that item to continue or skip it before adding another.
+The optional focus field sits immediately above **New practice**. It hides while
+the request is being submitted or generated, and the progress message acknowledges
+an included focus. Successful generation clears the submitted text; a failure keeps
+it available for editing or retry. Practice filters follow these creation controls.
 **Complete practice** saves input, closes the task, and returns to the list. Add
 feedback in the completed item: 😈 Impossible, 💪 Challenging, 🙂 Good practice,
 or 🙄 Too easy to be useful. A tap saves it; a memo is optional. Completion does not

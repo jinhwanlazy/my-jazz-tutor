@@ -406,7 +406,8 @@ class Recommendations:
         return lock
 
     def public(self, job):
-        return {key: job[key] for key in ('id', 'state', 'started_at', 'task_id', 'error_code') if key in job}
+        return {key: job[key] for key in ('id', 'state', 'started_at', 'task_id', 'error_code') if key in job} | {
+            'has_request': bool(job.get('context', {}).get('request', '').strip())}
 
     def latest(self):
         import review as r

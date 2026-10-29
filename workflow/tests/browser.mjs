@@ -80,15 +80,26 @@ try {
   assert.equal(await page.locator('[data-view="history"], [data-view="progress"], #next-btn').count(),0);
   assert.doesNotMatch(await page.locator('body').innerText(),/[가-힣]/);
   await page.locator('.recommendation-focus summary').click();
+  assert.ok(await page.evaluate(()=>{
+    const focus=document.querySelector('#recommendation-focus').getBoundingClientRect();
+    const button=document.querySelector('#new-practice').getBoundingClientRect();
+    const filters=document.querySelector('.list-filters').getBoundingClientRect();
+    return focus.bottom<=button.top && button.top-focus.bottom<30 && button.bottom<filters.top;
+  }));
   await page.locator('#recommendation-request').fill('simulate:auth');
   await page.locator('#new-practice').click();
+  await hidden('#recommendation-focus');
   await visible('#generation-panel');
   await page.waitForFunction(()=>document.querySelector('#generation-panel').getAttribute('aria-busy')==='true');
+  assert.match(await page.locator('#generation-message').textContent(),/Your focus is included/);
   await visible('#retry-recommendation');
+  await visible('#recommendation-focus');
+  assert.equal(await page.locator('#recommendation-request').inputValue(),'simulate:auth');
   assert.match(await page.locator('#generation-message').textContent(),/login/);
   assert.equal((await state()).history.length,0);
   await page.locator('#recommendation-request').fill('');
   const first=await add('E01');
+  await visible('#recommendation-focus');
   assert.equal((await state()).sessions.length,0);
   await hidden('#view-practice');
   assert.match(await item(first).textContent(),/Ready to practice/);
@@ -320,6 +331,7 @@ try {
   await page.locator('.recommendation-focus').evaluate(e=>e.open=true);
   await page.locator('#recommendation-request').fill('simulate:no-pad');
   const withoutPad=await add(); await enter(withoutPad);
+  assert.equal(await page.locator('#recommendation-request').inputValue(),'');
   assert.equal(await page.locator('#pad-toggle').isEnabled(),false);
   assert.equal(await page.locator('.score-target[data-duration="2"] .score-whole').first().evaluate(n=>getComputedStyle(n).fill),'none');
   await page.locator('#tempo').fill('240'); await page.locator('#tempo').dispatchEvent('change');
