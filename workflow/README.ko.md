@@ -52,6 +52,27 @@ uv run --project practice jazz accept-recommendation --context /tmp/jazz-context
 검증·저장합니다. 원장이나 설치 소스를 직접 고치지 않습니다. `reflection TASK --input`
 명령은 웹과 같은 라벨·선택 메모를 받습니다. 기존 상세 보고·정정 명령은 호환용입니다.
 
+## LAN 접속
+
+0.3.1부터 `--host`로 LAN 바인딩을 명시할 수 있습니다. 기본은 `127.0.0.1`입니다.
+저장소 루트에서 실행하고 다른 기기에서는 `http://<서버-LAN-IP>:8768`로 접속합니다.
+
+```sh
+uv run --project practice jazz serve --host 0.0.0.0 --port 8768 --open
+```
+
+`0.0.0.0`은 모든 IPv4 인터페이스이며 특정 로컬 IPv4 주소로 제한할 수도 있습니다.
+`localhost`도 지원하지만 다른 호스트명과 IPv6는 지원하지 않습니다. `--open`은 서버
+컴퓨터의 브라우저를 엽니다. 방화벽 설정은 바꾸지 않습니다. 로그인 기능은 없으므로
+접속 가능한 기기는 개인 기록을 읽고 수정하거나 서버의 Codex 계정으로 추천을 요청할
+수 있습니다. 신뢰하는 LAN에서 사용합니다. Host·Origin·CSRF 검사는 유지합니다.
+
+일반 HTTP에서도 생성·메트로놈·저장은 동작합니다. MIDI는 지원 브라우저의 HTTPS 또는
+localhost가 필요합니다. 서버 자체는 TLS를 제공하지 않으므로 원격 MIDI는 SSH 포트
+전달 후 클라이언트의 localhost로 접속할 수 있습니다. 미전송 입력은 원래 브라우저·
+주소·포트에서 먼저 복구합니다. 개발 미리보기에도 `--host`를 추가할 수 있으며 기록은
+실제 practice가 아닌 `build/web-preview/` 등에서 만듭니다.
+
 ## 검증과 발행
 
 개인 기록은 테스트에 사용하지 않습니다. 소스 편집 후 버전을 올리고 아래를 실행합니다.
@@ -69,7 +90,7 @@ Playwright 브라우저 검사는 [영문 문서](README.md#web-validation)를 �
 새 버전 소스를 커밋·태그한 후 발행합니다.
 
 ```sh
-uv run python publish.py --ref v0.3.0
+uv run python publish.py --ref v0.3.1
 ```
 
 발행은 새 버전 활성화를 우선합니다. 호환 미완료 과제는 원래 조건을 유지하고 비호환은

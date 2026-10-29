@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.3.0`; create a new tag for later releases instead of moving an old tag:
+selects `v0.3.1`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.3.0
+uv run python publish.py --ref v0.3.1
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -71,7 +71,7 @@ tests.
 ## Web practice room
 
 Version 0.3.0 connects **New practice** to local Codex analysis and generation. The
-Python standard-library server remains loopback-only; playback and MIDI capture use
+Python standard-library server defaults to loopback; playback and MIDI capture use
 Web Audio/Web MIDI. Generation needs the installed Codex CLI, an existing login,
 network access and available usage allowance. No separate API key is required.
 It does not fall back to rule-selected exercises when Codex fails.
@@ -107,11 +107,30 @@ prepares the environment; `jazz` with no arguments runs `serve --open`:
 uv run --project practice jazz
 ```
 
-The server listens at `http://127.0.0.1:8765` and cannot be reached from other
-devices. Use `--port 8768` if needed, and Ctrl+C to stop. After publishing a new
-version, restart the server. Unfinished tasks do not block activation. Return with
+The server defaults to `http://127.0.0.1:8765`. Use `--port 8768` if needed,
+and Ctrl+C to stop. After publishing a new version, restart the server.
+Unfinished tasks do not block activation. Return with
 the same browser, address, and port to recover pending MIDI uploads; recovery also
 preserves input attached to retired tasks without creating a performance report.
+
+For access from other devices on a trusted LAN, explicitly choose a listen address:
+
+```sh
+uv run --project practice jazz serve --host 0.0.0.0 --port 8768 --open
+```
+
+Open `http://<server-LAN-IP>:8768` on the other device. `0.0.0.0` listens on all
+IPv4 interfaces; use a specific local IPv4 address to bind only that interface.
+`localhost` is also accepted; other hostnames and IPv6 are not supported.
+`--open` opens a browser on the server computer. No firewall rules are changed.
+There is no login: reachable devices can read and change practice records and
+request recommendations using the server's Codex account. Host, same-origin and
+CSRF checks remain enabled; they do not authenticate LAN users.
+Practice generation, metronome playback and saving work over plain HTTP. Web MIDI
+requires HTTPS or localhost in a supporting browser; this server does not provide
+TLS. To use MIDI remotely without HTTPS, forward the port through SSH and visit
+localhost on the client. Changing the address creates a separate browser storage
+origin, so recover any unsent input at its original address first.
 
 - **Practice room:** read the task instructions, target conditions, and success
   criteria first, then use the score and its single set of playback controls.
@@ -154,7 +173,7 @@ New tasks can use any key and 20–240 BPM. The current notation contract suppor
 notes and rests. It has no ties, tuplets or dotted notes. Open improvisation can use
 specific written instructions with an explicit reason for omitting fixed notation.
 
-MIDI is optional. In a browser supporting Web MIDI on a local address, choose
+MIDI is optional. In a browser supporting Web MIDI on HTTPS or localhost, choose
 **MIDI input → Connect** and grant permission. All connected inputs are selected
 by default; you can choose a particular device. The browser's raw bytes are saved
 without requesting SysEx permission. Other practice features work without MIDI
@@ -194,6 +213,8 @@ uv run python review.py --practice-root build/web-preview serve --open --port 87
 ```
 
 Preview records stay in the ignored `build/web-preview/` directory.
+Add `--host 0.0.0.0` to the preview command to access it over LAN. The same HTTP
+and MIDI limitations apply; use this preview directory for development records.
 
 ### Managing the uv launcher
 
@@ -264,6 +285,16 @@ Screenshots go to `build/browser/`. Checks cover MIDI permission denial, synthet
 input preservation and timing, tempo/pad playback, reports, corrections, skips,
 offline recovery, and mobile layout. Synthetic MIDI tests do not verify a physical
 keyboard connection or speaker quality.
+
+The optional LAN browser check requires this computer's actual non-loopback IPv4
+address. It uses temporary synthetic records and verifies an ordinary HTTP origin,
+including generation, recording completion, feedback, repeat and MIDI messaging:
+
+```sh
+JAZZ_TEST_LAN_HOST='<server-LAN-IP>' \
+PLAYWRIGHT_MODULE="$PWD/build/browser-tools/node_modules/playwright/index.mjs" \
+CHROME_EXECUTABLE=/usr/bin/google-chrome node tests/browser-lan.mjs
+```
 
 ## Codex recommendations and conversational coaching
 

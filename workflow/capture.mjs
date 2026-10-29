@@ -1,3 +1,8 @@
+// getRandomValues also works on plain HTTP LAN origins, where randomUUID is absent.
+export function randomHex(bytes = 16) {
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 // JPM1 export: magic, then repeated little-endian f64 milliseconds/u16 port/u16 length/bytes.
 export function encodeMidi(messages) {
   const bytes = new Uint8Array(messages.reduce((n, m) => n + 12 + m.data.length, 0));

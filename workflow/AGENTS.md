@@ -34,8 +34,9 @@ user requests implementation. Read `DESIGN.md`, `README.md`, `curriculum.yaml`, 
   New tasks use the shared recommendation schema and immutable generated conditions.
 - Same-day success, later retention, and transfer are distinct observations.
 - Do not represent coverage as a percentage of total jazz mastery or polygon area.
-- Keep runtime dependencies small. The web UI uses a loopback-only Python standard-library
-  server. Recommendations use local Codex CLI authentication; no separate API key is required.
+- Keep runtime dependencies small. The Python standard-library web server defaults to
+  loopback; explicit `serve --host` binding supports trusted LAN use without login.
+  Recommendations use local Codex CLI authentication; no separate API key is required.
   Codex returns structured recommendations; the app validates and writes records.
   Test real connections only with synthetic context, never production personal data.
 - If code/curriculum/coach instructions change after release, use a new version.

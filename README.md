@@ -94,5 +94,9 @@ default, carries compatible unfinished tasks, and retires incompatible tasks whi
 preserving their history and MIDI. Use `--cache-only` to defer activation; restart
 the practice server after publishing.
 
+For trusted LAN access, add `--host 0.0.0.0` and open the server's LAN IP and port
+from another device. The server has no login; Web MIDI requires HTTPS or localhost.
+See [LAN setup](workflow/README.md#web-practice-room) for details and development previews.
+
 Role boundaries are enforced by directory instructions and runtime publication.
 They are operating conventions, not an OS sandbox blocking access to other files.

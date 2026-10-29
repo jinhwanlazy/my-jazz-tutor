@@ -1,4 +1,4 @@
-# 설계 결정 — 0.3.0
+# 설계 결정 — 0.3.1
 
 ## 추천의 역할
 
@@ -10,7 +10,16 @@ LLM이 실제 프로필, 과제 조건, 완료 기록, 난이도 라벨, 원문 
 
 ## 실행 경계
 
-표준 라이브러리 loopback 서버가 `codex exec --sandbox read-only --ephemeral --json
+서버 바인딩은 기본 `127.0.0.1`이며, `serve --host`에 로컬 IPv4 주소나 `0.0.0.0`을
+명시하면 LAN 접속을 허용한다. `localhost` 외 호스트명과 IPv6는 지원하지 않는다.
+Host는 실제 연결이 도달한 로컬 IP와 포트에, Origin은 해당 요청 Host에 맞아야 하며
+쓰기에는 기존 CSRF 토큰이 필요하다. 와일드카드 바인딩에서도 임의 DNS 이름을 허용하지
+않는다. 인증 기능은 없으므로 접속 가능한 기기가 기록과 추천 기능을 공유한다.
+HTTP LAN에서도 과제·세션 ID는 `crypto.getRandomValues()`로 생성하고 메트로놈과
+저장을 지원한다. Web MIDI는 보안 컨텍스트가 필요하며 일반 LAN HTTP에서는 그 제한을
+표시한다. 서버 자체의 TLS나 방화벽 자동 설정은 제공하지 않는다.
+
+표준 라이브러리 로컬 서버가 `codex exec --sandbox read-only --ephemeral --json
 --output-schema ...`를 실행한다. 기존 CLI 인증을 재사용하며 별도 API_KEY가 필수는
 아니다. 실제 생성에는 Codex 설치·로그인·서비스 연결·사용 가능 한도가 필요하다.
 `--ignore-user-config --ignore-rules`와 도구 기능 비활성화, 빈 임시 작업 디렉터리를 쓴다.

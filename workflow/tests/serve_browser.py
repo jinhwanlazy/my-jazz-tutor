@@ -29,6 +29,6 @@ class BrowserRunner(SyntheticRunner):
 root = Path(sys.argv[1]).resolve()
 if not root.name.startswith('jazz-browser-'):
     raise ValueError('Browser tests require their own temporary directory.')
-server = make_server(root, r.curriculum(), 0, recommender=BrowserRunner())
+server = make_server(root, r.curriculum(), 0, recommender=BrowserRunner(), host=sys.argv[2] if len(sys.argv) > 2 else '127.0.0.1')
 print(f'http://127.0.0.1:{server.server_port}', flush=True)
 server.serve_forever()

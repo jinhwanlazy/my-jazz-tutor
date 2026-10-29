@@ -85,13 +85,20 @@ inside this directory also remains supported. Records stay in the existing CSV
 and `sessions.sqlite3`. To recover unsent input, return with the same browser,
 address, and port, then choose **Recover practice**.
 
+For a trusted LAN, run `uv run --project practice jazz serve --host 0.0.0.0 --port 8768`
+and open `http://<server-LAN-IP>:8768` on another device. You may bind a specific
+local IPv4 address instead. There is no login: reachable devices can access your
+records and request recommendations. Generation, metronome and saving work over
+HTTP; MIDI requires HTTPS or localhost. See the
+[LAN setup and limitations](../workflow/README.md#web-practice-room).
+
 `uv run --project practice jazz runtime` shows the active version, Git commit, and
 cache location. First launch resolves `runtime-ref` to a commit in local
 `runtime.json`. Later source or tag changes do not change that pin. Deleting the
 `.runtime/` cache reconstructs the same commit from local Git history.
 
 Publishing activates the selected release even with unfinished tasks. From the
-repository root, run `uv run --project workflow python workflow/publish.py --ref v0.3.0`.
+repository root, run `uv run --project workflow python workflow/publish.py --ref v0.3.1`.
 Compatible tasks keep their original conditions; incompatible tasks are retired
 with a reason while preserving history and MIDI. Retirement is not a performance
 result or a skip. Use `--cache-only` to prepare without activating, and restart the

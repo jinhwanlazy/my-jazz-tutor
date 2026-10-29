@@ -799,6 +799,7 @@ def main(argv=None):
     report = sub.add_parser("report")
     report.add_argument("--output", type=Path)
     web = sub.add_parser("serve", help="Local web practice room")
+    web.add_argument("--host", default="127.0.0.1", help="IPv4 listen address or localhost; use 0.0.0.0 for trusted LAN access")
     web.add_argument("--port", type=int, default=8765)
     web.add_argument("--open", action="store_true", help="Also open the browser")
     assignment = sub.add_parser("assign")
@@ -834,7 +835,7 @@ def main(argv=None):
                         "Write development previews outside the practice project, for example with --output build/preview.html.")
         if args.command == "serve":
             from webapp import serve
-            serve(args.practice_root, data, args.port, args.open)
+            serve(args.practice_root, data, args.port, args.open, host=args.host)
             return 0
         if args.command == "validate-curriculum":
             result = {"valid": True, "version": data["version"], "exercises": len(data["exercises"]), "milestones": len(data["milestones"])}

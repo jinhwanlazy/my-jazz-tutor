@@ -15,6 +15,11 @@ test -e practice/profile.json || cp practice/profile.example.json practice/profi
 uv run --project practice jazz
 ```
 
+신뢰하는 LAN에서 접속하려면
+`uv run --project practice jazz serve --host 0.0.0.0 --port 8768`을 실행하고 다른 기기에서
+서버의 LAN IP와 포트로 접속합니다. 로그인 기능은 없으며 Web MIDI는 HTTPS 또는
+localhost가 필요합니다. [LAN 접속 안내](workflow/README.ko.md#lan-접속)를 참고하세요.
+
 웹의 첫 화면은 날짜별 연습 목록입니다. 생성 진행 상태를 표시하고 검증된 항목을
 추가하되 자동 진입하지 않습니다. 항목을 직접 열어 연습한 뒤 ‘연습 완료’로 저장하고
 목록으로 돌아옵니다. 완료 항목에서 네 가지 난이도 라벨과 선택 메모를 입력·수정합니다.

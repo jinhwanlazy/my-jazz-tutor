@@ -1,6 +1,6 @@
 import {tr, locale, setLocale, loadTranslations, translatePage} from './i18n.mjs';
 import {Transport} from './audio.mjs';
-import {Capture, Outbox, uploadPending} from './capture.mjs';
+import {Capture, Outbox, uploadPending, randomHex} from './capture.mjs';
 import {ScoreView} from './score.mjs';
 
 const $ = id => document.getElementById(id);
@@ -231,7 +231,7 @@ async function startOrPause() {
     await transport.unlock(); // User gesture, before a network round trip.
     if (!ui.capture) {
       await outbox.database();
-      const session = await api('/api/sessions/start', {task_id: openedTask().id, session_id: 'S-' + crypto.randomUUID().replaceAll('-', '')});
+      const session = await api('/api/sessions/start', {task_id: openedTask().id, session_id: 'S-' + randomHex()});
       const capture = new Capture(session, outbox, api, (text, warning) => {
         ui.saveStatus = text; $('save-status').textContent = tr(text);
         $('save-status').classList.toggle('save-warning', warning);
@@ -496,7 +496,7 @@ for (const id of ['click-volume', 'pad-volume']) $(id).addEventListener('input',
 async function newPractice() {
   if (pending() || ui.busy || ui.capture || openSessions().length || ui.data.recommendation?.state === 'running') return;
   clearError(); ui.busy = true; renderChoices();
-  ui.newRequestId ||= 'R-' + crypto.randomUUID().replaceAll('-', '');
+  ui.newRequestId ||= 'R-' + randomHex();
   $('generation-panel').hidden = false;
   $('generation-panel').setAttribute('aria-busy', 'true');
   $('generation-title').textContent = tr('Creating your practice…');
@@ -517,7 +517,7 @@ $('back-list').addEventListener('click', goToList);
 $('repeat-btn').addEventListener('click', async () => {
   if (pending() || ui.busy || ui.capture || ui.data.recommendation?.state === 'running') return;
   ui.busy = true; $('repeat-btn').disabled = true;
-  ui.repeatTaskId ||= 'T-' + crypto.randomUUID().replaceAll('-', '').slice(0,10);
+  ui.repeatTaskId ||= 'T-' + randomHex(5);
   try {
     await api('/api/repeat', {source_task_id: detailTask.id, task_id: ui.repeatTaskId});
     ui.repeatTaskId = null; $('history-dialog').close(); clearFilters();
@@ -527,6 +527,7 @@ $('repeat-btn').addEventListener('click', async () => {
 });
 $('midi-connect').addEventListener('click', async () => {
   clearError();
+  if (window.isSecureContext === false) { ui.midiNotice = 'MIDI input requires HTTPS or localhost. You can still practice with the metronome.'; $('midi-status').textContent = tr(ui.midiNotice); return; }
   if (!navigator.requestMIDIAccess) { ui.midiNotice = 'This browser does not support Web MIDI. Practice without MIDI or connect using a supported browser.'; $('midi-status').textContent = tr(ui.midiNotice); return; }
   try {
     const first = !midiAccess;

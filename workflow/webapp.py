@@ -1,7 +1,8 @@
-"""Loopback-only web UI over the same versioned practice operations as the CLI."""
+"""Local web UI with explicit LAN binding, using the same operations as the CLI."""
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 from pathlib import Path
 import secrets
@@ -167,8 +168,22 @@ class Application:
             raise KeyError("Unknown API path.")
 
 
-def make_server(root, data, port=8765, source=r.HERE, recommender=None):
+def listen_host(host):
+    r.require(isinstance(host, str), "The host must be an IPv4 address or localhost.")
+    if host.lower() == "localhost":
+        return "127.0.0.1"
+    try:
+        address = ipaddress.IPv4Address(host)
+    except ipaddress.AddressValueError:
+        raise ValueError("The host must be an IPv4 address or localhost (use 0.0.0.0 for LAN access).") from None
+    r.require(not address.is_multicast and address != ipaddress.IPv4Address("255.255.255.255"),
+              "The host must be a unicast IPv4 address or 0.0.0.0.")
+    return str(address)
+
+
+def make_server(root, data, port=8765, source=r.HERE, recommender=None, host="127.0.0.1"):
     r.require(type(port) is int and 0 <= port <= 65535, "The port must be between 0 and 65535.")
+    host = listen_host(host)
     app = Application(root, data, source, recommender)
 
     class Handler(BaseHTTPRequestHandler):
@@ -181,10 +196,24 @@ def make_server(root, data, port=8765, source=r.HERE, recommender=None):
 
         def permitted(self, mutation=False):
             port = self.server.server_address[1]
-            hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
-            r.require(self.headers.get("Host") in hosts, "Host not allowed.")
-            origin = self.headers.get("Origin")
-            r.require(not origin or origin in {f"http://{host}" for host in hosts}, "Access from another site is not allowed.")
+            # A wildcard listener accepts the IP this connection actually reached,
+            # never an arbitrary Host/DNS name supplied by the browser.
+            local_ip = self.connection.getsockname()[0]
+            names = {local_ip}
+            if ipaddress.IPv4Address(local_ip).is_loopback:
+                names.add("localhost")
+            hosts = {f"{name}:{port}" for name in names}
+            if port == 80:
+                hosts.update(names)
+            authorities = self.headers.get_all("Host", [])
+            r.require(len(authorities) == 1 and authorities[0].lower() in hosts, "Host not allowed.")
+            authority = authorities[0].lower()
+            origins = self.headers.get_all("Origin", [])
+            expected = {f"http://{authority}"}
+            if port == 80:
+                expected = {f"http://{authority.removesuffix(':80')}", f"http://{authority.removesuffix(':80')}:80"}
+            r.require(len(origins) <= 1 and (not origins or origins[0].lower() in expected),
+                      "Access from another site is not allowed.")
             if mutation:
                 r.require(secrets.compare_digest(self.headers.get("X-Jazz-Token", ""), app.token),
                           "Refresh the page and try again.")
@@ -255,16 +284,22 @@ def make_server(root, data, port=8765, source=r.HERE, recommender=None):
             except (OSError, sqlite3.Error):
                 self.respond(500, {"error": "Could not save. Check the connection and try again."})
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = ThreadingHTTPServer((host, port), Handler)
     server.daemon_threads = True
     server.app = app
     return server
 
 
-def serve(root, data, port=8765, open_browser=False):
-    server = make_server(root, data, port)
-    url = f"http://127.0.0.1:{server.server_address[1]}"
+def serve(root, data, port=8765, open_browser=False, host="127.0.0.1"):
+    server = make_server(root, data, port, host=host)
+    address = server.server_address[0]
+    browser_host = "127.0.0.1" if address == "0.0.0.0" else address
+    url = f"http://{browser_host}:{server.server_address[1]}"
     print(f"My Jazz Tutor · {url}\nStop: Ctrl+C", flush=True)
+    if not ipaddress.IPv4Address(address).is_loopback:
+        print(f"Listening on {address}:{server.server_address[1]} · use this computer's LAN IP from other devices.\n"
+              "LAN access has no login: reachable devices can access practice data and request recommendations.\n"
+              "MIDI input requires HTTPS or localhost; metronome practice also works over LAN HTTP.", flush=True)
     if open_browser:
         webbrowser.open(url)
     try:
