@@ -4,7 +4,16 @@ import copy
 
 def result():
     whole = lambda notes: [{'beat': 0, 'duration': 4, 'notes': notes}]
-    return {'schema_version': 1,
+    from difficulty import AXES, RUBRIC
+    return {'schema_version': 2,
+            'difficulty': {'rubric_version': RUBRIC['version'],
+                'axes': {axis: {'status': 'rated', 'level': 1, 'anchor_ids': [axis + '-1'],
+                               'reason': 'Compare the synthetic task with the first reference at the assigned tempo.'} for axis in AXES},
+                'focus_axes': ['harmony', 'coordination'],
+                'interaction': 'Both hands attack together while chord shapes change.',
+                'prediction': {'burden': 'unknown', 'source_ids': ['profile'],
+                               'reason': 'There is not enough comparable performance feedback.',
+                               'uncertainty': 'This synthetic fixture has no verified performance evidence.'}},
             'evidence': [{'source_ids': ['profile'], 'interpretation': 'A synthetic player requested chord connection practice.', 'confidence': 'low'}],
             'unknowns': ['Actual note and timing accuracy has not been analyzed.'],
             'exercise': {'title': 'D major voice leading', 'objective': 'Connect two chords with a small right-hand movement.',

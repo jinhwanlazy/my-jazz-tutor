@@ -22,7 +22,9 @@ import uuid
 
 HERE = Path(__file__).resolve().parent
 SCHEMA = json.loads((HERE / 'recommendation.schema.json').read_text())
+LEGACY_SCHEMA = json.loads((HERE / 'recommendation.v1.schema.json').read_text())
 MAX_CONTEXT = 500_000
+INPUT_BUDGET = 64_000  # App-supplied prompt + output-schema UTF-8 bytes, not measured tokens.
 ERRORS = {
     'not_installed': 'Codex CLI was not found. Install Codex and restart the practice server.',
     'auth': 'Codex login has expired or is missing. Run codex login in a terminal, then retry.',
@@ -88,9 +90,17 @@ def validate_shape(value, schema=SCHEMA, path='recommendation'):
 
 def validate_result(value, context=None):
     from notation import pitches
-    validate_shape(value)
+    from difficulty import validate as validate_difficulty
+    if not isinstance(value, dict):
+        raise ValueError('The recommendation must be an object.')
+    validate_shape(value, LEGACY_SCHEMA if value.get('schema_version') == 1 else SCHEMA)
+    if context is not None and 'difficulty_rubric' in context and value['schema_version'] != 2:
+        raise ValueError('New recommendations require a calibrated difficulty assessment.')
+    if value['schema_version'] == 2:
+        validate_difficulty(value['difficulty'], context)
     if context is not None:
-        source_ids = {source['id'] for source in context['sources']}
+        from coaching_context import evidence_ids
+        source_ids = evidence_ids(context)
         if any(ref not in source_ids for finding in value['evidence'] for ref in finding['source_ids']):
             raise ValueError('Recommendation cites evidence that was not supplied.')
         if 'display_language' in context and any(re.search(r'[\u3131-\u318e\uac00-\ud7a3]', text) for text in prose_fields(value).values()):
@@ -135,6 +145,11 @@ def prose_fields(result):
     fields.update({f'exercise.steps.{i}': text for i, text in enumerate(exercise['steps'])})
     fields.update({f'evidence.{i}.interpretation': item['interpretation'] for i, item in enumerate(result['evidence'])})
     fields.update({f'unknowns.{i}': text for i, text in enumerate(result['unknowns'])})
+    if result.get('difficulty'):
+        d = result['difficulty']
+        fields.update({f'difficulty.axes.{axis}.reason': rating['reason'] for axis, rating in d['axes'].items()})
+        fields['difficulty.interaction'] = d['interaction']
+        fields.update({f'difficulty.prediction.{key}': d['prediction'][key] for key in ('reason', 'uncertainty')})
     return fields
 
 
@@ -142,6 +157,8 @@ def context_for(root, data, language=None, request=''):
     """Caller holds practice log lock when a consistent snapshot is required."""
     import review as r
     from sessions import SessionStore
+    from difficulty import RUBRIC
+    from coaching_context import POLICY, fit
     root = Path(root)
     profile_path = root / 'profile.json'
     profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
@@ -153,36 +170,15 @@ def context_for(root, data, language=None, request=''):
     sources = [{'id': 'profile', 'kind': 'profile_with_provenance', 'data': profile}]
     if request:
         sources.append({'id': 'request', 'kind': 'current_user_request', 'data': request})
-    recent = tasks[-40:]
-    selected = {t['assignment']['task_id'] for t in recent}
-    for task in recent:
-        assignment = task['assignment']
-        target = task['target']
-        # Do not recursively include earlier LLM analysis as observed evidence.
-        conditions = {key: value for key, value in target.items() if key not in ('generation', 'analysis')}
-        sources.append({'id': 'task:' + assignment['task_id'], 'kind': 'assigned_conditions',
-                        'data': {'task_id': assignment['task_id'], 'exercise_id': assignment['exercise_id'],
-                                 'assigned_at': assignment['recorded_at'], 'conditions': conditions,
-                                 'state': 'pending' if r.is_pending(task) else 'retired' if task['retired'] else
-                                 'discarded' if task['discarded'] else 'cancelled' if task['cancelled'] else 'completed'}})
-        for field in ('completion', 'report', 'cancellation'):
-            event = task[field]
-            if event:
-                sources.append({'id': 'event:' + event['event_id'], 'kind': event['event_type'], 'data': event})
-    for session in sessions:
-        if session['task_id'] in selected:
-            sources.append({'id': 'session:' + session['id'], 'kind': 'session_measurements_not_performance_analysis',
-                            'data': {k: session[k] for k in ('id', 'task_id', 'status', 'created_at', 'summary')}})
     coach = (HERE / 'COACH.md').read_text()
     reference = {'role': 'Optional examples only. Not a candidate list, progression, prerequisite, or key/tempo restriction.',
-                 'materials': data['materials'], 'exercises': data['exercises']}
+                 'examples': [{k: e[k] for k in ('title', 'domains', 'rhythm')} for e in data['exercises'][:8]]}
     fingerprint = digest({'events': events, 'profile': profile, 'sessions': sessions, 'coach': coach,
-                          'reference': reference, 'version': data['version'], 'schema': SCHEMA})
+                          'reference': reference, 'version': data['version'], 'schema': SCHEMA,
+                          'rubric': RUBRIC, 'context_policy': POLICY})
     context = {'schema_version': 1, 'fingerprint': fingerprint, 'runtime_version': data['version'],
                'language': 'en', 'display_language': language or profile.get('language', 'en'), 'request': request,
-               'history_window': {'included_tasks': len(recent), 'total_tasks': len(tasks),
-                                  'omitted_older_tasks': max(0, len(tasks) - len(recent)),
-                                  'policy': 'Latest 40 assignments with latest feedback and original completion; no inferred older mastery.'},
+               'history_window': {}, 'difficulty_rubric': RUBRIC,
                'today': r.daily_summary(data, tasks, profile), 'sources': sources,
                'coaching_instructions': coach, 'reference_material': reference,
                'observation_rules': ['Labels and notes are self-report, not audio/MIDI verification.',
@@ -191,7 +187,16 @@ def context_for(root, data, language=None, request=''):
                                      'Completion without feedback is completed, not a pending task.',
                                      'Retirement on update is neither failure nor a practice result or skip.',
                                      'No raw MIDI or audio analysis has been supplied. Unknown observations stay unknown.']}
-    if len(r.jdump(context).encode()) > MAX_CONTEXT:
+    overhead = len(r.jdump(SCHEMA).encode()) + len(prompt_for({}).encode())
+    context['input_budget'] = {'policy': 'UTF-8 bytes conservatively bound app-supplied text tokens; not an exact tokenizer count.',
+                               'max_prompt_and_schema_bytes': INPUT_BUDGET}
+    try:
+        fit(context, tasks, sessions, events, INPUT_BUDGET - overhead - 500)
+    except ValueError:
+        raise RecommendationError('context') from None
+    for _ in range(3):
+        context['input_budget']['prompt_and_schema_bytes'] = len(prompt_for(context).encode()) + len(r.jdump(SCHEMA).encode())
+    if len(prompt_for(context).encode()) + len(r.jdump(SCHEMA).encode()) > INPUT_BUDGET:
         raise RecommendationError('context')
     return context
 
@@ -221,6 +226,17 @@ must still be specific. Otherwise supply notation. Chord accompaniment is option
 if supplied, use identical bar/chord labels and piano MIDI notes. State what is actually supported instead
 of pretending unavailable notation/audio exists. minutes is a proposed task budget, never actual duration.
 Do not manufacture accuracy checks or mastery scores. Result labels guide interpretation, not fixed rules.
+Provide difficulty using context.difficulty_rubric: all seven axes, status and ordinal level, matching
+anchor IDs and concrete comparisons at this task's BPM. Anchors are measuring references, never a syllabus
+or candidate restriction. Unknown/inapplicable/out-of-range axes have null level. Explain interactions;
+do not sum axis levels, invent probabilities or infer ability from assigned demand. App computes score
+features independently. Plain notation does not establish unstated expression requirements.
+Predict personal burden separately with supplied source IDs and explicit uncertainty. If evidence is
+insufficient use unknown. Good feedback reports utility, not medium burden; challenging is not failure.
+Compare prior predictions with latest feedback only under comparable conditions. Consider changing one
+dimension when pedagogically useful to clarify uncertainty; do not impose diagnostic exercises.
+Context is a bounded view: exact excerpts may be marked truncated; rollups are facts, not inferred
+mastery. Prior model ratings/predictions are labeled interpretations, never new performance evidence.
 CONTEXT JSON:\n''' + r.jdump(context)
 
 
@@ -259,7 +275,7 @@ class CodexRunner:
             # Empty isolated cwd, no inherited project config, plugins, hooks or tool access.
             work = Path(directory)
             schema = work / 'schema.json'
-            schema.write_text(json.dumps(output_schema))
+            schema.write_text(json.dumps(output_schema, ensure_ascii=False, separators=(',', ':'), sort_keys=True))
             output = work / 'result.json'
             args = [self.executable, 'exec', '--sandbox', 'read-only', '--ephemeral', '--json',
                     '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', '--cd', directory,
@@ -316,7 +332,7 @@ def make_target(result, data, generation, exercise_id=None):
     e = result['exercise']
     exercise_id = exercise_id or 'G-' + uuid.uuid4().hex
     chords = e['notation']['bars'] if e['notation'] else e['accompaniment']['bars'] if e['accompaniment'] else []
-    return {'kind': 'generated', 'schema_version': 1, 'exercise_id': exercise_id,
+    target = {'kind': 'generated', 'schema_version': result['schema_version'], 'exercise_id': exercise_id,
             'key': e['key'], 'bpm': e['bpm'], 'bars': e['bars'], 'arrangement': e['left_hand'] + ' / ' + e['right_hand'],
             'bass': e['left_hand'], 'voicing': e['right_hand'], 'melody': e['notes'], 'rhythm': e['rhythm'],
             'material_id': exercise_id, 'title': e['title'], 'instructions': e['instructions'],
@@ -327,12 +343,17 @@ def make_target(result, data, generation, exercise_id=None):
             'playback': e['accompaniment'], 'exercise': copy.deepcopy(e),
             'analysis': {'evidence': copy.deepcopy(result['evidence']), 'unknowns': copy.deepcopy(result['unknowns'])},
             'generation': copy.deepcopy(generation)}
+    if result['schema_version'] == 2:
+        from difficulty import score_features
+        target['difficulty'] = copy.deepcopy(result['difficulty']) | {'features': score_features(e)}
+    return target
 
 
 def validate_target(target):
-    if target.get('schema_version') != 1 or not re.fullmatch(r'G-[a-f0-9]{32}', target.get('exercise_id', '')):
+    if target.get('schema_version') not in (1, 2) or not re.fullmatch(r'G-[a-f0-9]{32}', target.get('exercise_id', '')):
         raise ValueError('Unsupported generated task format.')
-    result = {'schema_version': 1, **target['analysis'], 'exercise': target['exercise']}
+    from difficulty import result_from_target
+    result = result_from_target(target)
     expected = make_target(result, {'version': target['curriculum_version'], 'daily_minutes': target['daily_minutes']},
                            target['generation'], target['exercise_id'])
     if digest(expected) != digest(target):
@@ -361,8 +382,8 @@ def accept(root, data, context, result, request_id, provenance):
         tasks = r.records(events)
         existing = next((t for t in tasks if t['target'].get('generation', {}).get('request_id') == request_id), None)
         if existing:
-            r.require(existing['target']['exercise'] == result['exercise'] and
-                      existing['target']['analysis'] == {k: result[k] for k in ('evidence', 'unknowns')},
+            from difficulty import result_from_target
+            r.require(result_from_target(existing['target']) == result,
                       'This request ID belongs to a different recommendation.')
             return {'task_id': existing['assignment']['task_id'], 'target': existing['target']}
         current = context_for(root, data, context.get('display_language', context.get('language')), context.get('request', ''))

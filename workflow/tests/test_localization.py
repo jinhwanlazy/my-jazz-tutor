@@ -17,6 +17,14 @@ from webapp import Application, make_server
 
 
 class TranslationTests(unittest.TestCase):
+    def test_korean_music_terms_may_use_digits_only_for_same_source_concept(self):
+        self.assertFalse(loc.introduced_number('4분음표, 장3화음, 7음', 'quarter notes, major triads, sevenths', 'ko'))
+        self.assertFalse(loc.introduced_number('[KEEP_0] BPM에서 4분음표', 'quarter notes at [KEEP_0] BPM', 'ko'))
+        for text, source in [('8분음표', 'quarter notes'), ('7화음', 'major triads'),
+                             ('99 BPM', 'quarter notes'), ('4마디', 'four bars'),
+                             ('14분음표', 'quarter notes'), ('C7', 'seventh chords')]:
+            with self.subTest(text=text):self.assertTrue(loc.introduced_number(text,source,'ko'))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

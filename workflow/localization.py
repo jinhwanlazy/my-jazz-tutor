@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from collections import Counter
-import copy
 import fcntl
 import json
 from pathlib import Path
@@ -22,8 +21,29 @@ TOKEN = re.compile(r'\[KEEP_\d+\]')
 LANGUAGES = {'en': 'English', 'ko': 'Korean'}
 
 
+def introduced_number(text, source, language):
+    """Korean musical terminology can contain digits absent from English words.
+
+    Permit only a corresponding concept in this same source field. Tempo, bar
+    counts, pitches and arbitrary new numeric conditions still require KEEP tokens.
+    This is a lexical check, not a proof of semantic translation equivalence.
+    """
+    remainder = TOKEN.sub('', text)
+    if language == 'ko':
+        terms = [('quarter', '4분음표'), ('eighth', '8분음표'), ('sixteenth', '16분음표'),
+                 ('half', '2분음표'), ('thirty-second', '32분음표'), ('triad', '3화음')]
+        terms += [(word, str(n) + r'(?:도|음|화음)') for n, word in
+                  ((2,'second'),(3,'third'),(4,'fourth'),(5,'fifth'),(6,'sixth'),(7,'seventh'),
+                   (9,'ninth'),(11,'eleventh'),(13,'thirteenth'))]
+        for word, korean in terms:
+            if re.search(r'\b' + word + r's?\b', source, re.I):
+                remainder = re.sub(r'(?<!\d)' + korean, '', remainder)
+    return bool(re.search(r'\d', remainder))
+
+
 def original_result(target):
-    return {'schema_version': 1, **copy.deepcopy(target['analysis']), 'exercise': copy.deepcopy(target['exercise'])}
+    from difficulty import result_from_target
+    return result_from_target(target)
 
 
 def translation_input(target, language, source_language):
@@ -66,6 +86,8 @@ add advice, fix perceived musical mistakes, invent evidence, or change uncertain
 Keep every [KEEP_n] placeholder exactly once in its original field. They protect notes, chords and
 numbers; their order may change for grammar. Never invent a new placeholder or add numerical values.
 If the source spells a number as a word (two, four), translate it as a word (두, 네), not digits.
+Conventional Korean music terms may use digits only for the same source concept: quarter notes =
+4분음표, triads = 3화음, seventh chords = 7화음, thirds = 3도/3음. Never add a tempo or count this way.
 Translate all prose, including headings, steps, rationale and unknowns. Keep the same field IDs.
 Use natural musical terminology. Do not wrap the translation in Markdown fences or commentary.
 CONTEXT JSON:\n''' + json.dumps(context, ensure_ascii=False)
@@ -78,7 +100,7 @@ def translated_target(target, language, source_language, result):
     for field, text in result['strings'].items():
         if Counter(TOKEN.findall(text)) != Counter(TOKEN.findall(context['strings'][field])):
             raise ValueError('Translation changed protected musical values.')
-        if re.search(r'\d', TOKEN.sub('', text)):
+        if introduced_number(text, context['strings'][field], language):
             raise ValueError('Translation introduced a numerical condition.')
         value = TOKEN.sub(lambda match: tokens[field][match.group()], text)
         parts = field.split('.')

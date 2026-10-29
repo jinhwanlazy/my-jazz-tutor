@@ -382,3 +382,15 @@ dialog{padding:23px 20px}
 .tempo-control input:disabled,.tempo-range:disabled{opacity:.6;cursor:not-allowed}
 .practice-steps{padding-left:20px;line-height:1.8}
 .practice-steps:empty{display:none}
+
+.demand-chips {display:flex;flex-wrap:wrap;gap:.4rem;margin:.6rem 0}
+.demand-chip {font-size:.78rem;padding:.25rem .55rem;border:1px solid var(--line, #d8ddd8);border-radius:6px;background:#f2f5f0;color:#344436}
+.demand-2 {background:#f5f1e6;color:#655025}
+.demand-3 {background:#f9eadb;color:#794722}
+.demand-unknown {background:#f4f4f4;color:#666}
+.difficulty-detail {margin:1rem 0;padding:.8rem 1rem;border:1px solid var(--line, #d8ddd8);border-radius:10px}
+.difficulty-detail summary {cursor:pointer;font-weight:600}
+.difficulty-detail p {white-space:pre-wrap;overflow-wrap:anywhere}
+.demand-reasons dt {font-weight:600;margin-top:.8rem}
+.demand-reasons dd {margin:.25rem 0 .7rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.burden-prediction {font-weight:600}

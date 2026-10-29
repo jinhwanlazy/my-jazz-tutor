@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.3.3`; create a new tag for later releases instead of moving an old tag:
+selects `v0.4.0`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.3.3
+uv run python publish.py --ref v0.4.0
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -315,9 +315,21 @@ hooks, browser and delegation tools. Existing CLI authentication is reused. It d
 not resume a chat or assume any shared conversation memory.
 
 Each explicit request supplies COACH.md, profile provenance, optional request text,
-the latest 40 assignments with their original conditions, completion/latest feedback,
-notes/skip/retirement events, and session measurement summaries. Older omitted task
-counts are explicit. Raw MIDI is not sent. Context over 500 KB is rejected. Context
+the difficulty rubric, up to eight recent tasks and four related/corrected older tasks.
+Conditions are compact descriptions and score features; full scores stay in original
+snapshots. Latest feedback, exact note/skip excerpts and up to three recent session
+summaries per task retain source IDs. An all-history factual rollup counts current
+states and latest labels, preserves dated example excerpts, and joins original
+burden predictions with later feedback. It rebuilds from the ledger after corrections,
+without promoting earlier interpretations to performance facts or summarizing old summaries. Related history selection
+uses request text, key and focus axes; it does not restrict generated exercises.
+The app-supplied prompt plus output schema is limited to 64,000 UTF-8 bytes (a
+conservative text-token upper bound, not a tokenizer count or total CLI input usage).
+Descriptions are shortened with explicit omission metadata and fewer cases are
+included when necessary. A profile/request/rules bundle that alone exceeds the
+budget fails explicitly. Original records are never shortened. Coverage and omitted
+detail counts are supplied; omitted history does not mean unpracticed. Raw MIDI is
+not sent. The private request artifact preserves the exact assembled context. Context
 sent to Codex uses the account's remote model service; local files are not model
 write targets. Login expiry, quota, connection, four-minute timeout and invalid
 output are visible failures, with no substitute fixed recommendation.
@@ -332,6 +344,33 @@ are idempotent and single-flight across servers. A changed profile, record, sess
 or runtime invalidates an in-flight result. Restarted jobs recover saved items or
 show an interrupted error. Restart the server after activating a release.
 
+New schema-v2 tasks include seven separate demand axes: melody, rhythm, meter,
+tonality, harmony/voicing, expression and hand coordination. `difficulty-rubric.json`
+contains three concrete comparison anchors per axis with fixed reference conditions.
+They are provisional, unvalidated ordinal references, never a required curriculum,
+equal-interval scale or overall ability score. Unsupported meters in reference
+examples do not extend the notation renderer. Unknown, inapplicable and out-of-range
+demands have no numerical level. The app validates axis/anchor/level consistency and
+source IDs, and independently derives facts from assigned notation. It does not
+certify the musical judgment or infer a fingering from pitch distance.
+
+The list shows focus-axis labels; room and record details show all axes, reasons,
+score facts and the personal burden prediction made at generation. Prediction is
+separate from task demand, with evidence and explicit uncertainty, not a probability.
+The next request compares it with latest feedback under comparable conditions;
+there is no label-to-BPM rule or automatic ability update. `good` means useful, not
+medium difficulty; `challenging` is not failure. Repeated copies retain the original
+prediction and are excluded from aggregate new-forecast counts. Translation changes
+only explanatory prose, preserving levels, anchor IDs, music and computed facts.
+Version-1 snapshots remain supported without retroactive assessments. Assessment
+snapshots and rubric versions never change when feedback is corrected.
+
+Calibration checks cover anchor validation, score facts under wording/tempo changes,
+translation invariance, prospective-feedback joins, corrections and long histories.
+These checks establish software consistency, not empirically validated musical
+difficulty or reliable performance prediction. Local history processing still scans
+the ledger; the model input remains bounded as that ledger grows.
+
 New recommendations always have an English original, regardless of the display
 language or profile language. `context.language` is `en`; `display_language` records
 the UI preference. This also applies to conversationally accepted recommendations.
@@ -344,6 +383,9 @@ rationale, interpretations and unknowns. It receives those strings, not a new pr
 or history analysis. The app accepts only the expected prose fields, protects written
 numbers/pitches/chord names with placeholders, and copies structured music, source
 IDs and confidence unchanged. These checks do not prove complete semantic equivalence.
+Korean musical terms may contain a numeral only when the same English concept occurs
+in that field (for example, quarter note → 4분음표 or seventh chord → 7화음).
+New tempo, count or pitch values still fail validation.
 
 Translations are cached locally in `practice/.translations/` by original snapshot,
 language and format. One worker translates items sequentially; repeats of the same
@@ -391,11 +433,16 @@ English generation from a Korean request and a subsequent Korean translation):
 
 ```sh
 uv run python tests/codex_smoke.py --run
+uv run python tests/calibration_smoke.py --run
 ```
 
 This consumes the logged-in account's Codex allowance. Normal unit and browser tests
 use an explicitly injected synthetic provider and never require an account or network.
 The provider is not available as a production fallback.
+The calibration smoke test independently assesses fixed synthetic music, checks
+invariance to wording/language and compares an unseen offbeat variation with a
+regular pulse. Its private `build/` report records results and usage. Passing this
+small regression suite is not evidence of empirically calibrated human difficulty.
 
 CLI reference: [noninteractive mode](https://learn.chatgpt.com/docs/non-interactive-mode),
 [authentication](https://learn.chatgpt.com/docs/auth). A persistent

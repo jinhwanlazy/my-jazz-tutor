@@ -10,10 +10,20 @@ import threading
 import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import review as r
-from recommendation import Recommendations
+from recommendation import Recommendations, CodexRunner
 from recommendation_fixture import SyntheticRunner
 from webapp import Application, make_server
 from test_webapp import chunk
+
+
+class ObservedTranslator(CodexRunner):
+    """Save only this opt-in test's synthetic output for validation diagnostics."""
+    def translate(self, context, schema):
+        result, provenance = super().translate(context, schema)
+        path = Path(__file__).resolve().parents[1]/'build/codex-translation-synthetic.json'
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps({'context':context,'result':result},ensure_ascii=False,indent=2))
+        return result, provenance
 
 
 def main():
@@ -38,7 +48,7 @@ def main():
         r.discard(root,data,second,'Synthetic skip: the same two chords again are not useful.','already_practiced')
         before = r.read_events(root)
         started = time.monotonic()
-        server = make_server(root,data,0)
+        server = make_server(root,data,0,translator=ObservedTranslator())
         thread = threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         address = f'http://127.0.0.1:{server.server_port}'
         try:
@@ -55,6 +65,12 @@ def main():
             if job['state'] != 'completed':
                 raise AssertionError(f'Real Codex failed: {job}')
             canonical = r.records(r.read_events(root))[-1]['target']
+            debug_path=Path(__file__).resolve().parents[1]/'build/codex-candidate-synthetic.json'
+            debug_path.parent.mkdir(exist_ok=True)
+            debug_path.write_text(json.dumps(canonical,ensure_ascii=False,indent=2))
+            assert canonical['schema_version'] == 2
+            assert len(canonical['difficulty']['axes']) == 7
+            assert canonical['difficulty']['features']['source'] == 'assigned_notation'
             assert canonical['generation']['source_language'] == 'en'
             assert not re.search('[가-힣]',canonical['title']+canonical['instructions'])
             ledger_before_translation = (root/'practice.csv').read_bytes()
@@ -73,6 +89,11 @@ def main():
             assert re.search('[가-힣]',localized['title'])
             for field in ('key','bpm','bars','notation','accompaniment'):
                 assert localized['exercise'][field] == canonical['exercise'][field]
+            for axis in canonical['difficulty']['axes']:
+                for field in ('status', 'level', 'anchor_ids'):
+                    assert localized['difficulty']['axes'][axis][field] == canonical['difficulty']['axes'][axis][field]
+            assert localized['difficulty']['features'] == canonical['difficulty']['features']
+            assert localized['difficulty']['prediction']['burden'] == canonical['difficulty']['prediction']['burden']
             assert (root/'practice.csv').read_bytes() == ledger_before_translation
             translation_seconds=round(time.monotonic()-translation_started,1)
         finally:
@@ -95,6 +116,9 @@ def main():
                  'source_language':target['generation']['source_language'],
                  'korean_title':localized['title'],'translation_seconds':translation_seconds,
                  'translation_preserved_snapshot_and_ledger':True}
+        summary['difficulty_levels'] = {axis: a['level'] for axis,a in canonical['difficulty']['axes'].items()}
+        summary['predicted_burden'] = canonical['difficulty']['prediction']['burden']
+        summary['input_budget'] = artifact['context']['input_budget']
         output=Path(__file__).resolve().parents[1]/'build/codex-smoke.json'
         output.parent.mkdir(exist_ok=True);output.write_text(json.dumps(summary,indent=2)+'\n')
         print(json.dumps(summary,indent=2))

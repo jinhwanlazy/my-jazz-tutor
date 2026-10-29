@@ -109,7 +109,8 @@ class RecommendationTests(unittest.TestCase):
         self.assertIn('not analyzed playing BPM', text)
         self.assertEqual(context['history_window']['included_tasks'], 2)
         self.assertEqual(sum(x['kind']=='completed' for x in context['sources']), 1)
-        self.assertNotIn('analysis', context['sources'][1]['data']['conditions'])
+        assigned = next(s for s in context['sources'] if s['kind'] == 'assigned_conditions')
+        self.assertNotIn('analysis', assigned['data']['conditions'])
         self.assertIn('USER DATA', rec.prompt_for(context))
 
     def test_invalid_music_schema_and_fabricated_references_never_create_assignments(self):

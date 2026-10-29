@@ -182,6 +182,48 @@ function appendAnalysis(parent, t, open = false) {
   parent.append(analysis);
 }
 
+const demandAxes = {melody: 'Melody and patterns', rhythm: 'Rhythm', meter: 'Meter and grouping',
+  tonality: 'Tonality', harmony: 'Harmony and voicing', expression: 'Accents and expression', coordination: 'Hand coordination'};
+const demandLevels = {1: 'Limited demand', 2: 'Moderate demand', 3: 'High demand'};
+const demandStates = {unknown: 'Unknown', not_applicable: 'Not applicable', out_of_range: 'Outside reference range'};
+const burdenLabels = {unknown: 'Not enough evidence', underload: 'May be too easy', workable: 'Likely manageable', challenging: 'Likely challenging', overload: 'May be overwhelming'};
+function appendDifficulty(parent, t, compact = false, open = false) {
+  const d = t.difficulty;
+  if (!d) {
+    if (!compact) parent.append(el('p', tr('Difficulty was not assessed for this practice.'), 'subtle'));
+    return;
+  }
+  const chips = el('div', undefined, 'demand-chips');
+  const axes = compact ? d.focus_axes : Object.keys(demandAxes);
+  for (const axis of axes) {
+    const a = d.axes[axis];
+    chips.append(el('span', `${tr(demandAxes[axis])} · ${tr(a.status === 'rated' ? demandLevels[a.level] : demandStates[a.status])}`, `demand-chip demand-${a.level || 'unknown'}`));
+  }
+  if (compact) { parent.append(chips); return; }
+  const details = el('details', undefined, 'difficulty-detail'); details.open = open;
+  details.append(el('summary', tr('Task difficulty')), el('p', tr`Assessed at ${t.bpm} BPM. Different settings may feel different.`), chips,
+    el('p', tr('Provisional reference levels for each axis, not an overall score or a measure of your ability.'), 'subtle'));
+  const list = el('dl', undefined, 'demand-reasons');
+  for (const axis of axes) {
+    const a = d.axes[axis];
+    list.append(el('dt', tr(demandAxes[axis])), el('dd', a.reason));
+  }
+  details.append(list, el('p', d.interaction), el('h4', tr('Expected burden when assigned')),
+    el('p', tr(burdenLabels[d.prediction.burden]), 'burden-prediction'), el('p', d.prediction.reason),
+    el('p', d.prediction.uncertainty, 'subtle'));
+  if (d.prediction.source_ids.length) details.append(el('small', `${tr('Sources')}: ${d.prediction.source_ids.join(', ')}`));
+  const facts = d.features;
+  if (facts.available) {
+    details.append(el('h4', tr('Facts from the assigned score')));
+    for (const [hand, label] of [['left', 'Left hand'], ['right', 'Right hand']]) {
+      const f = facts.hands[hand];
+      details.append(el('p', tr`${tr(label)}: ${f.onsets} attacks · ${f.offbeat_onsets} offbeat attacks · up to ${f.max_simultaneous_notes} simultaneous notes`));
+    }
+  }
+  details.append(el('small', `${tr('Reference scale')}: ${d.rubric_version}`));
+  parent.append(details);
+}
+
 function target() { return openedTask()?.target; }
 function renderLesson(resetTempo = false) {
   const current = openedTask(), t = target();
@@ -211,8 +253,11 @@ function renderLesson(resetTempo = false) {
   $('lesson-instructions').textContent = tr`${t.instructions} C4 is middle C.`;
   $('criterion-text').textContent = t.exercise?.rhythm || tr`Play ${t.criteria.min_clean_runs} consecutive runs with correct notes, a steady pulse, and no stops under the assigned conditions.`;
   $('lesson-steps').replaceChildren(...(t.exercise?.steps || []).map(step => el('li', step)));
-  const analysisOpen = $('lesson-analysis').querySelector('details')?.open;
-  $('lesson-analysis').replaceChildren(); appendAnalysis($('lesson-analysis'), t, analysisOpen);
+  const difficultyOpen = $('lesson-analysis').querySelector('.difficulty-detail')?.open;
+  const coachOpen = $('lesson-analysis').querySelector('.recommendation-analysis')?.open;
+  $('lesson-analysis').replaceChildren();
+  appendDifficulty($('lesson-analysis'), t, false, difficultyOpen);
+  appendAnalysis($('lesson-analysis'), t, coachOpen);
   $('discard-btn').hidden = false;
   $('pad-toggle').disabled = !t.playback;
   if (!t.playback) { $('pad-toggle').checked = false; transport.setPad(false); }
@@ -472,6 +517,7 @@ function renderHistory() {
     button.append(left, el('span', status, `tag ${task.completed ? 'success' : 'unknown'}`));
     button.addEventListener('click', () => task.pending ? openPractice(task) : showDetail(task));
     card.append(button, el('p', task.target.instructions, 'practice-content'), translationNotice(task));
+    appendDifficulty(card, task.target, true);
     const result = ratings[task.report?.difficulty] ? ratingText(task.report.difficulty) : task.report ? tr(labels[task.outcome]) : task.completed ? tr('Feedback not added yet') : '';
     if (result) card.append(el('p', result, 'practice-result'));
     if (task.discard_choice) card.append(el('p', tr(discardChoices[task.discard_choice]), 'practice-result'));
@@ -495,6 +541,7 @@ function renderHistory() {
 }
 function showDetail(task) {
   const analysisOpen = detailTask?.id === task.id && $('history-detail').querySelector('.recommendation-analysis')?.open;
+  const difficultyOpen = detailTask?.id === task.id && $('history-detail').querySelector('.difficulty-detail')?.open;
   detailTask = task;
   const box = $('history-detail'); box.replaceChildren(el('h2', task.target.title), el('p', `${task.exercise_id} · ${(task.report || task.completion)?.practice_date || task.assigned_at.slice(0, 10)}`, 'subtle'));
   box.append(translationNotice(task));
@@ -518,6 +565,7 @@ function showDetail(task) {
     box.append(el('p', e.section), el('p', e.notes), el('p', e.rhythm));
     const steps = el('ol'); steps.append(...e.steps.map(step => el('li', step))); box.append(steps);
   }
+  appendDifficulty(box, task.target, false, difficultyOpen);
   appendAnalysis(box, task.target, analysisOpen);
   if (task.discard_choice) box.append(el('p', tr(discardChoices[task.discard_choice]), 'discard-choice'));
   const note = task.report ? task.report.raw_note : task.reason;

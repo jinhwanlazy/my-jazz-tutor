@@ -17,7 +17,8 @@ WEB = ['webapp.py', 'sessions.py', 'webapp.html', 'webapp.css', 'webapp.js', 'au
 LOCALIZATION = ['i18n.mjs', 'translations.json']
 NOTATION = ['notation.py', 'score.mjs', 'timeline.mjs', 'Bravura.woff2', 'Bravura-LICENSE.txt', 'THIRD_PARTY.md']
 RECOMMENDATION = ['recommendation.py', 'recommendation.schema.json']
-FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + ['localization.py']
+DIFFICULTY = ['difficulty.py', 'difficulty-rubric.json', 'recommendation.v1.schema.json', 'coaching_context.py']
+FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + DIFFICULTY + ['localization.py']
 PIN = 'runtime.json'
 CACHE = '.runtime'
 
@@ -56,6 +57,8 @@ def snapshot(repo, ref):
             'Runtime notation files are incomplete.')
     require(not set(RECOMMENDATION).intersection(names) or set(RECOMMENDATION) <= set(names),
             'Runtime recommendation files are incomplete.')
+    require(not set(DIFFICULTY).intersection(names) or set(DIFFICULTY) <= set(names),
+            'Runtime difficulty files are incomplete.')
     contents = {name: git(repo, 'show', f'{revision}:workflow/{name}') for name in FILES if name in names}
     version = tomllib.loads(contents['pyproject.toml'].decode())['project']['version']
     manifest = {'revision': revision, 'version': version,
