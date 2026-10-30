@@ -306,6 +306,7 @@ class CodexRunner:
             if process.returncode:
                 raise RecommendationError(classify_failure(stream + diagnostics))
             events = []
+            result = None
             try:
                 events = [json.loads(line) for line in stream.splitlines() if line.strip()]
                 if any(e.get('type') in ('turn.failed', 'error') for e in events):
@@ -321,7 +322,9 @@ class CodexRunner:
             except RecommendationError:
                 raise
             except (ValueError, TypeError, KeyError, IndexError):
-                raise RecommendationError('invalid_output') from None
+                error = RecommendationError('invalid_output')
+                error.invalid_result = result  # Bounded JSON only; never subprocess diagnostics or credentials.
+                raise error from None
             usage = next((e.get('usage') for e in reversed(events) if e.get('type') == 'turn.completed'), None)
             return result, {'provider': 'codex-exec', 'authentication': 'existing-cli-login', 'usage': usage}
 

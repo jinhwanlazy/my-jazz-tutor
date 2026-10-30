@@ -19,10 +19,15 @@ from webapp import Application, make_server
 class TranslationTests(unittest.TestCase):
     def test_korean_music_terms_may_use_digits_only_for_same_source_concept(self):
         self.assertFalse(loc.introduced_number('4분음표, 장3화음, 7음', 'quarter notes, major triads, sevenths', 'ko'))
+        self.assertFalse(loc.introduced_number('8분쉼표와 4분 음표', 'eighth-note rests and quarter notes', 'ko'))
+        self.assertFalse(loc.introduced_number('2분 쉼표', 'half-note rests', 'ko'))
         self.assertFalse(loc.introduced_number('[KEEP_0] BPM에서 4분음표', 'quarter notes at [KEEP_0] BPM', 'ko'))
         for text, source in [('8분음표', 'quarter notes'), ('7화음', 'major triads'),
                              ('99 BPM', 'quarter notes'), ('4마디', 'four bars'),
-                             ('14분음표', 'quarter notes'), ('C7', 'seventh chords')]:
+                             ('14분음표', 'quarter notes'), ('C7', 'seventh chords'),
+                             ('8분쉼표', 'quarter-note rests'), ('8분쉼표', 'eighth notes'),
+                             ('8분쉼표', 'quarter-note rests between eighth notes'),
+                             ('18분쉼표', 'eighth-note rests')]:
             with self.subTest(text=text):self.assertTrue(loc.introduced_number(text,source,'ko'))
 
     def setUp(self):
@@ -39,6 +44,100 @@ class TranslationTests(unittest.TestCase):
 
     def translate(self, **kwargs):
         return self.app.translations.start(self.task_id, 'ko', asynchronous=False, **kwargs)
+
+    def test_written_counts_and_positions_are_protected_without_changing_original(self):
+        candidate=result()
+        candidate['exercise']['instructions']='Repeat two bars four times. Start on the third beat at seventy-two BPM.'
+        target=rec.make_target(candidate,self.data,{'source_language':'en'})
+        before=copy.deepcopy(target)
+        context,tokens=loc.translation_input(target,'ko','en')
+        field='exercise.instructions'
+        self.assertEqual(list(tokens[field].values()),['2','4','3','72'])
+        translated={'strings':dict(context['strings'])}
+        translated['strings'][field]='[KEEP_0]마디를 [KEEP_1]회 반복하세요. [KEEP_3] BPM에서 [KEEP_2]번째 박에 시작하세요.'
+        display=loc.translated_target(target,'ko','en',translated)
+        self.assertEqual(display['instructions'],'2마디를 4회 반복하세요. 72 BPM에서 3번째 박에 시작하세요.')
+        self.assertEqual(target,before)
+        translated['strings'][field]=translated['strings'][field].replace('[KEEP_3]','80')
+        with self.assertRaises(loc.TranslationValidationError):loc.translated_target(target,'ko','en',translated)
+        self.assertEqual(loc.numeric_conditions('thirds and sevenths; four quarter-note beats'),
+                         'thirds and sevenths; 4 quarter-note beats')
+
+    def test_valid_legacy_cache_is_read_with_original_tokenization_without_model_calls(self):
+        context,_=loc.translation_input(self.target,'ko','en',protocol=1)
+        translated={'strings':{k:'번역: '+v for k,v in context['strings'].items()}}
+        manager=self.app.translations; manager.directory.mkdir()
+        job=manager.identity(self.target,'ko') | {'state':'completed','result':translated}
+        manager._write(job)
+        before=manager._path(job).read_bytes()
+        view,state=manager.view(self.target,'ko')
+        self.assertEqual(state['state'],'completed')
+        self.assertTrue(view['title'].startswith('번역: '))
+        self.assertEqual(manager._path(job).read_bytes(),before)
+        self.assertEqual(self.runner.calls,0)
+        self.assertEqual(view['exercise']['notation'],self.target['exercise']['notation'])
+
+    def test_invalid_field_gets_one_targeted_repair_and_preserves_valid_fields(self):
+        contexts=[]
+        def translate(context,schema):
+            contexts.append(copy.deepcopy(context))
+            translated={'strings':{k:'번역: '+v for k,v in context['strings'].items()}}
+            if len(contexts)==1:
+                translated['strings']['exercise.instructions']+=' 99 BPM'
+            return translated,{'provider':'synthetic-repair','usage':{'input_tokens':10}}
+        with patch.object(self.runner,'translate',side_effect=translate):
+            self.assertEqual(self.translate()['state'],'completed')
+        self.assertEqual(len(contexts),2)
+        self.assertEqual(set(contexts[1]['strings']),{'exercise.instructions'})
+        self.assertEqual(set(contexts[1]['protected_values']),{'exercise.instructions'})
+        self.assertEqual(contexts[1]['repair'],[{'field':'exercise.instructions','code':'unexpected_number'}])
+        job=json.loads(self.app.translations._path(self.app.translations.identity(self.target,'ko')).read_text())
+        self.assertEqual(job['protocol'],2)
+        self.assertEqual(len(job['attempts']),2)
+        self.assertEqual(job['result']['strings']['exercise.title'],job['attempts'][0]['result']['strings']['exercise.title'])
+        self.assertEqual((self.root/'practice.csv').read_bytes(),self.before)
+
+    def test_missing_placeholder_is_repaired_but_repeated_failure_is_bounded_and_diagnosable(self):
+        def broken(context,schema):
+            translated={'strings':dict(context['strings'])}
+            translated['strings']['exercise.notes']=translated['strings']['exercise.notes'].replace('[KEEP_0]','')
+            return translated,{'provider':'synthetic-invalid'}
+        with patch.object(self.runner,'translate',side_effect=broken) as run:
+            self.assertEqual(self.translate()['error_code'],'invalid_output')
+            self.assertEqual(run.call_count,2)
+            self.app.state('ko');self.translate()
+            self.assertEqual(run.call_count,2)
+        job=json.loads(self.app.translations._path(self.app.translations.identity(self.target,'ko')).read_text())
+        self.assertEqual(job['validation_issues'],[{'field':'exercise.notes','code':'protected_value_mismatch'}])
+        self.assertEqual(len(job['attempts']),2)
+        self.assertIn('result',job['attempts'][0])
+        self.assertIn('result',job['attempts'][1])
+        self.assertEqual((self.root/'practice.csv').read_bytes(),self.before)
+
+    def test_repair_auth_error_does_not_retry_again_or_publish_partial_translation(self):
+        def translate(context,schema):
+            if 'repair' in context:raise rec.RecommendationError('auth')
+            return {'strings':{k:v+' 999' for k,v in context['strings'].items()}},{}
+        with patch.object(self.runner,'translate',side_effect=translate) as run:
+            self.assertEqual(self.translate()['error_code'],'auth')
+            self.assertEqual(run.call_count,2)
+        view,state=self.app.translations.view(self.target,'ko')
+        self.assertEqual(view,self.target)
+        self.assertEqual(state['state'],'failed')
+
+    def test_invalid_provider_response_is_saved_privately_without_exposing_it_in_state(self):
+        error=rec.RecommendationError('invalid_output');error.invalid_result={'unexpected':'synthetic rejected output'}
+        with patch.object(self.runner,'translate',side_effect=error) as run:
+            self.assertEqual(self.translate()['error_code'],'invalid_output')
+            self.assertEqual(run.call_count,1)
+        job=json.loads(self.app.translations._path(self.app.translations.identity(self.target,'ko')).read_text())
+        self.assertEqual(job['attempts'][0]['result'],error.invalid_result)
+        self.assertNotIn('synthetic rejected output',json.dumps(self.app.state('ko')))
+
+    def test_malformed_output_repair_cannot_raise_an_unrelated_connection_error(self):
+        with patch.object(self.runner,'translate',return_value=({'strings':[]},{})) as run:
+            self.assertEqual(self.translate()['error_code'],'invalid_output')
+            self.assertEqual(run.call_count,2)
 
     def test_english_source_is_independent_of_display_language_and_retries(self):
         context = rec.context_for(self.root, self.data, 'ko')

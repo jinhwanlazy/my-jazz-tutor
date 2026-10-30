@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.4.0`; create a new tag for later releases instead of moving an old tag:
+selects `v0.4.1`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.4.0
+uv run python publish.py --ref v0.4.1
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -384,7 +384,11 @@ or history analysis. The app accepts only the expected prose fields, protects wr
 numbers/pitches/chord names with placeholders, and copies structured music, source
 IDs and confidence unchanged. These checks do not prove complete semantic equivalence.
 Korean musical terms may contain a numeral only when the same English concept occurs
-in that field (for example, quarter note → 4분음표 or seventh chord → 7화음).
+in that field (for example, quarter note → 4분음표, eighth-note rest → 8분쉼표, or
+seventh chord → 7화음). Standard spacing such as 4분 음표 is accepted. Written counts
+and positions with explicit units (four bars, third beat, seventy-two BPM) are
+normalized only in the translation input and protected by the same placeholders.
+The model receives their values for context but must return the placeholders.
 New tempo, count or pitch values still fail validation.
 
 Translations are cached locally in `practice/.translations/` by original snapshot,
@@ -392,6 +396,14 @@ language and format. One worker translates items sequentially; repeats of the sa
 snapshot reuse the cache. Reads never start model requests. While translating or
 after failure, the original stays available with status and an explicit retry button.
 Successful translations survive reloads and version updates with a compatible format.
+Earlier caches retain their original placeholder protocol, without a new model call.
+Within an explicit translation request, a rejected field gets at most one targeted
+repair attempt; validated fields are kept. A failed repair leaves the original
+available and requires an explicit retry. Login, quota, connection and timeout errors
+do not automatically retry. Each Codex call has the four-minute timeout.
+Returned attempts and field-level validation diagnostics remain in the private
+translation artifact for offline debugging; they are not sent in the web state or
+committed to Git. Rejections from before this release did not retain the model output.
 Historical snapshots and user notes are never rewritten. For older generated tasks,
 the source language comes from their original generation artifact if available; an
 unknown language is not inferred from the current profile. Built-in legacy tasks
@@ -434,6 +446,7 @@ English generation from a Korean request and a subsequent Korean translation):
 ```sh
 uv run python tests/codex_smoke.py --run
 uv run python tests/calibration_smoke.py --run
+uv run python tests/translation_smoke.py --run
 ```
 
 This consumes the logged-in account's Codex allowance. Normal unit and browser tests
@@ -443,6 +456,9 @@ The calibration smoke test independently assesses fixed synthetic music, checks
 invariance to wording/language and compares an unseen offbeat variation with a
 regular pulse. Its private `build/` report records results and usage. Passing this
 small regression suite is not evidence of empirically calibrated human difficulty.
+The translation smoke test uses synthetic musical text and deliberately removes a
+placeholder from a real model response to check the bounded repair path, Korean rest
+terminology, counts, and preservation of the original conditions and MIDI.
 
 CLI reference: [noninteractive mode](https://learn.chatgpt.com/docs/non-interactive-mode),
 [authentication](https://learn.chatgpt.com/docs/auth). A persistent

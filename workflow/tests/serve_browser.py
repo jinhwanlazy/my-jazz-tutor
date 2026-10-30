@@ -17,6 +17,8 @@ class BrowserRunner(SyntheticRunner):
         result, provenance = super().generate(context)
         if context['request'] == 'simulate:translation-auth':
             result['exercise']['instructions'] = 'Synthetic translation authentication failure; retry this fixture.'
+        if context['request'] == 'simulate:translation-repair':
+            result['exercise']['instructions'] = 'Synthetic translation repair case. Keep eighth-note rests silent.'
         if context['request'] == 'simulate:no-pad':
             result['exercise']['accompaniment'] = None
             result['exercise']['rhythm'] = 'Two half notes per bar in 4/4.'
@@ -31,10 +33,14 @@ class BrowserRunner(SyntheticRunner):
 class BrowserTranslator(SyntheticTranslator):
     def translate(self, context, schema):
         time.sleep(.5)
-        if 'Synthetic translation authentication failure' in context['strings']['exercise.instructions'] and not getattr(self, 'failed_once', False):
+        instructions = context['strings'].get('exercise.instructions', '')
+        if 'Synthetic translation authentication failure' in instructions and not getattr(self, 'failed_once', False):
             self.failed_once = True
             raise RecommendationError('auth')
-        return super().translate(context, schema)
+        result, provenance = super().translate(context, schema)
+        if 'Synthetic translation repair case' in instructions and 'repair' not in context:
+            result['strings']['exercise.instructions'] += ' 99 BPM'
+        return result, provenance
 
 
 root = Path(sys.argv[1]).resolve()

@@ -1,4 +1,4 @@
-# 코칭 운영 규칙 — 0.4.0
+# 코칭 운영 규칙 — 0.4.1
 
 Respond in the language the user uses, unless they explicitly request another
 language. A profile default or document language does not override conversation.
@@ -55,6 +55,9 @@ Codex 호출에 자동 공유된다고 가정하지 않는다.
 방법·선택 이유·해석·미확인 사항의 번역은 `.translations/`에 별도 저장하며 원래
 과제 스냅샷, 기록, 사용자 메모와 MIDI를 바꾸지 않는다. 번역은 재추천이나 재평가가
 아니다. 과거 과제는 생성 당시 원문을 유지하고 필요할 때 표시용 번역만 만든다.
+번역은 숫자·음이름 자리표시자를 검증하며, 동일한 음악 용어의 한국어 숫자 표기는
+허용한다(예: eighth-note rest → 8분쉼표). 한 요청에서 잘못된 필드만 한 번 보정할 수
+있으며 최종 실패 시 원문을 유지한다. 진단 자료는 개인 번역 캐시에만 남긴다.
 
 ## 매번 제시할 내용
 

@@ -58,7 +58,8 @@ try {
       await page.unroute('**/api/recommend*');
       loseAddResponse=false;
     }
-    await page.waitForFunction(()=>document.querySelector('#generation-title').textContent==='Your new practice is in the list.');
+    await page.waitForFunction(()=>document.querySelector('#generation-panel').getAttribute('aria-busy')==='false' &&
+      document.querySelector('#generation-title').textContent===(document.documentElement.lang==='ko' ? '새 연습이 목록에 추가됐어요.' : 'Your new practice is in the list.'));
     await visible('#view-list'); await hidden('#view-practice');
     const data=await state();
     assert.equal(data.history.filter(t=>t.pending).length,1);
@@ -373,6 +374,17 @@ try {
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
   await page.screenshot({path:join(project,'build/browser/difficulty-mobile-ko.png'),fullPage:true});
   await page.screenshot({path:join(project,'build/browser/translation-recovered-mobile.png'),fullPage:true});
+  // Validation repairs stay inside the original job, without a retry button or extra POST.
+  await page.locator('#discard-btn').click();await page.locator('#discard-submit').click();await hidden('#discard-dialog');
+  await page.locator('.recommendation-focus').evaluate(e=>e.open=true);
+  await page.locator('#recommendation-request').fill('simulate:translation-repair');
+  const repairPosts=[];
+  page.on('request',request=>{if(request.url().includes('/api/translate')&&request.method()==='POST')repairPosts.push(request.postDataJSON());});
+  const repairTask=await add();
+  await page.waitForFunction(id=>document.querySelector(`.practice-item[data-task-id="${id}"] h3`)?.textContent.startsWith('번역: '),repairTask);
+  assert.equal(repairPosts.filter(request=>request.task_id===repairTask).length,1);
+  assert.equal(await item(repairTask).getByRole('button',{name:'번역 재시도'}).count(),0);
+  assert.doesNotMatch(await item(repairTask).textContent(),/99 BPM/);
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,checks:['Codex job progress and authentication failure','response loss without duplicate generation','custom tasks outside the catalog','list landing without writes','explicit create and enter','pending resume after reload','completion before feedback','no duplicate counts','notes and skip reasons inline','repeat creates another item','score continuity and MIDI','failed save and recovery','active discard preserves recordings','languages and mobile layout','translation retry and reload cache','BPM locked during playing and pause','MIDI stays visible in sidebar and mobile header'],screenshots:'workflow/build/browser'}));
 } finally {
