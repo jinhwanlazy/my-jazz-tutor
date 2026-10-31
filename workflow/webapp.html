@@ -58,7 +58,7 @@
       </section>
     </section>
     <section id="view-practice" class="view" hidden>
-      <div class="room-heading"><button id="back-list" class="text-button" data-i18n="Back to practice list">Back to practice list</button><span class="eyebrow" data-i18n="Practice room">Practice room</span></div>
+      <div class="room-heading"><button id="back-list" class="text-button" data-i18n="Back to practice list">Back to practice list</button><div class="room-actions"><a href="#practice-player" class="text-button" data-i18n="Go to score">Go to score</a><button id="discard-btn" class="text-button" hidden data-i18n="Discard task">Discard task</button></div></div>
       <section class="card lesson-card" aria-labelledby="lesson-title">
         <div class="section-top"><span class="eyebrow" id="lesson-kind"><span data-i18n="Next task">Next task</span></span><span class="tag" id="lesson-phase"><span data-i18n="Starting point">Starting point</span></span></div>
         <h2 id="lesson-title"><span data-i18n="Loading your exercise">Loading your exercise</span></h2>
@@ -67,27 +67,30 @@
         <div id="target-meta" class="meta-row"></div>
         <div id="lesson-overview"></div>
         <p id="lesson-section" class="subtle"></p><p id="lesson-instructions" class="instructions"></p>
+        <div class="lesson-resources">
+        <details id="lesson-guide" class="lesson-guide"><summary data-i18n="Practice plan">Practice plan</summary>
+          <div class="practice-plan"><p id="criterion-text"></p><ol id="lesson-steps" class="practice-steps"></ol></div>
+        </details>
         <details id="lesson-material" class="lesson-material"><summary data-i18n="Notes and chord progression">Notes and chord progression</summary>
         <div class="chord-label"><span><span data-i18n="CHORD PROGRESSION">CHORD PROGRESSION</span></span><span id="bar-position"><span data-i18n="One chord per bar">One chord per bar</span></span></div>
         <div id="chords" class="chords"></div>
         <p id="lesson-notes" class="instructions"></p><div id="hand-notes" class="hand-notes"></div>
         </details>
-        <div class="criterion"><span class="criterion-icon" aria-hidden="true">✓</span><div><strong><span data-i18n="Practice focus">Practice focus</span></strong><p id="criterion-text"></p><ol id="lesson-steps" class="practice-steps"></ol><div id="lesson-analysis"></div></div></div>
-
-        <div class="lesson-actions"><button id="discard-btn" class="text-button" hidden><span data-i18n="Discard task">Discard task</span></button></div>
+        </div>
+        <div id="lesson-analysis"></div>
       </section>
-      <section class="card score-card" aria-labelledby="score-title">
-        <div class="section-top score-heading"><h2 id="score-title" data-i18n="Practice">Practice</h2><div class="score-legend"><span class="target-swatch" data-i18n="Assigned notes">Assigned notes</span><span class="input-swatch" data-i18n="Your MIDI input">Your MIDI input</span></div></div>
-        <div class="score-toolbar"><span id="score-position"></span><div><label class="check-line"><input id="score-follow" type="checkbox" checked><span data-i18n="Follow playback">Follow playback</span></label></div></div>
-        <div id="score-viewport" class="score-viewport" tabindex="0" role="region" aria-label="Scrollable practice score" data-i18n-aria-label="Scrollable practice score" aria-describedby="score-help"></div>
-        <div id="score-material-help"></div>
+      <section id="practice-player" class="card score-card" tabindex="-1" aria-labelledby="score-title">
+        <div class="section-top score-heading"><h2 id="score-title" data-i18n="Score and playback">Score and playback</h2><div class="score-legend"><span class="target-swatch" data-i18n="Assigned notes">Assigned notes</span><span class="input-swatch" data-i18n="Your MIDI input">Your MIDI input</span></div></div>
         <div class="practice-controls" role="group" aria-label="Practice playback" data-i18n-aria-label="Practice playback">
           <div class="playback-bar">
-            <div class="transport-buttons"><button id="practice-btn" class="button primary" disabled><span data-i18n="Start practice">Start practice</span></button><button id="finish-btn" class="button secondary" disabled><span data-i18n="Complete practice">Complete practice</span></button></div>
-            <div class="playback-tempo"><div class="tempo-control"><button id="tempo-down" class="round-button" aria-label="Decrease BPM by 5" data-i18n-aria-label="Decrease BPM by 5">−</button><div><input id="tempo" type="number" min="40" max="120" value="60" aria-label="Metronome BPM" data-i18n-aria-label="Metronome BPM"><span>BPM</span></div><button id="tempo-up" class="round-button" aria-label="Increase BPM by 5" data-i18n-aria-label="Increase BPM by 5">+</button></div><input id="tempo-range" class="tempo-range" type="range" min="40" max="120" value="60" aria-label="Metronome tempo slider" data-i18n-aria-label="Metronome tempo slider"></div>
-            <div class="playback-progress"><div id="beats" class="beats" aria-label="Current beat" data-i18n-aria-label="Current beat"><span>1</span><span>2</span><span>3</span><span>4</span></div><span id="elapsed">00:00</span><span id="transport-state" class="transport-status"><span data-i18n="Ready">Ready</span></span></div>
+            <div class="transport-main"><div class="transport-buttons"><button id="practice-btn" class="button primary" disabled><span data-i18n="Start practice">Start practice</span></button><button id="finish-btn" class="button secondary" disabled><span data-i18n="Complete practice">Complete practice</span></button></div><small id="save-status" class="save-status" role="status"><span data-i18n="Timing starts when you begin practice.">Timing starts when you begin practice.</span></small></div>
+            <div class="tempo-block"><div class="playback-tempo"><div class="tempo-control"><button id="tempo-down" class="round-button" aria-label="Decrease BPM by 5" data-i18n-aria-label="Decrease BPM by 5">−</button><div><input id="tempo" type="number" min="40" max="120" value="60" aria-label="Metronome BPM" data-i18n-aria-label="Metronome BPM" aria-describedby="tempo-hint"><span>BPM</span></div><button id="tempo-up" class="round-button" aria-label="Increase BPM by 5" data-i18n-aria-label="Increase BPM by 5">+</button></div><input id="tempo-range" class="tempo-range" type="range" min="40" max="120" value="60" aria-label="Metronome tempo slider" data-i18n-aria-label="Metronome tempo slider" aria-describedby="tempo-hint"></div><p id="tempo-hint" class="tempo-hint" data-i18n="Choose BPM before starting. It stays fixed until this recording ends.">Choose BPM before starting. It stays fixed until this recording ends.</p></div>
           </div>
-          <p id="tempo-hint" class="tempo-hint" data-i18n="Choose BPM before starting. It stays fixed until this recording ends.">Choose BPM before starting. It stays fixed until this recording ends.</p>
+        </div>
+        <div class="score-toolbar"><div class="playback-progress"><div id="beats" class="beats" aria-label="Current beat" data-i18n-aria-label="Current beat"><span>1</span><span>2</span><span>3</span><span>4</span></div><span id="elapsed">00:00</span><span id="transport-state" class="transport-status"><span data-i18n="Ready">Ready</span></span><span id="score-position"></span></div><label class="check-line"><input id="score-follow" type="checkbox" checked><span data-i18n="Follow playback">Follow playback</span></label></div>
+        <div id="score-viewport" class="score-viewport" tabindex="0" role="region" aria-label="Scrollable practice score" data-i18n-aria-label="Scrollable practice score" aria-describedby="score-help"></div>
+        <div id="score-material-help"></div>
+        <div class="score-options">
           <details id="playback-settings" class="playback-settings"><summary data-i18n="Sound settings">Sound settings</summary><div class="playback-settings-grid">
           <div class="sound-controls">
             <div class="sound-row"><label class="switch-label"><input id="click-toggle" type="checkbox" checked><span class="switch"></span><span><span data-i18n="Metronome click">Metronome click</span></span></label><input id="click-volume" type="range" min="0" max="1" step="0.01" value="0.35" aria-label="Metronome volume" data-i18n-aria-label="Metronome volume"></div>
@@ -95,10 +98,8 @@
             <p class="sound-hint"><span data-i18n="Soft chords follow the progression.">Soft chords follow the progression.</span></p>
           </div>
           </div></details>
-          <small id="save-status" class="save-status"><span data-i18n="Timing starts when you begin practice.">Timing starts when you begin practice.</span></small>
+          <details class="score-details"><summary data-i18n="About the live display">About the live display</summary><p id="score-help" class="field-note" data-i18n="Blue marks show when you press keys during playback; tails show key holds, not pedal sustain. This is a live view of the current pass, not a score of your performance.">Blue marks show when you press keys during playback; tails show key holds, not pedal sustain. This is a live view of the current pass, not a score of your performance.</p><p data-i18n="Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.">Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.</p></details>
         </div>
-        <p id="score-help" class="field-note" data-i18n="Blue marks show when you press keys during playback; tails show key holds, not pedal sustain. This is a live view of the current pass, not a score of your performance.">Blue marks show when you press keys during playback; tails show key holds, not pedal sustain. This is a live view of the current pass, not a score of your performance.</p>
-        <details class="score-details"><summary data-i18n="About the live display">About the live display</summary><p data-i18n="Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.">Staff placement follows the assigned notes or pitch range; it does not identify your hand. Notes outside the visible range are labeled at the edge. Dashed tails end at a pause or disconnect. Resuming starts a fresh display from bar 1. Input during pauses is still recorded, but has no beat position here. Device latency can affect alignment.</p></details>
       </section>
     </section>
     <section id="view-settings" class="view" hidden>

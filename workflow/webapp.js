@@ -4,6 +4,12 @@ import {Capture, Outbox, uploadPending, randomHex} from './capture.mjs';
 import {ScoreView} from './score.mjs';
 
 const $ = id => document.getElementById(id);
+// Keep in-page navigation clear of the mobile header, including connected MIDI controls.
+const sidebar = document.querySelector('.sidebar');
+new ResizeObserver(() => {
+  const height = getComputedStyle(sidebar).position === 'sticky' ? sidebar.getBoundingClientRect().height : 0;
+  document.documentElement.style.setProperty('--app-header-height', `${height}px`);
+}).observe(sidebar);
 const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, openedTaskId: null, view: 'list', reflectionSaving: false, ports: new Map()};
 let outbox, midiAccess, midiSelection = 'all', timer, detailTask;
 const labels = {success: 'Criteria met', unmet: 'Target not met', unknown: 'Assessment pending'};
@@ -194,8 +200,8 @@ function appendTaskOverview(parent, t, compact = false, open = false) {
   else overview.append(el('p', t.exercise?.rhythm || t.instructions, 'task-description'));
   const prediction = t.difficulty?.prediction;
   const burden = el('p', undefined, 'burden-prediction');
-  burden.append(el('strong', tr('Personal burden · when assigned')), document.createTextNode(' · '),
-    document.createTextNode(tr(prediction ? burdenLabels[prediction.burden] : 'No prediction was saved for this task.')));
+  burden.append(el('span', tr('Personal burden · when assigned'), 'burden-label'),
+    el('strong', tr(prediction ? burdenLabels[prediction.burden] : 'No prediction was saved for this task.'), 'burden-value'));
   overview.append(burden);
   parent.append(overview);
   if (compact) return;
@@ -223,7 +229,11 @@ function renderLesson(resetTempo = false) {
   const current = openedTask(), t = target();
   if (!current) return;
   score.setScore(t.notation);
-  if (!t.notation) $('lesson-material').open = true;
+  if ($('view-practice').dataset.taskId !== current.id) {
+    $('lesson-guide').open = false;
+    $('lesson-material').open = !t.notation;
+    $('view-practice').dataset.taskId = current.id;
+  }
   $('lesson-kind').textContent = tr('Current task');
   $('lesson-title').textContent = t.title;
   $('lesson-translation').replaceChildren(translationNotice(current));
@@ -244,7 +254,7 @@ function renderLesson(resetTempo = false) {
   if (t.arrangement === 'left-bass-only') rows.push([tr('Right hand'), tr('Rest comfortably')]);
   if (t.arrangement === 'right-melody-only') rows.push([tr('Left hand'), tr('Rest comfortably')]);
   for (const [label, text] of rows) { const row = el('div', undefined, 'hand-row'); row.append(el('span', label), el('strong', text)); $('hand-notes').append(row); }
-  $('lesson-instructions').textContent = tr`${t.instructions} C4 is middle C.`;
+  $('lesson-instructions').textContent = t.instructions;
   $('criterion-text').textContent = t.exercise?.rhythm || tr`Play ${t.criteria.min_clean_runs} consecutive runs with correct notes, a steady pulse, and no stops under the assigned conditions.`;
   $('lesson-steps').replaceChildren(...(t.exercise?.steps || []).map(step => el('li', step)));
   const contextOpen = $('lesson-overview').querySelector('.task-context-detail')?.open;
@@ -479,7 +489,8 @@ async function saveReflection(rating) {
 function switchView(name) {
   ui.view = name;
   document.querySelectorAll('.view').forEach(view => view.hidden = view.id !== `view-${name}`);
-  document.querySelectorAll('[data-view]').forEach(button => { button.classList.toggle('active', button.dataset.view === name); button.setAttribute('aria-current', button.dataset.view === name ? 'page' : 'false'); });
+  const section = name === 'practice' ? 'list' : name;
+  document.querySelectorAll('[data-view]').forEach(button => { button.classList.toggle('active', button.dataset.view === section); button.setAttribute('aria-current', button.dataset.view === section ? 'page' : 'false'); });
 }
 function clearFilters() {
   for (const id of ['filter-exercise', 'filter-key', 'filter-from', 'filter-to']) $(id).value = '';

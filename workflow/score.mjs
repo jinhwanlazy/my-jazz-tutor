@@ -97,6 +97,16 @@ export class ScoreView {
   constructor({root, status, follow, help}) {
     Object.assign(this, {root, status, follow, help});
     this.pass = 0; this.playing = false;
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(root);
+  }
+  resize() {
+    if (!this.svg || !this.root.clientWidth) return;
+    // Scale notation consistently across bar counts. SVG dimensions work under
+    // the server's CSP; inline style attributes are deliberately blocked.
+    const scale = Math.min(1, Math.max(760, this.root.clientWidth) / (scoreX(16) + 24));
+    this.svg.setAttribute('width', this.width * scale);
+    this.svg.setAttribute('height', this.height * scale);
   }
   setScore(score) {
     const identity = JSON.stringify(score);
@@ -158,11 +168,11 @@ export class ScoreView {
     }
     const score = this.score;
     this.width = scoreX(score.bars.length * 4) + 24;
-    const scale = this.width / (scoreX(16) + 24);
     const written = score.bars.flatMap(bar => ['left', 'right'].flatMap(hand => bar[hand].flatMap(e => e.pitches.map(p => noteY(p, hand)))));
     const minY = Math.min(0, ...written.map(y => y - 42)), maxY = Math.max(HEIGHT, ...written.map(y => y + 16));
+    this.height = maxY - minY;
     this.svg = svg('svg', {viewBox: `0 ${minY} ${this.width} ${maxY - minY}`, role: 'img', class: 'practice-score',
-      style: `width: ${Math.max(1, scale) * 100}%; min-width: ${scale * 760}px`,
+      width: this.width, height: this.height,
       'aria-label': tr`Practice score in ${score.key}, ${score.bars.length} bars`});
     const canvas = this.svg;
     const bars = score.bars;
@@ -201,6 +211,7 @@ export class ScoreView {
     line(this.cursor, 0, 60, 0, 270, 'score-cursor-line');
     this.cursor.append(svg('path', {d: 'M-5 56 L5 56 L0 63 Z'})); canvas.append(this.cursor);
     this.root.append(canvas);
+    this.resize();
     if (score.allowed_pitches.length) {
       const note = document.createElement('p'); note.className = 'score-improv-help';
       note.textContent = tr`Use ${score.allowed_pitches.map(p => p.name).join(' · ')}. Improvise with quarter notes and rests, then rest for two bars. Bass diamonds mark beat 1; hold length is not specified.`;

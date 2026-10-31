@@ -613,6 +613,9 @@
     "Different entries between hands": "양손의 서로 다른 진입",
     "Hands enter together": "양손이 함께 진입",
     "Left hand only": "왼손만 연주",
-    "Right hand only": "오른손만 연주"
+    "Right hand only": "오른손만 연주",
+    "Go to score": "악보로 이동",
+    "Practice plan": "연습 순서",
+    "Score and playback": "악보와 재생"
   }
 }

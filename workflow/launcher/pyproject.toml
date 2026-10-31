@@ -1,6 +1,6 @@
 [project]
 name = "my-jazz-tutor"
-version = "0.1.9"
+version = "0.1.10"
 description = "uv launcher for the installed My Jazz Tutor runtime"
 requires-python = ">=3.11"
 dependencies = []

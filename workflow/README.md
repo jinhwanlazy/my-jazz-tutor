@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.4.2`; create a new tag for later releases instead of moving an old tag:
+selects `v0.4.3`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.4.2
+uv run python publish.py --ref v0.4.3
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -136,9 +136,13 @@ TLS. To use MIDI remotely without HTTPS, forward the port through SSH and visit
 localhost on the client. Changing the address creates a separate browser storage
 origin, so recover any unsent input at its original address first.
 
-- **Practice room:** read the task instructions, target conditions, and success
-  criteria first, then use the score and its single set of playback controls.
-  **Notes and chord progression** expands the written parts. Target BPM and current
+- **Practice room:** the purpose, conditions, characteristics and saved personal
+  prediction appear before the score. Expand **Practice plan** for the rhythm and
+  ordered steps, or **Notes and chord progression** for the written parts (opened
+  automatically when no score is available). These choices stay open when the
+  language changes. **Go to score** moves keyboard focus to the player, clear of
+  the mobile MIDI header. Start, complete and tempo controls sit above the score;
+  narrow screens stack them without squeezing the buttons. Target BPM and current
   metronome BPM are separate. Choose tempo before starting: the input, slider and
   buttons stay locked until the recording ends, including pauses. Expand **Sound
   settings** for volume and chord pad. MIDI connection, status and input selection
@@ -151,7 +155,9 @@ origin, so recover any unsent input at its original address first.
   All bars share one continuous horizontal staff and beat scale. **Follow playback**
   scrolls within the score as the cursor advances, without jumps at bar boundaries
   or page turns. A score that fits the viewport stays still; the cursor returns to
-  the beginning at each loop. Turn following off to scroll manually. Whole-note
+  the beginning at each loop. Turn following off to scroll manually. Note size
+  stays consistent across short and long exercises; longer scores scroll rather
+  than shrinking to fit. Whole-note
   centers are transparent, and the score omits bar numbers and hand labels.
   Improvisation has allowed pitches and rest bars, with no invented melody; bass
   diamonds mean a beat-1 attack whose
@@ -292,7 +298,9 @@ input preservation and timing, tempo/pad playback, reports, corrections, skips,
 offline recovery, and mobile layout. Synthetic MIDI tests do not verify a physical
 keyboard connection or speaker quality.
 Checks also cover translated descriptions during capture, fixed BPM while playing
-and paused, and the MIDI connection control remaining visible on mobile.
+and paused, and the MIDI connection control remaining visible on mobile. Layout
+checks cover 320–1440 px, aligned journal content, expandable plans, keyboard
+navigation to the player and consistent notation size under the server's CSP.
 
 The optional LAN browser check requires this computer's actual non-loopback IPv4
 address. It uses temporary synthetic records and verifies an ordinary HTTP origin,

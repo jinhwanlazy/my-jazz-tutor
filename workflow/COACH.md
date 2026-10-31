@@ -1,4 +1,4 @@
-# 코칭 운영 규칙 — 0.4.2
+# 코칭 운영 규칙 — 0.4.3
 
 Respond in the language the user uses, unless they explicitly request another
 language. A profile default or document language does not override conversation.

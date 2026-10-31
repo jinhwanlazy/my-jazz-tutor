@@ -106,6 +106,8 @@ try {
   assert.match(await item(first).textContent(),/Ready to practice/);
   assert.equal(await item(first).locator('.characteristic-chip').count(),3);
   assert.match(await item(first).locator('.burden-prediction').innerText(),/Not enough evidence/);
+  assert.ok(await item(first).evaluate(card=>Math.abs(card.querySelector('h3').getBoundingClientRect().left-
+    card.querySelector('.task-overview').getBoundingClientRect().left)<2));
   assert.equal(await item(first).locator('.demand-chip').count(),0);
   assert.equal(await page.locator('#new-practice').isEnabled(),false);
   await page.reload();await visible('#view-list');
@@ -113,6 +115,33 @@ try {
   await hidden('#view-practice');
   assert.equal((await state()).history.length,1);
   await enter(first);
+  assert.equal(await page.locator('#lesson-steps').isVisible(),false);
+  await page.locator('#lesson-guide summary').click();
+  assert.match(await page.locator('#lesson-steps').innerText(),/Play each hand separately/);
+  await page.locator('#lesson-guide summary').click();
+  for(const width of [320,390,768,1024,1440]){
+    await page.setViewportSize({width,height:1000});
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    const layout=await page.evaluate(()=>{
+      const rect=selector=>document.querySelector(selector).getBoundingClientRect();
+      const player=rect('.score-card'),score=rect('#score-viewport'),controls=rect('.practice-controls');
+      const buttons=['#practice-btn','#finish-btn','#tempo-down','#tempo-up'].map(rect);
+      return {noOverflow:document.documentElement.scrollWidth<=innerWidth,
+        controlsBeforeScore:controls.bottom<=score.top,
+        buttonsFit:buttons.every(r=>r.left>=player.left&&r.right<=player.right&&r.height>=44),
+        scoreHeight:rect('.practice-score').height};
+    });
+    assert.ok(layout.noOverflow,`page overflow at ${width}`);
+    assert.ok(layout.controlsBeforeScore);
+    assert.ok(layout.buttonsFit,`controls overflow at ${width}`);
+    assert.ok(layout.scoreHeight<=321,`short score enlarged at ${width}`);
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('a[href="#practice-player"]').focus();
+  await page.keyboard.press('Enter');
+  assert.ok(await page.evaluate(()=>document.activeElement.id==='practice-player'&&
+    document.querySelector('.score-card').getBoundingClientRect().top>=document.querySelector('.sidebar').getBoundingClientRect().bottom));
+  await page.setViewportSize({width:1440,height:1080});
   assert.match(await page.locator('#lesson-overview').innerText(),/Not enough evidence/);
   assert.ok(await page.evaluate(()=>document.querySelector('#lesson-overview').getBoundingClientRect().bottom <=
     document.querySelector('#lesson-instructions').getBoundingClientRect().top));
@@ -141,12 +170,15 @@ try {
     const view = new ScoreView({root, status, follow});
     const score = id => fixtures[id];
     const at = (absolute, bars) => ({absolute, bar: Math.floor(absolute / 4) % bars, pass: Math.floor(absolute / (bars * 4)), beat: absolute % 4});
+    view.setScore({...score('E06'),bars:score('E06').bars.slice(0,2)});
+    const shortGlyphHeight=root.querySelector('.score-glyph').getBoundingClientRect().height;
     view.setScore(score('E04')); view.begin(); view.frame(at(8.1, 4));
     view.midi([0x90, 50, 100], 'test', at(8.1, 4)); // D3 belongs to the right hand here.
     const low = root.querySelector('.score-live-note[data-midi="50"]');
     const lowRight = low.dataset.hand === 'right' && Boolean(low.querySelector('.score-input-head')) && !low.querySelector('.score-edge-note');
     const alignedY = low.querySelector('.score-input-head').getAttribute('cy') === root.querySelector('.score-target[data-bar="2"][data-hand="right"] [data-midi="50"] ellipse').getAttribute('cy');
     view.setScore(score('E06')); view.begin();
+    const consistentNoteSize=Math.abs(root.querySelector('.score-glyph').getBoundingClientRect().height-shortGlyphHeight)<.1;
     const canvas = root.querySelector('svg');
     const cursorX = () => view.cursor.transform.baseVal.consolidate().matrix.e;
     const positions = [];
@@ -187,7 +219,7 @@ try {
     view.setScore(null); view.frame(at(15, 4));
     const fallback = !root.querySelector('svg') && root.textContent.includes('not available');
     host.remove();
-    return {lowRight, alignedY, continuous, oneCanvas, joinedTail, manualScroll, loop, continuedHold, interrupted, reset, localScroll, fittingScore, fallback};
+    return {lowRight, alignedY, consistentNoteSize, continuous, oneCanvas, joinedTail, manualScroll, loop, continuedHold, interrupted, reset, localScroll, fittingScore, fallback};
   }, notationFixtures);
   assert.ok(Object.values(displayChecks).every(Boolean), JSON.stringify(displayChecks));
   await page.locator('#playback-settings > summary').click();
