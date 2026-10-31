@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.4.3`; create a new tag for later releases instead of moving an old tag:
+selects `v0.5.0`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.4.3
+uv run python publish.py --ref v0.5.0
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -180,9 +180,12 @@ BPM, hand roles, specific notes/rhythm, steps and proposed practice time. **Why 
 practice?** separates the coach's interpretations and source IDs from unknowns;
 the original context is available locally. The existing curriculum is optional
 reference material, not a candidate list, required sequence, or set of unlocked keys.
-New tasks can use any key and 20–240 BPM. The current notation contract supports
-1–16 bars of 4/4, one voice per hand including chords, and whole/half/quarter/eighth
-notes and rests. It has no ties, tuplets or dotted notes. Open improvisation can use
+New tasks can use any key and 20–240 BPM. New schema-3 scores store canonical ABC
+(`jazz-abc-1`): 1–16 full bars of fixed 3/4 or 4/4, two staves with up to two voices
+each, chords/rests, sixteenth through whole notes, dots, ties, ordinary triplets,
+dynamics and accents. The goal determines form length, including 8-bar phrases and
+12-bar blues. Unsupported notation is rejected, never silently simplified. Legacy
+schema-1/2 JSON scores remain unchanged. Open improvisation can use
 specific written instructions with an explicit reason for omitting fixed notation.
 
 MIDI is optional. In a browser supporting Web MIDI on HTTPS or localhost, choose
@@ -312,6 +315,66 @@ PLAYWRIGHT_MODULE="$PWD/build/browser-tools/node_modules/playwright/index.mjs" \
 CHROME_EXECUTABLE=/usr/bin/google-chrome node tests/browser-lan.mjs
 ```
 
+## ABC runtime and teaching materials
+
+Install Node.js 20 or later alongside Python/uv. Python invokes the bundled parser
+in a short Node subprocess; the browser uses the matching bundled abcjs renderer.
+The launcher and publisher check Node before running/activating an ABC release.
+`JAZZ_NODE_BIN` can name its executable. Normal use needs no npm install or browser
+process on the server. Development bundle changes use `npm ci` and
+`npm run build:notation` followed by the music interoperability checks.
+
+Generation pins `gpt-6.1-sol` with `model_reasoning_effort="high"`. It first asks for
+an evidence-based learning goal and material requests, then the app retrieves
+sources, and a fresh explicit call writes the exercise. One music-only validation
+repair is allowed; it cannot change evidence, goal, prose, difficulty or citations.
+Calls have a four-minute limit within a ten-minute request deadline. Auth/quota/
+connection failures do not trigger a fallback or a weaker model. Requested settings,
+CLI version, usage and elapsed time are recorded; unobserved effective model
+configuration is left unknown. Translation keeps its separate prose-only protocol.
+
+`materials-catalog.json` contains public source metadata and links, including Open
+Studio, Open Music Theory and other teaching sites. It is not a fixed exercise list.
+Sources are fetched only on request into
+`${XDG_CACHE_HOME:-~/.cache}/my-jazz-tutor/materials/`; `JAZZ_MATERIALS_CACHE` selects
+another local cache (tests use temporary directories). Original bytes are addressed
+by SHA-256, with URL, retrieval time, ETag and Last-Modified metadata. Refresh uses
+conditional requests; old snapshots never follow a changed source. SQLite FTS5
+searches section/page text. At most two sources and three excerpts/page images are
+supplied per generation. Downloads are capped at 40 MB and PDFs at 300 pages;
+images are capped at three MB each. Text still fits the 64,000-byte prompt/schema
+budget; images are separately bounded and are not counted as text tokens.
+
+The model receives the retrieved content explicitly. A cached path or PDF text is
+not proof that an image score was inspected. Source failures remain in the request
+artifact/context. The model may create an original exercise when no source fits,
+with honest attribution; no fixed-curriculum fallback is used.
+
+References appear in the room and completed details with author, title, URL and
+page/section. Unchanged examples, adapted examples (including changes), and teaching
+concept references are distinct. Exact reuse requires a reviewed ABC cache asset;
+the model selects its ID and the app inserts its notation. Review compares source
+bytes and the exact excerpt with pitch, duration, spelling, voice and expression.
+The review record identifies its author and method; it is not automatic proof of
+musical/source correctness. Broad unattended PDF/video OMR and audio transcription
+are not included. Keep original symbolic files when converting externally and
+record any lost/changed features instead of calling an adaptation unchanged.
+
+For local material inspection and explicit reviewed imports:
+
+```sh
+uv run --project practice jazz material-catalog
+uv run --project practice jazz material-source openstudio-beginners --pages 44
+uv run --project practice jazz material-import --input /tmp/reviewed-example.json
+```
+
+The import JSON contains `source_id`, an exact returned `locator`, `notation`
+(the ABC envelope), and `review` with `source_sha256`, `reviewer`, `scope`, `notes`,
+`method` (`visual_source_comparison` or `symbolic_source_comparison`), and `checked`
+containing `pitches`, `durations`, `spelling`, `voices`, `expression`. This explicit
+review path is not available to the tool-free generation model. Downloaded content,
+transcriptions and personal contexts must never be committed.
+
 ## Codex recommendations and conversational coaching
 
 Verify the local CLI with `codex --version` and `codex login status`. If necessary,
@@ -322,7 +385,8 @@ temporary directory, ignores user configuration/rules, and disables shell, plugi
 hooks, browser and delegation tools. Existing CLI authentication is reused. It does
 not resume a chat or assume any shared conversation memory.
 
-Each explicit request supplies COACH.md, profile provenance, optional request text,
+Each explicit request supplies the shared `coaching-policy.txt` and
+`notation-policy.txt` contracts, profile provenance, optional request text,
 the difficulty rubric, up to eight recent tasks and four related/corrected older tasks.
 Conditions are compact descriptions and score features; full scores stay in original
 snapshots. Latest feedback, exact note/skip excerpts and up to three recent session
@@ -339,7 +403,7 @@ budget fails explicitly. Original records are never shortened. Coverage and omit
 detail counts are supplied; omitted history does not mean unpracticed. Raw MIDI is
 not sent. The private request artifact preserves the exact assembled context. Context
 sent to Codex uses the account's remote model service; local files are not model
-write targets. Login expiry, quota, connection, four-minute timeout and invalid
+write targets. Login expiry, quota, connection, timeout and invalid
 output are visible failures, with no substitute fixed recommendation.
 
 The app checks the JSON schema, evidence references, piano pitches, bar counts,
@@ -352,7 +416,7 @@ are idempotent and single-flight across servers. A changed profile, record, sess
 or runtime invalidates an in-flight result. Restarted jobs recover saved items or
 show an interrupted error. Restart the server after activating a release.
 
-New schema-v2 tasks include seven separate demand axes: melody, rhythm, meter,
+Schema-2 and schema-3 tasks include seven separate demand axes: melody, rhythm, meter,
 tonality, harmony/voicing, expression and hand coordination. `difficulty-rubric.json`
 uses an extensible ordinal scale with registered comparison anchors. Its initial
 anchors 1–3 are not low/moderate/high bands or a maximum musical difficulty.
@@ -437,9 +501,13 @@ A conversational coach can perform the analysis itself using the same protocol:
 
 ```sh
 uv run --project practice jazz recommend-context --output /tmp/jazz-context.json
+uv run --project practice jazz recommendation-plan-schema
+# Write the goal/material plan first, then let the app fetch the requested sources:
+uv run --project practice jazz recommend-materials --context /tmp/jazz-context.json --plan /tmp/jazz-plan.json --output /tmp/jazz-prepared.json
+# Read the supplied excerpts and inspect any listed images before composing:
 uv run --project practice jazz recommendation-schema
 # Write one matching recommendation JSON to a temporary file, then validate/save:
-uv run --project practice jazz accept-recommendation --context /tmp/jazz-context.json --input /tmp/jazz-recommendation.json
+uv run --project practice jazz accept-recommendation --context /tmp/jazz-prepared.json --input /tmp/jazz-recommendation.json
 ```
 
 These commands use the same records, guidelines, schema, validator and storage as

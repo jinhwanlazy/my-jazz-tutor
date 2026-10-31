@@ -7,6 +7,7 @@
   <title data-i18n="My Jazz Tutor · Practice Room">My Jazz Tutor · Practice Room</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/webapp.css">
+  <script defer src="/abcjs.min.js"></script>
   <script type="module" src="/webapp.js"></script>
 </head>
 <body>
@@ -67,12 +68,13 @@
         <div id="target-meta" class="meta-row"></div>
         <div id="lesson-overview"></div>
         <p id="lesson-section" class="subtle"></p><p id="lesson-instructions" class="instructions"></p>
+        <div id="lesson-references"></div>
         <div class="lesson-resources">
         <details id="lesson-guide" class="lesson-guide"><summary data-i18n="Practice plan">Practice plan</summary>
-          <div class="practice-plan"><p id="criterion-text"></p><ol id="lesson-steps" class="practice-steps"></ol></div>
+          <div class="practice-plan"><p id="criterion-text"></p><ol id="lesson-steps" class="practice-steps"></ol><div id="lesson-development"></div></div>
         </details>
         <details id="lesson-material" class="lesson-material"><summary data-i18n="Notes and chord progression">Notes and chord progression</summary>
-        <div class="chord-label"><span><span data-i18n="CHORD PROGRESSION">CHORD PROGRESSION</span></span><span id="bar-position"><span data-i18n="One chord per bar">One chord per bar</span></span></div>
+        <div class="chord-label"><span><span data-i18n="CHORD PROGRESSION">CHORD PROGRESSION</span></span><span id="bar-position"><span data-i18n="Chord changes by bar">Chord changes by bar</span></span></div>
         <div id="chords" class="chords"></div>
         <p id="lesson-notes" class="instructions"></p><div id="hand-notes" class="hand-notes"></div>
         </details>

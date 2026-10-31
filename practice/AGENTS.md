@@ -13,11 +13,20 @@ user-reported experience; keep unknown observations unknown.
 
 ## Scope
 
-- Use `./jazz recommend-context` and `recommendation-schema` to analyze explicit
-  records and compose a new task. Save through `accept-recommendation`, or use
+- Use `./jazz recommend-context` and `recommendation-plan-schema` to set an
+  evidence-based goal and request relevant materials. Run `recommend-materials`
+  with that context and plan, then inspect its prepared excerpts and images.
+  Read the active `coaching-policy.txt`, `notation-policy.txt` and
+  `recommendation-schema` to compose the final task. Save with the prepared
+  context through `accept-recommendation`, or use
   `recommend` to ask local Codex. `suggest` is a generating, saving alias, not a
   rule-based preview. Use `reflection` for labels/notes. Never limit recommendations
   to the legacy exercise IDs or edit the log directly.
+- New fixed scores use the supported ABC profile; old JSON snapshots remain
+  unchanged. Cite only supplied material. For exact source reuse select a reviewed
+  example ID and let the app insert its notation. Unreviewed OCR is not a verified
+  source example. Keep downloaded sources and transcriptions in the local material
+  cache, never Git. The source catalog is optional reference material, not a syllabus.
 - You may maintain `profile.json` when the user gives new preferences, and generate
   `reports/`. Keep the original user note intact.
 - Do not change `AGENTS.md`, `jazz`, `runtime-ref`, `runtime.json`, `.runtime/`, the curriculum,

@@ -69,7 +69,14 @@ export class Transport {
       const bar = Math.floor(this.beatIndex / beats) % Math.max(1, this.playback.bars.length);
       const beat = this.beatIndex % beats;
       if (this.click) this.tick(this.nextTime, beat === 0);
-      if (this.padEnabled && (beat === 0 || changed || this.refreshPad)) {
+      if (this.padEnabled && this.playback.events) {
+        const local = bar * beats + beat;
+        for (const event of this.playback.events) if (event.start >= local && event.start < local + 1) {
+          this.note(this.nextTime + (event.start - local) * 60 / this.bpm,
+            event.pitch, event.duration * 60 / this.bpm);
+        }
+        this.refreshPad = false;
+      } else if (this.padEnabled && (beat === 0 || changed || this.refreshPad)) {
         this.chord(this.nextTime, this.playback.bars[bar]?.notes || []);
         this.refreshPad = false;
       }
@@ -133,6 +140,21 @@ export class Transport {
         this.padVoices.push({osc, gain});
       }
     }
+  }
+  note(time, pitch, duration) {
+    const osc = this.context.createOscillator(), gain = this.context.createGain();
+    osc.type = 'sine'; osc.frequency.value = 440 * 2 ** ((pitch - 69) / 12);
+    this.padBus.gain.value = this.padVolume;
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(.12, time + Math.min(.015, duration / 4));
+    gain.gain.setValueAtTime(.1, time + Math.max(.02, duration - .04));
+    gain.gain.linearRampToValueAtTime(0, time + duration);
+    gain.connect(this.padBus);
+    const voice = {osc, gain}; this.padVoices.push(voice);
+    this.voice(osc, gain, time);
+    const ended = osc.onended;
+    osc.onended = () => { ended(); this.padVoices = this.padVoices.filter(item => item !== voice); };
+    osc.stop(time + duration + .01);
   }
   setTempo(bpm) { this.requestedBpm = bpm; }
   setPad(enabled) {

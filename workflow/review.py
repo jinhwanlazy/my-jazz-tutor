@@ -782,7 +782,7 @@ def main(argv=None):
     parser.add_argument("--practice-root", type=Path, default=HERE.parent / "practice")
     parser.add_argument("--curriculum", type=Path, default=HERE / "curriculum.yaml")
     sub = parser.add_subparsers(dest="command", required=True)
-    for command in ("status", "validate", "validate-curriculum", "recommendation-schema"):
+    for command in ("status", "validate", "validate-curriculum", "recommendation-schema", "recommendation-plan-schema", "material-catalog"):
         sub.add_parser(command)
     for command in ("recommend", "suggest"):
         recommendation = sub.add_parser(command, help="Analyze with Codex and add one validated practice to the list")
@@ -792,6 +792,17 @@ def main(argv=None):
     context.add_argument("--output", type=Path, required=True)
     context.add_argument("--request", default="")
     context.add_argument("--language", choices=["ko", "en"])
+    materials = sub.add_parser("recommend-materials", help="Validate a goal plan, retrieve sources and prepare shared coaching context")
+    materials.add_argument("--context", type=Path, required=True)
+    materials.add_argument("--plan", type=Path, required=True)
+    materials.add_argument("--output", type=Path, required=True)
+    source = sub.add_parser("material-source", help="Fetch/search a catalog source into the local cache")
+    source.add_argument("source_id")
+    source.add_argument("--query", default="piano exercise")
+    source.add_argument("--pages", type=int, nargs="*", default=[])
+    source.add_argument("--refresh", action="store_true")
+    imported = sub.add_parser("material-import", help="Cache an ABC excerpt with an explicit source comparison record")
+    imported.add_argument("--input", type=Path, required=True)
     acceptance = sub.add_parser("accept-recommendation", help="Validate and save conversational coaching JSON")
     acceptance.add_argument("--context", type=Path, required=True)
     acceptance.add_argument("--input", type=Path, required=True)
@@ -828,7 +839,7 @@ def main(argv=None):
         development_source = (HERE / "publish.py").exists()
         production_root = (HERE.parent / "practice").resolve()
         if development_source and args.practice_root.resolve() == production_root:
-            require(args.command not in ("assign", "record", "correct", "reflection", "cancel", "discard", "serve", "recommend", "suggest", "accept-recommendation"),
+            require(args.command not in ("assign", "record", "correct", "reflection", "cancel", "discard", "serve", "recommend", "suggest", "accept-recommendation", "recommend-materials"),
                     "Development source cannot write the real practice log. Use ./jazz in the practice project. For tests, set --practice-root to a temporary directory.")
             if args.command == "report":
                 require(args.output is not None and not args.output.resolve().is_relative_to(production_root),
@@ -853,6 +864,28 @@ def main(argv=None):
         elif args.command == "recommendation-schema":
             from recommendation import SCHEMA
             result = SCHEMA
+        elif args.command == "recommendation-plan-schema":
+            from coaching_materials import PLAN_SCHEMA
+            result = PLAN_SCHEMA
+        elif args.command == "material-catalog":
+            from materials import catalog
+            result = catalog()
+        elif args.command == "material-source":
+            from materials import MaterialStore
+            store = MaterialStore()
+            if args.refresh:
+                store.fetch(args.source_id, refresh=True)
+            result = store.retrieve([{'source_id': args.source_id, 'query': args.query, 'pages': args.pages}])
+        elif args.command == "material-import":
+            from materials import MaterialStore
+            value = json.loads(args.input.read_text())
+            result = MaterialStore().import_example(value['source_id'], value['locator'], value['notation'], value['review'])
+        elif args.command == "recommend-materials":
+            from coaching_materials import prepare_context
+            context = prepare_context(args.practice_root, data, json.loads(args.context.read_text()), json.loads(args.plan.read_text()))
+            atomic_text(args.output, jdump(context))
+            result = {'context': str(args.output), 'images_to_inspect': context['preparation']['images'],
+                      'failures': context['preparation']['material_failures']}
         elif args.command == "recommend-context":
             from recommendation import context_for
             with log_lock(args.practice_root):

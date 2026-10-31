@@ -104,7 +104,8 @@ try {
   assert.equal((await state()).sessions.length,0);
   await hidden('#view-practice');
   assert.match(await item(first).textContent(),/Ready to practice/);
-  assert.equal(await item(first).locator('.characteristic-chip').count(),3);
+  assert.deepEqual(await item(first).locator('.characteristic-chip').allTextContents(),
+    ['Repeating left-hand rhythm', 'Notes played together', 'Hands enter together', 'Written expression']);
   assert.match(await item(first).locator('.burden-prediction').innerText(),/Not enough evidence/);
   assert.ok(await item(first).evaluate(card=>Math.abs(card.querySelector('h3').getBoundingClientRect().left-
     card.querySelector('.task-overview').getBoundingClientRect().left)<2));
@@ -146,7 +147,7 @@ try {
   assert.ok(await page.evaluate(()=>document.querySelector('#lesson-overview').getBoundingClientRect().bottom <=
     document.querySelector('#lesson-instructions').getBoundingClientRect().top));
   await page.locator('#lesson-overview .task-context-detail summary').click();
-  assert.equal(await page.locator('#lesson-overview .characteristic-chip').count(),3);
+  assert.equal(await page.locator('#lesson-overview .characteristic-chip').count(),4);
   assert.match(await page.locator('#lesson-overview .task-context-detail').innerText(),/assigned task, not measured performance/);
   assert.match(await page.locator('#lesson-overview .task-parts').innerText(),/Hold D3/);
   assert.doesNotMatch(await page.locator('#lesson-overview').innerText(),/reference|[Ll]ow demand|[Hh]igh demand/);
@@ -156,7 +157,7 @@ try {
   assert.equal(await page.locator('#finish-btn').isEnabled(),false);
   assert.ok(await page.evaluate(()=>document.querySelector('.lesson-card').getBoundingClientRect().bottom<=document.querySelector('.score-card').getBoundingClientRect().top));
   assert.equal(await page.locator('.score-hand,.score-bar-number').count(),0);
-  assert.equal(await page.locator('.score-whole').first().evaluate(node=>getComputedStyle(node).fill),'none');
+  assert.ok(await page.locator('.abc-score .abcjs-note').count()>0);
   await page.evaluate(()=>document.fonts.load('40px Bravura'));
   const notationFixtures = JSON.parse(execFileSync('uv', ['run','python','-c', "import json,review;from notation import score_for;print(json.dumps({i:score_for(review.target_for(review.curriculum(),i,'Bb')) for i in ('E04','E06')}))"], {cwd:project}).toString());
   const displayChecks = await page.evaluate(async fixtures => {
@@ -173,6 +174,7 @@ try {
     view.setScore({...score('E06'),bars:score('E06').bars.slice(0,2)});
     const shortGlyphHeight=root.querySelector('.score-glyph').getBoundingClientRect().height;
     view.setScore(score('E04')); view.begin(); view.frame(at(8.1, 4));
+    const hollowWhole = getComputedStyle(root.querySelector('.score-whole')).fill === 'none';
     view.midi([0x90, 50, 100], 'test', at(8.1, 4)); // D3 belongs to the right hand here.
     const low = root.querySelector('.score-live-note[data-midi="50"]');
     const lowRight = low.dataset.hand === 'right' && Boolean(low.querySelector('.score-input-head')) && !low.querySelector('.score-edge-note');
@@ -189,7 +191,7 @@ try {
       (Math.abs(value.x - positions[i - 1].x - 5.2) < .001 &&
        value.scroll >= positions[i - 1].scroll && value.scroll - positions[i - 1].scroll <= 5));
     const oneCanvas = canvas === root.querySelector('svg') && root.querySelectorAll('.score-chord').length === 8;
-    view.frame(at(15.8, 8));
+    view.begin(); view.frame(at(15.8, 8));
     const tailStart = cursorX();
     view.midi([0x90, 62, 100], 'test', at(15.8, 8));
     view.frame(at(16.2, 8)); view.midi([0x80, 62, 0], 'test', at(16.2, 8));
@@ -219,7 +221,7 @@ try {
     view.setScore(null); view.frame(at(15, 4));
     const fallback = !root.querySelector('svg') && root.textContent.includes('not available');
     host.remove();
-    return {lowRight, alignedY, consistentNoteSize, continuous, oneCanvas, joinedTail, manualScroll, loop, continuedHold, interrupted, reset, localScroll, fittingScore, fallback};
+    return {hollowWhole, lowRight, alignedY, consistentNoteSize, continuous, oneCanvas, joinedTail, manualScroll, loop, continuedHold, interrupted, reset, localScroll, fittingScore, fallback};
   }, notationFixtures);
   assert.ok(Object.values(displayChecks).every(Boolean), JSON.stringify(displayChecks));
   await page.locator('#playback-settings > summary').click();
@@ -378,7 +380,7 @@ try {
   const withoutPad=await add(); await enter(withoutPad);
   assert.equal(await page.locator('#recommendation-request').inputValue(),'');
   assert.equal(await page.locator('#pad-toggle').isEnabled(),false);
-  assert.equal(await page.locator('.score-target[data-duration="2"] .score-whole').first().evaluate(n=>getComputedStyle(n).fill),'none');
+  assert.ok(await page.locator('.abc-score .abcjs-note').count()>0);
   await page.locator('#tempo').fill('240'); await page.locator('#tempo').dispatchEvent('change');
   await page.locator('#practice-btn').click();
   await page.waitForFunction(()=>document.querySelector('#bar-position').textContent.startsWith('Bar 2'), {timeout:10000});
@@ -406,7 +408,7 @@ try {
   assert.deepEqual(saved.difficulty,original.difficulty);
   await enter(translationTask);
   await page.locator('#lesson-overview .task-context-detail summary').click();
-  assert.equal(await page.locator('#lesson-overview .characteristic-chip').count(),3);
+  assert.equal(await page.locator('#lesson-overview .characteristic-chip').count(),4);
   assert.match(await page.locator('#lesson-overview').innerText(),/개인 예상 부담 · 출제 당시/);
   assert.match(await page.locator('#lesson-overview .task-parts').innerText(),/번역:/);
   assert.equal(await page.locator('.demand-chip, .demand-reasons, .difficulty-detail').count(),0);

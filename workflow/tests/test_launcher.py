@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 import install_launcher
 import publish
@@ -58,6 +59,45 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn('실행 캐시가 수정되었습니다', result.stderr)
         self.assertFalse((self.root / 'practice.csv').exists())
+
+    def test_missing_node_prevents_activation_without_changing_records_or_pin(self):
+        before = (self.root / 'runtime.json').read_bytes()
+        (self.root / 'practice.csv').write_text('synthetic sentinel; must not be parsed or modified')
+        git_fixture.bump(self.source, r.curriculum()['version'], '9.9.9')
+        with patch.dict(os.environ, {'JAZZ_NODE_BIN': '/missing-synthetic-node'}):
+            with self.assertRaisesRegex(ValueError, 'Node.js 20'):
+                publish.publish(self.source, self.root, activate=True)
+        self.assertEqual((self.root / 'runtime.json').read_bytes(), before)
+        self.assertEqual((self.root / 'practice.csv').read_text(), 'synthetic sentinel; must not be parsed or modified')
+
+    def test_abc_node_requirement_does_not_apply_to_legacy_snapshots(self):
+        legacy = Path(self.temp.name) / 'legacy'
+        legacy.mkdir()
+        with patch.dict(os.environ, {'JAZZ_NODE_BIN': '/missing-synthetic-node'}):
+            publish.runtime.check_requirements(legacy)
+
+    def test_clean_runtime_compiles_abc_and_accepts_shared_prepared_context(self):
+        from recommendation_fixture import abc_result, plan
+        context = self.root / 'synthetic-context.json'
+        prepared = self.root / 'synthetic-prepared.json'
+        goal = self.root / 'synthetic-goal.json'
+        candidate = self.root / 'synthetic-recommendation.json'
+        goal.write_text(json.dumps(plan()))
+        candidate.write_text(json.dumps(abc_result(12, 3)))
+        for args in [
+            ('recommend-context', '--output', str(context)),
+            ('recommend-materials', '--context', str(context), '--plan', str(goal), '--output', str(prepared)),
+            ('accept-recommendation', '--context', str(prepared), '--input', str(candidate))]:
+            completed = self.run_uv(*args)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+        saved = json.loads(completed.stdout)['target']
+        self.assertEqual(saved['schema_version'], 3)
+        self.assertEqual(saved['notation_identity']['engine'], 'abcjs-6.7.2')
+        self.assertEqual(saved['difficulty']['features']['beats_per_bar'], 3)
+        self.assertEqual(saved['bars'], 12)
+        self.assertFalse((self.release / 'node_modules').exists())
+        self.assertEqual(len(r.read_events(self.root)), 1)
+        self.assertEqual(self.run_uv('validate').returncode, 0)
 
     def test_no_argument_command_delegates_web_and_browser_flags(self):
         # Probe the bootstrap boundary without opening an actual browser/default port.

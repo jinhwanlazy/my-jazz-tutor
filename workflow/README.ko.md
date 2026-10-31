@@ -70,8 +70,10 @@
 명시적으로 실패합니다. 원본 MIDI는 전송하지 않습니다. 결과와 원래 맥락은
 Git에서 제외된 `practice/.recommendations/`에 보존합니다. 생성 중 기록·프로필·세션·
 활성 버전이 바뀌면 저장하지 않습니다. 의미적으로 적절한 음악인지까지 완벽히 검증하는
-검사기는 아닙니다. 악보는 4/4, 1–16마디, 손별 한 성부와 화음, 온/2분/4분/8분음표와
-쉼표를 지원합니다. 타이·잇단음표·점음표는 지원하지 않습니다.
+검사기는 아닙니다. 새 악보는 ABC 원문을 저장합니다. 고정 3/4·4/4, 1–16마디,
+손별 최대 두 성부, 화음·쉼표, 16분음표부터 온음표, 타이·점음표·일반 셋잇단음표와
+강약·강세를 지원합니다. 미지원 표기는 명시적으로 거절합니다. 기존 JSON 악보와
+기록은 변환하지 않습니다. 8·12마디 등 구문 길이는 연습 목표에 맞춰 정합니다.
 
 목록·연습실·과거 기록에서 **과제 특성과 개인 예상 부담**을 먼저 보여줍니다. 특성은
 원래 악보·조건의 엇박 진입, 쉼표, 양손의 서로 다른 진입 등입니다. 숫자 단계와
@@ -100,13 +102,18 @@ Git에서 제외된 `practice/.recommendations/`에 보존합니다. 생성 중 
 ```sh
 uv run --project practice jazz recommend
 uv run --project practice jazz recommend-context --output /tmp/jazz-context.json
+uv run --project practice jazz recommendation-plan-schema
+# 목표/자료 요청 계획을 /tmp/jazz-plan.json에 작성한 뒤 자료를 가져옵니다.
+uv run --project practice jazz recommend-materials --context /tmp/jazz-context.json --plan /tmp/jazz-plan.json --output /tmp/jazz-prepared.json
+# 제공된 본문과 이미지를 확인한 뒤 최종 추천을 작성합니다.
 uv run --project practice jazz recommendation-schema
-uv run --project practice jazz accept-recommendation --context /tmp/jazz-context.json --input /tmp/jazz-recommendation.json
+uv run --project practice jazz accept-recommendation --context /tmp/jazz-prepared.json --input /tmp/jazz-recommendation.json
 ```
 
 `recommend`와 별칭 `suggest`는 생성 후 목록에 저장합니다. `status`는 읽기만 합니다.
-대화형 코치가 직접 분석할 때는 context와 schema를 읽어 JSON을 작성하고 accept로
-검증·저장합니다. 원장이나 설치 소스를 직접 고치지 않습니다. `reflection TASK --input`
+대화형 코치가 직접 분석할 때도 목표 계획을 먼저 작성하고 앱이 자료를 준비한
+prepared context와 schema를 읽어 최종 JSON을 작성합니다. accept가 검증·저장하며,
+원장이나 설치 소스를 직접 고치지 않습니다. `reflection TASK --input`
 명령은 웹과 같은 라벨·선택 메모를 받습니다. 기존 상세 보고·정정 명령은 호환용입니다.
 
 ## LAN 접속
@@ -147,7 +154,7 @@ Playwright 브라우저 검사는 [영문 문서](README.md#web-validation)를 �
 새 버전 소스를 커밋·태그한 후 발행합니다.
 
 ```sh
-uv run python publish.py --ref v0.4.3
+uv run python publish.py --ref v0.5.0
 ```
 
 발행은 새 버전 활성화를 우선합니다. 호환 미완료 과제는 원래 조건을 유지하고 비호환은
@@ -162,3 +169,23 @@ uv run python publish.py --ref v0.4.3
 
 공식 문서: [비대화형 실행](https://learn.chatgpt.com/docs/non-interactive-mode),
 [인증](https://learn.chatgpt.com/docs/auth), [app-server](https://learn.chatgpt.com/docs/app-server).
+
+## ABC와 참고자료
+
+새 악보를 검증하려면 Node.js 20 이상이 필요합니다. Python 서버가 번들 파서를 호출하고
+브라우저는 같은 버전의 abcjs를 로컬에서 사용합니다. 일반 실행에는 npm 설치가 필요 없습니다.
+생성은 Sol/high를 명시하며 목표 계획 → 앱의 자료 조회 → 최종 과제 생성 순서입니다.
+음악 검증 보정은 최대 한 번이며 근거·목표·설명·출처를 변경할 수 없습니다. 호출별 4분,
+전체 요청 10분 제한입니다. 인증·한도·연결 실패를 고정 과제나 약한 모델로 대체하지 않습니다.
+
+자료는 요청할 때만 `${XDG_CACHE_HOME:-~/.cache}/my-jazz-tutor/materials/`에 내려받습니다.
+`JAZZ_MATERIALS_CACHE`로 위치를 지정할 수 있습니다. Git에는 링크와 메타데이터만 둡니다.
+원본 내용 해시, 페이지/구간, 다운로드 시점과 검토 정보를 보존하며 SQLite 전문 검색으로
+필요한 내용을 찾습니다. 최대 두 자료·세 발췌/이미지를 모델에 명시적으로 제공합니다.
+본문 입력 한도는 기존 64,000 UTF-8 바이트이며 이미지는 별도 크기·개수 제한을 적용합니다.
+
+연습실과 기록 상세에는 원문 예제/변형 예제/교육 개념 참고를 구분하고 제목·저자·링크·
+페이지/구간과 변형 내용을 표시합니다. 원본 대조를 마친 예제는 ID만 선택하면 앱이 ABC를
+삽입합니다. 검토되지 않은 PDF 인식 결과를 원문 그대로인 과제로 발급하지 않습니다.
+범용 PDF·영상 자동 채보와 임베딩 검색은 후속 범위입니다. 자료 검토·가져오기 명령과
+JSON 형식은 [영문 운영 설명](README.md#abc-runtime-and-teaching-materials)을 참고하세요.

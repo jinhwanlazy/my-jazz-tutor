@@ -23,6 +23,8 @@ def score_features(exercise):
              'bars': exercise['bars'], 'available': bool(score)}
     if not score:
         return facts
+    if score.get('format') == 'abc':
+        return abc_features(exercise, facts)
     facts['beats_per_bar'] = score['beats_per_bar']
     hands, starts = {}, {}
     for hand in ('left', 'right'):
@@ -48,6 +50,46 @@ def score_features(exercise):
                  shared_onsets=len(starts['left'] & starts['right']),
                  nonshared_onsets=len(starts['left'] ^ starts['right']), total_onset_positions=len(union))
     return facts
+
+
+def abc_features(exercise, facts):
+    from abc_score import parse_score
+    score = parse_score(exercise['notation'], **{k: exercise[k] for k in ('key', 'bpm', 'bars')})
+    beats = score['beats_per_bar']
+    hands, starts = {}, {}
+    for hand in ('left', 'right'):
+        events = [e for e in score['events'] if e['hand'] == hand]
+        attacks, sounding = {}, []
+        for event in events:
+            at = event['bar'] * beats + event['beat']
+            for note in event['pitches']:
+                sounding.append((at, at + event['duration'], note['midi']))
+                if not note['tie_from']:
+                    attacks.setdefault(at, []).append((note['midi'], event['duration']))
+        starts[hand] = set(attacks)
+        flat = [p for _, _, p in sounding]
+        chords = [[p for p, _ in attacks[at]] for at in sorted(attacks)]
+        simultaneous = [{p for start, end, p in sounding if start <= at < end} for at in sorted({s for s, _, _ in sounding})]
+        hands[hand] = {
+            'onsets': len(attacks), 'offbeat_onsets': sum(at % 1 != 0 for at in attacks),
+            'shortest_duration_beats': min((e['duration'] for e in events if e['pitches']), default=None),
+            'pitch_range_semitones': max(flat) - min(flat) if flat else None,
+            'max_simultaneous_notes': max(map(len, simultaneous), default=0),
+            'max_chord_span_semitones': max((max(c) - min(c) for c in simultaneous if c), default=0),
+            'max_top_note_step_semitones': max((abs(max(b) - max(a)) for a, b in zip(chords, chords[1:])), default=0),
+            'pitch_classes': sorted({p % 12 for p in flat}),
+            'onsets_per_second_at_target': round(len(attacks) * exercise['bpm'] / (60 * beats * len(score['bars'])), 3),
+            'rhythm_patterns': len({tuple((e['voice'], e['beat'], e['duration'], bool(e['pitches'])) for e in b[hand]) for b in score['bars']}),
+            'voices': sum(v['hand'] == hand for v in score['voices']),
+            'tie_continuations': sum(bool(n['tie_from']) for e in events for n in e['pitches']),
+        }
+    return facts | {'beats_per_bar': beats, 'hands': hands,
+        'both_hands_active': bool(starts['left'] and starts['right']),
+        'shared_onsets': len(starts['left'] & starts['right']),
+        'nonshared_onsets': len(starts['left'] ^ starts['right']),
+        'total_onset_positions': len(starts['left'] | starts['right']),
+        'written_expression': sorted({d for e in score['events'] for d in e['decorations']} |
+                                     ({'slur'} if any(e['slur_starts'] for e in score['events']) else set()))}
 
 
 def validate(assessment, context=None):
@@ -88,10 +130,12 @@ def task_characteristics(score):
         return {'source': 'assigned_conditions', 'tags': [], 'notation_available': False}
     bars = score['bars']
     events = {hand: [event for bar in bars for event in bar[hand]] for hand in ('left', 'right')}
+    def attack(event):
+        return event['kind'] != 'rest' and (score.get('format') != 'abc' or any(not n['tie_from'] for n in event['pitches']))
     active = {hand: any(e['kind'] != 'rest' for e in part) for hand, part in events.items()}
     improvised = any(e['kind'] == 'improv' for part in events.values() for e in part)
     # Descriptive facts are not inferred from rubric numbers or axis reasons.
-    if any(e['kind'] == 'notes' and e['beat'] % 1 != 0 for part in events.values() for e in part):
+    if any(attack(e) and e['beat'] % 1 != 0 for part in events.values() for e in part):
         tags.append('Offbeat entries')
     if any(active[hand] and any(e['kind'] == 'rest' for e in part) for hand, part in events.items()):
         tags.append('Rests in the written parts')
@@ -108,13 +152,18 @@ def task_characteristics(score):
             tags.append('Both hands have assigned roles')
         else:
             starts = {hand: {(i, e['beat']) for i, bar in enumerate(bars)
-                             for e in bar[hand] if e['kind'] != 'rest'} for hand in events}
+                             for e in bar[hand] if attack(e)} for hand in events}
             tags.append('Different entries between hands' if starts['left'] != starts['right']
                         else 'Hands enter together')
     elif active['left']:
         tags.append('Left hand only')
     elif active['right']:
         tags.append('Right hand only')
+    if score.get('format') == 'abc':
+        if any(n['tie_from'] for e in score['events'] for n in e['pitches']): tags.append('Tied notes')
+        if any(e['triplet'] for e in score['events']): tags.append('Triplet rhythm')
+        if len(score['voices']) > 2: tags.append('Independent voices')
+        if any(e['decorations'] or e['slur_starts'] for e in score['events']): tags.append('Written expression')
     return {'source': 'assigned_notation', 'tags': tags, 'notation_available': True}
 
 
@@ -122,8 +171,10 @@ def result_from_target(target):
     """Recover the model contract without app-derived facts; v1 stays unchanged."""
     result = {'schema_version': target['schema_version'], **copy.deepcopy(target['analysis']),
               'exercise': copy.deepcopy(target['exercise'])}
-    if target['schema_version'] == 2:
+    if target['schema_version'] >= 2:
         result['difficulty'] = {k: copy.deepcopy(v) for k, v in target['difficulty'].items() if k != 'features'}
+    if target['schema_version'] == 3:
+        result.update(music_claims=copy.deepcopy(target['music_claims']), references=copy.deepcopy(target['references']))
     return result
 
 

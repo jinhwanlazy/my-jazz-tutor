@@ -34,8 +34,17 @@ def result():
 
 
 class SyntheticRunner:
-    def generate(self, context):
-        return copy.deepcopy(result()), {'provider': 'synthetic-test'}
+    def plan(self, context, **kwargs):
+        return plan(), {'provider': 'synthetic-test'}
+
+    def generate(self, context, **kwargs):
+        return abc_result(), {'provider': 'synthetic-test'}
+
+
+def plan():
+    return {'objective': 'Connect chord shapes in a musical phrase.', 'evidence_ids': ['profile'],
+            'stretch': 'Keep the bass quiet while connecting upper voices.', 'form': 'A short original phrase.',
+            'material_reason': 'This synthetic transport test needs no external material.', 'material_requests': []}
 
 
 class SyntheticTranslator:
@@ -46,3 +55,24 @@ class SyntheticTranslator:
         self.calls += 1
         prefix = '번역: ' if context['target_language'] == 'Korean' else 'Translated: '
         return {'strings': {key: prefix + text for key, text in context['strings'].items()}}, {'provider': 'synthetic-test'}
+
+
+def abc_result(bars=2, meter=4):
+    value = result()
+    value.update(schema_version=3, references=[], music_claims=[
+        {'bar': 1, 'beat': 0, 'voice': 'RH', 'pitch': 'F#4', 'chord': 'D', 'degree': 3, 'alteration': 0}])
+    e = value['exercise']
+    e['bars'] = bars
+    e['section'] = f'Original {bars}-bar phrase'
+    e['rhythm'] = f'Hold each chord for {meter} quarter-note beats in {meter}/4.'
+    e['instructions'] = f'Connect the chords in {meter}/4. Keep the melody louder than the bass.'
+    e['development'] = {'focus': 'Connect chord tones with a quiet bass.', 'musical_structure': 'Alternate D and G in a balanced phrase.',
+                        'expression': 'Keep the right hand mf and the bass p.', 'application': 'Repeat with a different final chord tone.',
+                        'difference_from_recent': 'No comparable synthetic history was supplied.'}
+    def abc(right):
+        rh = ' '.join(('"D"!mf!' + right[0] if i % 2 == 0 else '"G"' + right[1]) + str(meter*2) + ' |' for i in range(bars))
+        lh = ' '.join(('D,' if i % 2 == 0 else 'G,,') + str(meter*2) + ' |' for i in range(bars))
+        return {'format':'abc','profile':'jazz-abc-1','abc':f'X:1\nT:Synthetic chord connection\nM:{meter}/4\nL:1/8\n%%score {{ RH LH }}\nV:RH clef=treble\nV:LH clef=bass\nK:D\n[V:RH] {rh}\n[V:LH] !p!{lh}\n'}
+    e['notation'] = abc(('[FA]', '[GB]'))
+    e['accompaniment'] = abc(('[F,A,]', '[B,,D]'))
+    return value

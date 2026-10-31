@@ -18,7 +18,10 @@ LOCALIZATION = ['i18n.mjs', 'translations.json']
 NOTATION = ['notation.py', 'score.mjs', 'timeline.mjs', 'Bravura.woff2', 'Bravura-LICENSE.txt', 'THIRD_PARTY.md']
 RECOMMENDATION = ['recommendation.py', 'recommendation.schema.json']
 DIFFICULTY = ['difficulty.py', 'difficulty-rubric.json', 'recommendation.v1.schema.json', 'coaching_context.py']
-FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + DIFFICULTY + ['localization.py', 'difficulty-rubric.v1.json']
+ABC = ['abc_score.py', 'abc-parse.cjs', 'abc-parser.cjs', 'abc-view.mjs', 'abcjs.min.js',
+       'abcjs-LICENSE.md', 'abcjs.min.js.LICENSE', 'recommendation.v2.schema.json', 'coaching-policy.txt', 'notation-policy.txt',
+       'materials.py', 'material_extract.py', 'materials-catalog.json', 'coaching_materials.py', 'recommendation.plan.schema.json']
+FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + DIFFICULTY + ABC + ['localization.py', 'difficulty-rubric.v1.json']
 PIN = 'runtime.json'
 CACHE = '.runtime'
 
@@ -59,6 +62,7 @@ def snapshot(repo, ref):
             'Runtime recommendation files are incomplete.')
     require(not set(DIFFICULTY).intersection(names) or set(DIFFICULTY) <= set(names),
             'Runtime difficulty files are incomplete.')
+    require(not set(ABC).intersection(names) or set(ABC) <= set(names), 'Runtime ABC files are incomplete.')
     contents = {name: git(repo, 'show', f'{revision}:workflow/{name}') for name in FILES if name in names}
     version = tomllib.loads(contents['pyproject.toml'].decode())['project']['version']
     manifest = {'revision': revision, 'version': version,
@@ -151,6 +155,19 @@ def selected(root):
     return destination, manifest
 
 
+def check_requirements(destination):
+    if not (Path(destination) / 'abc_score.py').exists():
+        return
+    node = os.environ.get('JAZZ_NODE_BIN') or shutil.which('node')
+    require(node, 'ABC 악보 검증에는 Node.js 20 이상이 필요합니다. 설치 후 다시 실행하세요.')
+    try:
+        version = subprocess.run([node, '--version'], capture_output=True, text=True, timeout=5)
+        major = int(version.stdout.strip().lstrip('v').split('.')[0]) if version.returncode == 0 else 0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        major = 0
+    require(major >= 20, 'ABC 악보 검증에는 Node.js 20 이상이 필요합니다.')
+
+
 def run(root, args):
     try:
         destination, manifest = selected(root)
@@ -161,6 +178,7 @@ def run(root, args):
         require(args[:1] != ['serve'] or (destination / 'webapp.py').is_file(),
                 f"활성 런타임 {manifest['version']}은 웹을 지원하지 않습니다. "
                 '미완료 과제를 정리한 뒤 workflow의 publish.py로 웹 지원 Git ref를 활성화하세요.')
+        check_requirements(destination)
         uv = shutil.which('uv')
         require(uv, 'uv 실행 파일이 필요합니다.')
         os.environ.pop('VIRTUAL_ENV', None)

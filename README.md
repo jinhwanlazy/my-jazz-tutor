@@ -41,6 +41,8 @@ virtual environments, caches, and development previews.
 
 After cloning, follow [practice setup](practice/README.md) to copy the example
 profile and enter your preferences. CSV and MIDI storage are created when needed.
+Install Python 3.11+, uv and Node.js 20+. The ABC parser and renderer are bundled;
+normal use does not require npm.
 Checking out Git history or cloning again does not restore personal records;
 back them up separately.
 

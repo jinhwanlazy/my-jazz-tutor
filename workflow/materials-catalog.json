@@ -1,0 +1,266 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "openstudio-charleston",
+      "publisher": "Open Studio",
+      "author": "Adam Maness",
+      "title": "5 Easy Jazz Piano Chords That Sound Great",
+      "url": "https://www.openstudiojazz.com/5-easy-jazz-piano-chords-that-sound-great/",
+      "format": "html",
+      "topics": [
+        "comping",
+        "Charleston",
+        "rhythm",
+        "voicings"
+      ]
+    },
+    {
+      "id": "openstudio-pathways",
+      "publisher": "Open Studio",
+      "author": "Open Studio",
+      "title": "Piano course order / Core Piano Pathway",
+      "url": "https://openstudio.helpscoutdocs.com/article/575-what-order-should-i-take-the-piano-courses",
+      "format": "html",
+      "topics": [
+        "curriculum",
+        "skills",
+        "application"
+      ]
+    },
+    {
+      "id": "openstudio-jumpstart",
+      "publisher": "Open Studio",
+      "author": "Peter Martin and Adam Maness",
+      "title": "Jazz Piano Jump-Start Workbook",
+      "url": "https://www.openstudiojazz.com/wp-content/uploads/2024/11/Jazz-Piano-Jump-Start-2024-workbook.pdf",
+      "format": "pdf",
+      "topics": [
+        "blues",
+        "shell voicings",
+        "comping",
+        "ear training"
+      ]
+    },
+    {
+      "id": "openstudio-beginners",
+      "publisher": "Open Studio",
+      "author": "Peter Martin",
+      "title": "Jazz Piano for Beginners Workbook",
+      "url": "https://www.openstudiojazz.com/wp-content/uploads/2024/03/Jazz-Piano-for-Beginners-Workbook.pdf",
+      "format": "pdf",
+      "topics": [
+        "shell voicings",
+        "ii V I",
+        "melody",
+        "bebop"
+      ]
+    },
+    {
+      "id": "tjps-comping",
+      "publisher": "The Jazz Piano Site",
+      "author": "The Jazz Piano Site",
+      "title": "Jazz Piano Comping – How to Comp",
+      "url": "https://www.thejazzpianosite.com/jazz-piano-lessons/jazz-chord-voicings/how-to-comp/",
+      "format": "html",
+      "topics": [
+        "comping",
+        "space",
+        "register",
+        "voice leading"
+      ]
+    },
+    {
+      "id": "tjps-improvisation",
+      "publisher": "The Jazz Piano Site",
+      "author": "The Jazz Piano Site",
+      "title": "Approaches to Improvisation",
+      "url": "https://www.thejazzpianosite.com/jazz-piano-lessons/jazz-improvisation/approaches-to-improvisation/",
+      "format": "html",
+      "topics": [
+        "motif",
+        "melody",
+        "harmony",
+        "groove"
+      ]
+    },
+    {
+      "id": "berklee-basic",
+      "publisher": "Berklee Online",
+      "author": "Berklee Online",
+      "title": "Basic Improvisation",
+      "url": "https://online.berklee.edu/courses/basic-improvisation",
+      "format": "html",
+      "topics": [
+        "call and response",
+        "motif",
+        "expression",
+        "approach notes"
+      ]
+    },
+    {
+      "id": "berklee-piano",
+      "publisher": "Berklee Online",
+      "author": "Berklee Online",
+      "title": "Jazz Piano",
+      "url": "https://online.berklee.edu/courses/jazz-piano",
+      "format": "html",
+      "topics": [
+        "comping",
+        "tensions",
+        "bass",
+        "phrasing"
+      ]
+    },
+    {
+      "id": "berklee-playalong",
+      "publisher": "Berklee College of Music",
+      "author": "Berklee College of Music",
+      "title": "Practice Exercises",
+      "url": "https://college.berklee.edu/admissions/undergraduate/practiceexercises",
+      "format": "html",
+      "topics": [
+        "blues",
+        "accompaniment",
+        "style"
+      ]
+    },
+    {
+      "id": "berklee-pulse",
+      "publisher": "Berklee PULSE",
+      "author": "Berklee PULSE",
+      "title": "Practicing Improvisation",
+      "url": "https://pulse.berklee.edu/?id=4&lesson=27",
+      "format": "html",
+      "topics": [
+        "improvisation",
+        "form",
+        "chord tones"
+      ]
+    },
+    {
+      "id": "berklee-transcript",
+      "publisher": "Berklee PULSE",
+      "author": "Berklee PULSE",
+      "title": "Practicing Improvisation",
+      "url": "https://pulse.berklee.edu/content/public/pub_unit_assets/Casio_Video_Series/video_4/Practicing%20Improvisation_video%20transcript.pdf",
+      "format": "pdf",
+      "topics": [
+        "chord tones",
+        "chromatic approach",
+        "constraints"
+      ]
+    },
+    {
+      "id": "pianogroove-rootless",
+      "publisher": "PianoGroove",
+      "author": "PianoGroove",
+      "title": "Rootless 251 Progression",
+      "url": "https://www.pianogroove.com/jazz-piano-lessons/rootless-251-progression/",
+      "format": "html",
+      "topics": [
+        "rootless voicings",
+        "ii V I",
+        "voice leading"
+      ]
+    },
+    {
+      "id": "pianogroove-comping",
+      "publisher": "PianoGroove",
+      "author": "PianoGroove",
+      "title": "Comping & Improvisation Studies",
+      "url": "https://www.pianogroove.com/jazz-piano-lessons/jazz-piano-comping-voicings/",
+      "format": "html",
+      "topics": [
+        "standards",
+        "blues",
+        "modal comping"
+      ]
+    },
+    {
+      "id": "pianogroove-index",
+      "publisher": "PianoGroove",
+      "author": "PianoGroove",
+      "title": "Course Index",
+      "url": "https://www.pianogroove.com/course-index/",
+      "format": "html",
+      "topics": [
+        "jazz",
+        "blues",
+        "latin",
+        "solo",
+        "accompaniment"
+      ]
+    },
+    {
+      "id": "jazzadvice-variety",
+      "publisher": "Jazzadvice",
+      "author": "Jazzadvice",
+      "title": "How to Stop Playing the Same Ideas in Every Solo",
+      "url": "https://www.jazzadvice.com/lessons/how-to-stop-playing-the-same-ideas-in-every-solo/",
+      "format": "html",
+      "topics": [
+        "vocabulary",
+        "motif",
+        "creativity",
+        "ear training"
+      ]
+    },
+    {
+      "id": "jazzadvice-ear",
+      "publisher": "Jazzadvice",
+      "author": "Jazzadvice",
+      "title": "How to Hear Chord Changes",
+      "url": "https://www.jazzadvice.com/lessons/how-to-hear-chord-changes/",
+      "format": "html",
+      "topics": [
+        "ear training",
+        "root movement",
+        "chord quality"
+      ]
+    },
+    {
+      "id": "aebersold-handbook",
+      "publisher": "Jamey Aebersold Jazz",
+      "author": "Jamey Aebersold Jazz",
+      "title": "Jazz Handbook",
+      "url": "https://www.jazzbooks.com/mm5/download/FQBK-handbook.pdf",
+      "format": "pdf",
+      "topics": [
+        "practice",
+        "ear training",
+        "rhythm",
+        "blues",
+        "piano voicings"
+      ]
+    },
+    {
+      "id": "omt-voicings",
+      "publisher": "Open Music Theory",
+      "author": "Open Music Theory",
+      "title": "Jazz Voicings",
+      "url": "https://viva.pressbooks.pub/openmusictheory/chapter/jazz-voicings/",
+      "format": "html",
+      "topics": [
+        "thirds",
+        "sevenths",
+        "voice leading",
+        "extensions"
+      ]
+    },
+    {
+      "id": "omt-workbook",
+      "publisher": "Open Music Theory",
+      "author": "Open Music Theory",
+      "title": "Digital Workbook",
+      "url": "https://viva.pressbooks.pub/openmusictheory/chapter/digital-workbook/",
+      "format": "html",
+      "topics": [
+        "rhythm",
+        "voicings",
+        "ii V I",
+        "blues"
+      ]
+    }
+  ]
+}

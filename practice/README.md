@@ -6,6 +6,9 @@ This is the daily practice area of the `my-jazz-tutor/` monorepo. Workflow
 development belongs in `../workflow`; both areas share the root Git repository.
 The commands below run from the repository root.
 
+Install Python 3.11+, uv and Node.js 20+ before launching. New ABC scores use the
+bundled abcjs parser/renderer; npm is not required for normal practice.
+
 After cloning, prepare a local profile without overwriting an existing one:
 
 ```sh
@@ -64,9 +67,17 @@ The score and playback controls share one area below the task description. A
 continuous cursor and horizontal scrolling follow the entire score. Transparent
 whole/half notes preserve staff lines. MIDI traces show physical key holds, not
 pedal sustain or timing scores. Recording continues during pauses. Generated scores
-currently support 4/4, 1–16 bars, whole/half/quarter/eighth notes and rests; other
+support fixed 3/4 or 4/4, 1–16 bars, independent voices, chords/rests, sixteenth
+through whole notes, dots, ties, triplets and written expression; other
 exercises may have specific written instructions instead. Notes are not restricted
 to the example curriculum's keys or fixed exercises.
+
+Generation uses Sol/high to choose a learning goal before retrieving any teaching
+materials. Relevant pages are downloaded on request into the local material cache,
+then explicitly supplied to the model. References show the author, link and excerpt,
+and distinguish original source examples, adaptations and conceptual references.
+Verified examples can be reused exactly; automatic PDF/video transcription is not
+included. See the [source cache and ABC protocol](../workflow/README.md#abc-runtime-and-teaching-materials).
 
 Recorded BPM is the metronome setting, not an analysis of your actual playing tempo.
 Labels are subjective feedback, not accuracy or mastery. The app does not ask you
@@ -104,7 +115,7 @@ cache location. First launch resolves `runtime-ref` to a commit in local
 `.runtime/` cache reconstructs the same commit from local Git history.
 
 Publishing activates the selected release even with unfinished tasks. From the
-repository root, run `uv run --project workflow python workflow/publish.py --ref v0.3.3`.
+repository root, run `uv run --project workflow python workflow/publish.py --ref v0.5.0`.
 Compatible tasks keep their original conditions; incompatible tasks are retired
 with a reason while preserving history and MIDI. Retirement is not a performance
 result or a skip. Use `--cache-only` to prepare without activating, and restart the

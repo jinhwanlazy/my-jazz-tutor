@@ -91,6 +91,12 @@ def translation_input(target, language, source_language, protocol=PROTOCOL):
     result = original_result(target)
     chords = {bar['chord'] for part in ('notation', 'accompaniment')
               for bar in (result['exercise'][part] or {}).get('bars', [])}
+    if target.get('schema_version') == 3:
+        from abc_score import parse_score
+        for part in ('notation', 'accompaniment'):
+            if result['exercise'][part]:
+                score = parse_score(result['exercise'][part])
+                chords.update(h['chord'] for b in score['bars'] for h in b['harmony'])
     names = sorted(chords | {target['key']}, key=len, reverse=True)
     music = '|'.join(re.escape(name) for name in names if name)
     protected = re.compile(r'\[KEEP_\d+\]|(?<![\w])(?:[A-G][#b]?[0-8]|' + music + r')(?![\w])|\d+(?:\.\d+)?')

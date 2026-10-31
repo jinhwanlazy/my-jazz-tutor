@@ -5,6 +5,9 @@
 여기는 실제 연습 영역입니다. 개발은 `../workflow/`에서 진행합니다. 두 영역의 Git
 루트는 상위 디렉터리 하나입니다. 아래 명령은 저장소 루트에서 실행합니다.
 
+Python 3.11+, uv, Node.js 20+가 필요합니다. ABC 파서·렌더러는 앱에 포함되어 있어
+일반 연습에 npm 설치는 필요하지 않습니다.
+
 ```sh
 test -e practice/profile.json || cp practice/profile.example.json practice/profile.json
 uv run --project practice jazz
@@ -29,6 +32,12 @@ BPM은 메트로놈 설정이며 실제 타건을 분석한 BPM이 아닙니다.
 `codex login status`로 확인하고 필요하면 `codex login`을 실행하세요. 별도 API_KEY는
 필수가 아닙니다. 현재 대화가 자동 공유되는 대신 명시적인 기록 맥락이 Codex로
 전달됩니다. 실패하면 오류와 재시도를 표시하고 고정 과제로 대신 채우지 않습니다.
+
+생성은 Sol/high로 목표를 먼저 정하고 필요한 교육 자료만 로컬 캐시에 내려받아
+명시적으로 제공합니다. 새 악보는 ABC이며 고정 3/4·4/4, 1–16마디, 다성부,
+점음표·타이·셋잇단음표·16분음표·표현 기호를 지원합니다. 기존 JSON 악보는 보존합니다.
+참고 예제에는 저자·링크·사용 구간과 변형 여부를 표시합니다. 검토한 예제는 그대로
+삽입할 수 있으며 PDF·영상 전체의 자동 채보 기능은 포함하지 않습니다.
 
 ```sh
 uv run --project practice jazz status

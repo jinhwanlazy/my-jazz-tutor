@@ -424,3 +424,10 @@ dialog{padding:23px 20px}
   .score-toolbar{gap:4px 12px}.score-toolbar .playback-progress{gap:8px 10px}
   .sidebar nav .nav-button{min-height:36px}.midi-button{min-height:36px}
 }
+
+.practice-references { margin: 1rem 0; padding: .8rem 1rem; background: var(--surface, #f6f7f2); border-left: 3px solid #9ba88b; border-radius: .25rem; }
+.practice-references h4 { margin: 0 0 .5rem; }
+.practice-reference { display: grid; gap: .25rem; margin: .65rem 0; overflow-wrap: anywhere; }
+.practice-reference p { margin: .2rem 0; }
+.reference-kind { font-size: .75rem; color: #536343; }
+.development-details { margin-top: 1rem; }

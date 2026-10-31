@@ -4,7 +4,7 @@
     "schema_version": {
       "type": "integer",
       "enum": [
-        2
+        3
       ]
     },
     "evidence": {
@@ -139,115 +139,28 @@
             {
               "type": "object",
               "properties": {
-                "beats_per_bar": {
-                  "type": "integer",
+                "format": {
+                  "type": "string",
                   "enum": [
-                    4
+                    "abc"
                   ]
                 },
-                "bars": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "chord": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 60
-                      },
-                      "left": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "beat": {
-                              "type": "number",
-                              "minimum": 0,
-                              "maximum": 3.5
-                            },
-                            "duration": {
-                              "type": "number",
-                              "enum": [
-                                0.5,
-                                1,
-                                2,
-                                4
-                              ]
-                            },
-                            "notes": {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "pattern": "^[A-G][b#]?[0-8]$"
-                              },
-                              "minItems": 0,
-                              "maxItems": 6
-                            }
-                          },
-                          "required": [
-                            "beat",
-                            "duration",
-                            "notes"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "minItems": 1,
-                        "maxItems": 8
-                      },
-                      "right": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "beat": {
-                              "type": "number",
-                              "minimum": 0,
-                              "maximum": 3.5
-                            },
-                            "duration": {
-                              "type": "number",
-                              "enum": [
-                                0.5,
-                                1,
-                                2,
-                                4
-                              ]
-                            },
-                            "notes": {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "pattern": "^[A-G][b#]?[0-8]$"
-                              },
-                              "minItems": 0,
-                              "maxItems": 6
-                            }
-                          },
-                          "required": [
-                            "beat",
-                            "duration",
-                            "notes"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "minItems": 1,
-                        "maxItems": 8
-                      }
-                    },
-                    "required": [
-                      "chord",
-                      "left",
-                      "right"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "minItems": 1,
-                  "maxItems": 16
+                "profile": {
+                  "type": "string",
+                  "enum": [
+                    "jazz-abc-1"
+                  ]
+                },
+                "abc": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 24000
                 }
               },
               "required": [
-                "beats_per_bar",
-                "bars"
+                "format",
+                "profile",
+                "abc"
               ],
               "additionalProperties": false
             },
@@ -266,46 +179,28 @@
             {
               "type": "object",
               "properties": {
-                "beats_per_bar": {
-                  "type": "integer",
+                "format": {
+                  "type": "string",
                   "enum": [
-                    4
+                    "abc"
                   ]
                 },
-                "bars": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "chord": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 60
-                      },
-                      "notes": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 21,
-                          "maximum": 108
-                        },
-                        "minItems": 1,
-                        "maxItems": 8
-                      }
-                    },
-                    "required": [
-                      "chord",
-                      "notes"
-                    ],
-                    "additionalProperties": false
-                  },
-                  "minItems": 1,
-                  "maxItems": 16
+                "profile": {
+                  "type": "string",
+                  "enum": [
+                    "jazz-abc-1"
+                  ]
+                },
+                "abc": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 24000
                 }
               },
               "required": [
-                "beats_per_bar",
-                "bars"
+                "format",
+                "profile",
+                "abc"
               ],
               "additionalProperties": false
             },
@@ -313,6 +208,44 @@
               "type": "null"
             }
           ]
+        },
+        "development": {
+          "type": "object",
+          "properties": {
+            "focus": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1200
+            },
+            "musical_structure": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1200
+            },
+            "expression": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1200
+            },
+            "application": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1200
+            },
+            "difference_from_recent": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1200
+            }
+          },
+          "required": [
+            "focus",
+            "musical_structure",
+            "expression",
+            "application",
+            "difference_from_recent"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -332,7 +265,8 @@
         "steps",
         "notation",
         "notation_reason",
-        "accompaniment"
+        "accompaniment",
+        "development"
       ],
       "additionalProperties": false
     },
@@ -761,6 +695,144 @@
         "prediction"
       ],
       "additionalProperties": false
+    },
+    "music_claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "bar": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16
+          },
+          "beat": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3.99
+          },
+          "voice": {
+            "type": "string",
+            "enum": [
+              "RH",
+              "RH2",
+              "LH",
+              "LH2"
+            ]
+          },
+          "pitch": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12
+          },
+          "chord": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "degree": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 13
+          },
+          "alteration": {
+            "type": "integer",
+            "minimum": -2,
+            "maximum": 2
+          }
+        },
+        "required": [
+          "bar",
+          "beat",
+          "voice",
+          "pitch",
+          "chord",
+          "degree",
+          "alteration"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 32
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "excerpt_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "exercise_source",
+              "teaching_reference"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "source_original",
+              "source_adapted",
+              "generated_original"
+            ]
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "minItems": 0,
+            "maxItems": 8
+          },
+          "example_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_excerpt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "source_id",
+          "excerpt_id",
+          "role",
+          "mode",
+          "changes",
+          "example_id",
+          "source_excerpt"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 6
     }
   },
   "required": [
@@ -768,7 +840,9 @@
     "evidence",
     "unknowns",
     "exercise",
-    "difficulty"
+    "difficulty",
+    "music_claims",
+    "references"
   ],
   "additionalProperties": false
 }

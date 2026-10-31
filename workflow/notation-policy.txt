@@ -1,0 +1,49 @@
+Return recommendation schema 3. New fixed music uses ABC profile jazz-abc-1:
+{"format":"abc","profile":"jazz-abc-1","abc":"..."}.
+Use exactly one tune, X:1, explicit M:3/4 or M:4/4, and L:1/4, L:1/8 or L:1/16.
+K: is the last header, matching exercise.key (e.g. C, D, Bb, Dm). Q: is optional;
+if present it must be Q:1/4=<exercise.bpm>. Durations are written using ABC syntax,
+not scientific note names: C is C4, C, is C3, c is C5. Scientific names remain in
+the prose and music_claims. The key signature applies to ABC pitches.
+
+Always declare the right staff then the left staff, including rests for a silent
+hand. Put %%score and V: declarations BEFORE K:. The simplest header layout is:
+X:1
+T:Original study
+M:4/4
+L:1/8
+%%score { RH LH }
+V:RH clef=treble
+V:LH clef=bass
+K:C
+[V:RH] "Cmaj7"!mf!E2 G2 B2 c2 |
+[V:LH] !p![C,E,]8 |
+
+Optional independent voices RH2 and LH2 may share their hand's staff. Declare
+them in order RH, RH2, LH, LH2 and group them, e.g. %%score { (RH RH2) LH }.
+Use [V:ID] switches in the body. Fill EACH voice's bar exactly, with explicit
+rests. Use 1–16 full bars with matching voice lengths, piano A0–C8, and at most
+six distinct notes per voice chord. Use eighth/sixteenth, quarter, half, whole,
+dotted durations, ordinary (3 triplets, and ties between adjacent identically
+spelled pitches. A tie can cross a bar; a note's written duration cannot.
+Use ppp/pp/p/mp/mf/f/ff/fff, !accent!, !tenuto!, staccato, slurs and supported
+crescendo/diminuendo marks. Repeat dynamics only when they change or clarify.
+No repeats/endings, grace notes, invisible/spacer rests, cross-staff beaming,
+inline meter/key/tempo changes or other %% directives. Write repeats out.
+Use normal noteheads and chord symbols; put free-text directions in the exercise
+instructions, not positioned ABC annotations. Close every slur within the score.
+Swing may be a clearly identified performance instruction; automatic playback
+uses written durations and is not an authentic or analyzed swing performance.
+
+Accompaniment is null unless useful; otherwise it uses the SAME ABC envelope
+and meter/key/bar count, with explicit pitches and durations. Chord symbols do
+not automatically create backing notes. The learner's notation and backing have
+different roles; do not replace a specified learner voicing with a chord pad.
+If fixed notation is inappropriate (e.g. constrained improvisation), use null,
+explain why, and give concrete pitches/rhythm/form in the instructions.
+
+music_claims use bar numbers starting at 1 and quarter-note beat offsets starting
+at 0. degree names the diatonic degree (1–13); alteration is relative to the major
+interval from that chord root: Dm7/F4 is degree 3, alteration -1; Dm7/A4 is degree
+5, alteration 0. Cite the written voice, exact spelled pitch and chord symbol.
+Return references only for supplied excerpt IDs. Use an empty array if none.

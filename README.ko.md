@@ -10,6 +10,9 @@ Codex 로그인으로 쓰는 로컬 재즈 피아노 코치입니다. 대화형 
 [workflow](workflow/README.ko.md)는 코칭·소프트웨어 개발 영역입니다. 각 영역의
 AGENTS.md를 먼저 읽습니다. 개인 자료는 로컬에 보관하고 Git에 넣지 않습니다.
 
+Python 3.11+, uv, Node.js 20+를 설치합니다. ABC 파서와 렌더러가 앱에 포함되어
+일반 사용에 npm은 필요하지 않습니다.
+
 ```sh
 test -e practice/profile.json || cp practice/profile.example.json practice/profile.json
 uv run --project practice jazz

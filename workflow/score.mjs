@@ -1,4 +1,5 @@
-import {tr} from './i18n.mjs';
+import {tr, locale} from './i18n.mjs';
+import {ABCLayout} from './abc-view.mjs';
 
 const NS = 'http://www.w3.org/2000/svg';
 const HEIGHT = 320, START = 144, BAR = 208, TOP = {right: 90, left: 205};
@@ -74,7 +75,7 @@ export class LiveInput {
     }
   }
   prune(pass) {
-    const first = pass * this.score.bars.length * 4;
+    const first = pass * this.score.bars.length * (this.score.beats_per_bar || 4);
     this.notes = this.notes.filter(note => note.end === null || note.end >= first);
   }
 }
@@ -104,12 +105,14 @@ export class ScoreView {
     if (!this.svg || !this.root.clientWidth) return;
     // Scale notation consistently across bar counts. SVG dimensions work under
     // the server's CSP; inline style attributes are deliberately blocked.
-    const scale = Math.min(1, Math.max(760, this.root.clientWidth) / (scoreX(16) + 24));
+    const scale = this.abcLayout ? 1.2 : Math.min(1, Math.max(760, this.root.clientWidth) / (scoreX(16) + 24));
     this.svg.setAttribute('width', this.width * scale);
     this.svg.setAttribute('height', this.height * scale);
   }
   setScore(score) {
     const identity = JSON.stringify(score);
+    if (identity === this.identity && this.displayLocale === locale()) return;
+    this.displayLocale = locale();
     if (identity !== this.identity) {
       this.identity = identity; this.score = score; this.pass = 0;
       this.input = score ? new LiveInput(score) : null; this.position = null;
@@ -138,11 +141,14 @@ export class ScoreView {
   }
   frame(position) {
     if (!this.score || !position) return;
+    // Output-device timestamp estimates can jitter by a few milliseconds. Keep
+    // the display monotonic; recorded MIDI timestamps are never clamped here.
+    if (this.playing && this.position && position.absolute < this.position.absolute) return;
     this.position = position;
     const passChanged = position.pass !== this.pass;
     if (passChanged) { this.pass = position.pass; this.input.prune(this.pass); this.caption(); }
     this.cursor.setAttribute('visibility', this.playing ? 'visible' : 'hidden');
-    const x = noteX(position.bar, position.beat);
+    const x = this.x(position.bar * (this.score.beats_per_bar || 4) + position.beat);
     this.cursor.setAttribute('transform', `translate(${x} 0)`);
     // Follow every frame, without threshold jumps or animation lag behind audio.
     // Clamping keeps a fitting score still; only a loop resets to the beginning.
@@ -157,15 +163,30 @@ export class ScoreView {
     const count = this.score?.bars.length || 0;
     this.status.textContent = count ? tr`Pass ${this.pass + 1}` : '';
   }
+  x(beat) { return this.abcLayout ? this.abcLayout.x(beat) : scoreX(beat); }
+  renderABC(scroll) {
+    this.abcLayout = new ABCLayout(this.root, this.score);
+    this.svg = this.abcLayout.svg;
+    this.width = this.abcLayout.width; this.height = this.abcLayout.height;
+    this.svg.setAttribute('aria-label', tr`Practice score in ${this.score.key}, ${this.score.bars.length} bars`);
+    this.liveLayer = svg('g', {class: 'score-live-layer', 'aria-hidden': 'true'});
+    this.cursor = svg('g', {class: 'score-cursor', visibility: 'hidden', 'aria-hidden': 'true'});
+    line(this.cursor, 0, this.abcLayout.bounds('right').top - 20,
+      0, this.abcLayout.bounds('left').bottom + 20, 'score-cursor-line');
+    this.svg.append(this.liveLayer, this.cursor);
+    this.resize(); this.drawNotes(); this.root.scrollLeft = scroll;
+    if (this.position) this.frame(this.position);
+  }
   render() {
     const scroll = this.root.scrollLeft;
     this.root.replaceChildren(); this.help?.replaceChildren(); this.caption();
-    this.svg = this.cursor = this.liveLayer = null;
+    this.svg = this.cursor = this.liveLayer = this.abcLayout = null;
     if (!this.score) {
       const note = document.createElement('p'); note.className = 'field-note';
       note.textContent = tr('A score is not available for these conditions. Follow the written instructions.');
       this.root.append(note); return;
     }
+    if (this.score.format === 'abc') { this.renderABC(scroll); return; }
     const score = this.score;
     this.width = scoreX(score.bars.length * 4) + 24;
     const written = score.bars.flatMap(bar => ['left', 'right'].flatMap(hand => bar[hand].flatMap(e => e.pitches.map(p => noteY(p, hand)))));
@@ -260,30 +281,45 @@ export class ScoreView {
   drawNotes() {
     if (!this.liveLayer || !this.input || !this.score) return;
     this.lastDraw = performance.now(); this.liveLayer.replaceChildren();
-    const total = this.score.bars.length * 4, passStart = this.pass * total;
+    const beats = this.score.beats_per_bar || 4;
+    const total = this.score.bars.length * beats, passStart = this.pass * total;
     const passEnd = passStart + total;
     for (const note of this.input.notes) {
       const end = Math.max(note.start, note.end ?? this.position?.absolute ?? note.start);
       if (note.start >= passEnd || end < passStart || (end === passStart && note.start < passStart)) continue;
-      const bar = Math.floor(note.start / 4) % this.score.bars.length;
+      const bar = Math.floor(note.start / beats) % this.score.bars.length;
       const candidates = this.score.bars[bar][note.staff].flatMap(e => e.pitches).concat(this.score.allowed_pitches);
       const pitch = candidates.find(p => p.midi === note.midi) || spell(note.midi, this.score.key);
-      const rawY = noteY(pitch, note.staff), min = TOP[note.staff] - 35, max = TOP[note.staff] + 85;
+      const bounds = this.abcLayout?.bounds(note.staff);
+      const rawY = this.abcLayout ? this.abcLayout.y(pitch, note.staff) : noteY(pitch, note.staff);
+      const min = (bounds?.top ?? TOP[note.staff]) - 35, max = (bounds?.bottom ?? TOP[note.staff] + 40) + 45;
       const y = Math.max(min, Math.min(max, rawY));
       const group = svg('g', {class: 'score-live-note', 'data-midi': note.midi, 'data-start': note.start,
         'data-end': note.end ?? '', 'data-hand': note.staff});
       group.append(svg('title', {}, pitch.name));
       const from = Math.max(note.start, passStart), to = Math.min(end, passEnd);
       if (to > from) {
-        line(group, scoreX(from - passStart), y, scoreX(to - passStart), y,
+        line(group, this.x(from - passStart), y, this.x(to - passStart), y,
           note.interrupted ? 'score-hold interrupted' : 'score-hold');
       }
       if (note.start >= passStart) {
-        const x = noteX(bar, note.start % 4);
+        const x = this.x(bar * beats + note.start % beats);
         if (y !== rawY) {
           group.append(svg('text', {x, y, class: 'score-edge-note'}, `${rawY < min ? '↑' : '↓'}${pitch.name}`));
         } else {
-          ledger(group, x, y, note.staff); accidental(group, pitch, x, y, this.score.key, true);
+          if (bounds) {
+            const gap = (bounds.bottom - bounds.top) / 4;
+            for (let at = bounds.top - gap; at >= y - .1; at -= gap) line(group, x - 9, at, x + 9, at, 'score-ledger');
+            for (let at = bounds.bottom + gap; at <= y + .1; at += gap) line(group, x - 9, at, x + 9, at, 'score-ledger');
+            const alteredInScore = this.score.key_signature?.[pitch.letter] ||
+              candidates.some(p => p.letter === pitch.letter && p.octave === pitch.octave && p.alter);
+            if (pitch.alter || alteredInScore) {
+              const mark = {'-2':'𝄫', '-1':'♭', 0:'♮', 1:'♯', 2:'𝄪'}[pitch.alter];
+              group.append(svg('text', {x: x - 17, y: y + 5, 'font-size': 17}, mark));
+            }
+          } else {
+            ledger(group, x, y, note.staff); accidental(group, pitch, x, y, this.score.key, true);
+          }
           group.append(svg('ellipse', {cx: x, cy: y, rx: 5, ry: 3.7, class: 'score-input-head'}));
         }
       }

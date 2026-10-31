@@ -1,0 +1,774 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        2
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "minItems": 1,
+            "maxItems": 12
+          },
+          "interpretation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "required": [
+          "source_ids",
+          "interpretation",
+          "confidence"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 12
+    },
+    "unknowns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "minItems": 1,
+      "maxItems": 12
+    },
+    "exercise": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "selection_reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "section": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "bpm": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 240
+        },
+        "bars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "left_hand": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "right_hand": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "rhythm": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1500
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "notation": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "beats_per_bar": {
+                  "type": "integer",
+                  "enum": [
+                    4
+                  ]
+                },
+                "bars": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "chord": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60
+                      },
+                      "left": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "beat": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 3.5
+                            },
+                            "duration": {
+                              "type": "number",
+                              "enum": [
+                                0.5,
+                                1,
+                                2,
+                                4
+                              ]
+                            },
+                            "notes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[A-G][b#]?[0-8]$"
+                              },
+                              "minItems": 0,
+                              "maxItems": 6
+                            }
+                          },
+                          "required": [
+                            "beat",
+                            "duration",
+                            "notes"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "minItems": 1,
+                        "maxItems": 8
+                      },
+                      "right": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "beat": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 3.5
+                            },
+                            "duration": {
+                              "type": "number",
+                              "enum": [
+                                0.5,
+                                1,
+                                2,
+                                4
+                              ]
+                            },
+                            "notes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[A-G][b#]?[0-8]$"
+                              },
+                              "minItems": 0,
+                              "maxItems": 6
+                            }
+                          },
+                          "required": [
+                            "beat",
+                            "duration",
+                            "notes"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "minItems": 1,
+                        "maxItems": 8
+                      }
+                    },
+                    "required": [
+                      "chord",
+                      "left",
+                      "right"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1,
+                  "maxItems": 16
+                }
+              },
+              "required": [
+                "beats_per_bar",
+                "bars"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notation_reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "accompaniment": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "beats_per_bar": {
+                  "type": "integer",
+                  "enum": [
+                    4
+                  ]
+                },
+                "bars": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "chord": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60
+                      },
+                      "notes": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 21,
+                          "maximum": 108
+                        },
+                        "minItems": 1,
+                        "maxItems": 8
+                      }
+                    },
+                    "required": [
+                      "chord",
+                      "notes"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1,
+                  "maxItems": 16
+                }
+              },
+              "required": [
+                "beats_per_bar",
+                "bars"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "title",
+        "objective",
+        "selection_reason",
+        "section",
+        "key",
+        "bpm",
+        "bars",
+        "minutes",
+        "left_hand",
+        "right_hand",
+        "notes",
+        "rhythm",
+        "instructions",
+        "steps",
+        "notation",
+        "notation_reason",
+        "accompaniment"
+      ],
+      "additionalProperties": false
+    },
+    "difficulty": {
+      "type": "object",
+      "properties": {
+        "rubric_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "axes": {
+          "type": "object",
+          "properties": {
+            "melody": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "rated",
+                    "unknown",
+                    "not_applicable",
+                    "out_of_range"
+                  ]
+                },
+                "level": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "anchor_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "minItems": 0,
+                  "maxItems": 3
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 800
+                }
+              },
+              "required": [
+                "status",
+                "level",
+                "anchor_ids",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            "rhythm": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "rated",
+                    "unknown",
+                    "not_applicable",
+                    "out_of_range"
+                  ]
+                },
+                "level": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "anchor_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "minItems": 0,
+                  "maxItems": 3
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 800
+                }
+              },
+              "required": [
+                "status",
+                "level",
+                "anchor_ids",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            "meter": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "rated",
+                    "unknown",
+                    "not_applicable",
+                    "out_of_range"
+                  ]
+                },
+                "level": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "anchor_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "minItems": 0,
+                  "maxItems": 3
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 800
+                }
+              },
+              "required": [
+                "status",
+                "level",
+                "anchor_ids",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            "tonality": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "rated",
+                    "unknown",
+                    "not_applicable",
+                    "out_of_range"
+                  ]
+                },
+                "level": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "anchor_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "minItems": 0,
+                  "maxItems": 3
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 800
+                }
+              },
+              "required": [
+                "status",
+                "level",
+                "anchor_ids",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            "harmony": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "rated",
+                    "unknown",
+                    "not_applicable",
+                    "out_of_range"
+                  ]
+                },
+                "level": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "anchor_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "minItems": 0,
+                  "maxItems": 3
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 800
+                }
+              },
+              "required": [
+                "status",
+                "level",
+                "anchor_ids",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            "expression": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "rated",
+                    "unknown",
+                    "not_applicable",
+                    "out_of_range"
+                  ]
+                },
+                "level": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "anchor_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "minItems": 0,
+                  "maxItems": 3
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 800
+                }
+              },
+              "required": [
+                "status",
+                "level",
+                "anchor_ids",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            "coordination": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "rated",
+                    "unknown",
+                    "not_applicable",
+                    "out_of_range"
+                  ]
+                },
+                "level": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "anchor_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "minItems": 0,
+                  "maxItems": 3
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 800
+                }
+              },
+              "required": [
+                "status",
+                "level",
+                "anchor_ids",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "melody",
+            "rhythm",
+            "meter",
+            "tonality",
+            "harmony",
+            "expression",
+            "coordination"
+          ],
+          "additionalProperties": false
+        },
+        "focus_axes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "melody",
+              "rhythm",
+              "meter",
+              "tonality",
+              "harmony",
+              "expression",
+              "coordination"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 3
+        },
+        "interaction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 800
+        },
+        "prediction": {
+          "type": "object",
+          "properties": {
+            "burden": {
+              "type": "string",
+              "enum": [
+                "unknown",
+                "underload",
+                "workable",
+                "challenging",
+                "overload"
+              ]
+            },
+            "source_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "minItems": 0,
+              "maxItems": 12
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 800
+            },
+            "uncertainty": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 800
+            }
+          },
+          "required": [
+            "burden",
+            "source_ids",
+            "reason",
+            "uncertainty"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "rubric_version",
+        "axes",
+        "focus_axes",
+        "interaction",
+        "prediction"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "evidence",
+    "unknowns",
+    "exercise",
+    "difficulty"
+  ],
+  "additionalProperties": false
+}

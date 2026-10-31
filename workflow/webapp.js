@@ -140,6 +140,10 @@ function renderGeneration() {
     $('generation-panel').setAttribute('aria-busy', String(job.state === 'running'));
     $('generation-title').textContent = tr(job.state === 'running' ? 'Creating your practice…' : job.state === 'completed' ? 'Your new practice is in the list.' : 'Could not create a practice');
     $('generation-message').textContent = job.state === 'running' ? tr(job.has_request ? 'Your focus is included. Codex is reviewing it with your profile and practice records. This may take a few minutes.' : 'Codex is reviewing your profile, practice records, feedback, and notes. You can stay on this page; this may take a few minutes.') : job.state === 'failed' ? job.error : tr('Open the item when you are ready to practice.');
+    const stages = {materials: 'Finding teaching material for your practice goal…', generating: 'Writing the exercise and score…', checking: 'Checking the music and correcting a notation issue…'};
+    if (job.state === 'running' && stages[job.stage]) {
+      $('generation-message').textContent = (job.has_request ? tr('Your requested focus is included.') + ' ' : '') + tr(stages[job.stage]);
+    }
     if (job.state === 'completed' && job.id === ui.submittedRequestId) {
       if ($('recommendation-request').value === ui.submittedFocus) $('recommendation-request').value = '';
       ui.submittedRequestId = null;
@@ -173,8 +177,11 @@ function appendAnalysis(parent, t, open = false) {
   analysis.open = open;
   analysis.append(el('summary', tr('Why this practice?')));
   analysis.append(el('p', t.exercise.selection_reason));
+  if (t.exercise.development) analysis.append(el('p', t.exercise.development.difference_from_recent));
   analysis.append(el('h4', tr('Coach interpretation · not measured performance')));
   for (const evidence of t.analysis.evidence) {
+    const materials = new Set((t.source_references || []).flatMap(r => [r.source_id, r.excerpt_id]));
+    if (evidence.source_ids.some(id => materials.has(id))) analysis.append(el('small', tr('Teaching material · not player performance')));
     analysis.append(el('p', evidence.interpretation));
     analysis.append(el('small', `${tr('Confidence')}: ${tr(evidence.confidence)} · ${tr('Sources')}: ${evidence.source_ids.join(', ')}`));
   }
@@ -186,6 +193,34 @@ function appendAnalysis(parent, t, open = false) {
     link.target = '_blank'; link.rel = 'noopener'; analysis.append(link);
   }
   parent.append(analysis);
+}
+
+function appendDevelopment(parent, t) {
+  if (!t.exercise?.development) return;
+  const details = el('dl', undefined, 'task-parts development-details');
+  for (const [key, label] of [['musical_structure', 'Musical phrase'], ['expression', 'Listen for'], ['application', 'Apply it']]) {
+    details.append(el('dt', tr(label)), el('dd', t.exercise.development[key]));
+  }
+  parent.append(details);
+}
+
+function appendReferences(parent, t) {
+  if (!t.source_references?.length) return;
+  const section = el('section', undefined, 'practice-references');
+  section.append(el('h4', tr('Practice references')));
+  for (const [i, ref] of t.source_references.entries()) {
+    const item = el('div', undefined, 'practice-reference');
+    const kind = ref.role === 'teaching_reference' ? 'Teaching concept reference' : ref.mode === 'source_original' ? 'Original source example' : 'Adapted source example';
+    item.append(el('span', tr(kind), 'reference-kind'));
+    const link = el('a', ref.source.title);
+    try { if (new URL(ref.source.url).protocol === 'https:') link.href = ref.source.url; } catch {}
+    link.target = '_blank'; link.rel = 'noopener noreferrer';
+    item.append(link, el('small', `${ref.source.author} · ${ref.locator.kind === 'pdf_page' ? tr`PDF page ${ref.locator.page}` : ref.locator.label}`));
+    if (ref.source_excerpt) item.append(el('small', t.references?.[i]?.source_excerpt || ref.source_excerpt));
+    for (const change of t.references?.[i]?.changes || ref.changes) item.append(el('p', change));
+    section.append(item);
+  }
+  parent.append(section);
 }
 
 const burdenLabels = {unknown: 'Not enough evidence', underload: 'May be too easy', workable: 'Likely manageable', challenging: 'Likely challenging', overload: 'May be overwhelming'};
@@ -241,9 +276,12 @@ function renderLesson(resetTempo = false) {
   $('lesson-purpose').textContent = t.exercise?.objective || t.material.title;
   $('lesson-section').textContent = t.exercise?.section || '';
   $('lesson-notes').textContent = t.exercise ? [t.exercise.notes, !t.notation ? t.exercise.notation_reason : ''].filter(Boolean).join('\n') : '';
-  $('bar-position').textContent = ui.capture && ui.beat ? tr`Bar ${ui.beat.bar + 1} · beat ${ui.beat.beat + 1}` : tr('One chord per bar');
-  $('target-meta').replaceChildren(...[tr`Key ${t.key}`, tr`Target ${t.bpm} BPM`, tr`${t.bars} bars`, '4/4'].map(s => el('span', s)));
-  let chords = t.playback?.bars.map(b => b.chord);
+  $('bar-position').textContent = ui.capture && ui.beat ? tr`Bar ${ui.beat.bar + 1} · beat ${ui.beat.beat + 1}` : tr('Chord changes by bar');
+  const beats = t.notation?.beats_per_bar || t.playback?.beats_per_bar || 4;
+  $('target-meta').replaceChildren(...[tr`Key ${t.key}`, tr`Target ${t.bpm} BPM`, tr`${t.bars} bars`, `${beats}/4`].map(s => el('span', s)));
+  $('beats').replaceChildren(...Array.from({length: beats}, (_, i) => el('span', String(i + 1))));
+  let chords = t.notation?.format === 'abc' ? t.notation.bars.map(b =>
+    [b.chord, ...(b.harmony || []).filter(h => h.beat > 0).map(h => h.chord)].filter(Boolean).join(' → ')) : t.playback?.bars.map(b => b.chord);
   if (!chords) chords = t.material.chords.split('|').map(s => s.trim());
   $('chords').replaceChildren(...chords.map((chord, index) => { const box = el('div', undefined, 'chord-box'); box.append(el('small', `${String(index + 1).padStart(2, '0')}`), el('strong', chord)); return box; }));
   $('hand-notes').replaceChildren();
@@ -257,6 +295,10 @@ function renderLesson(resetTempo = false) {
   $('lesson-instructions').textContent = t.instructions;
   $('criterion-text').textContent = t.exercise?.rhythm || tr`Play ${t.criteria.min_clean_runs} consecutive runs with correct notes, a steady pulse, and no stops under the assigned conditions.`;
   $('lesson-steps').replaceChildren(...(t.exercise?.steps || []).map(step => el('li', step)));
+  $('lesson-development').replaceChildren();
+  appendDevelopment($('lesson-development'), t);
+  $('lesson-references').replaceChildren();
+  appendReferences($('lesson-references'), t);
   const contextOpen = $('lesson-overview').querySelector('.task-context-detail')?.open;
   const coachOpen = $('lesson-analysis').querySelector('.recommendation-analysis')?.open;
   $('lesson-analysis').replaceChildren();
@@ -361,7 +403,7 @@ async function startOrPause() {
     transport.setPad($('pad-toggle').checked);
     ui.capture.event('play', {bpm: ui.lockedBpm});
     const t = target();
-    const playback = t.playback || {beats_per_bar: 4,
+    const playback = t.playback || {beats_per_bar: t.notation?.beats_per_bar || 4,
       bars: Array.from({length: t.bars}, (_, i) => ({chord: t.notation?.bars[i]?.chord || '', notes: []}))};
     transport.start(playback, ui.lockedBpm);
     openedTask().started = true;
@@ -572,7 +614,9 @@ function showDetail(task) {
     const e = task.target.exercise;
     box.append(el('p', e.section), el('p', e.notes), el('p', e.rhythm));
     const steps = el('ol'); steps.append(...e.steps.map(step => el('li', step))); box.append(steps);
+    appendDevelopment(box, task.target);
   }
+  appendReferences(box, task.target);
   appendAnalysis(box, task.target, analysisOpen);
   if (task.discard_choice) box.append(el('p', tr(discardChoices[task.discard_choice]), 'discard-choice'));
   const note = task.report ? task.report.raw_note : task.reason;

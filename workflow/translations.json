@@ -256,6 +256,7 @@
     "Notes and chord progression": "연주 음과 코드 진행",
     "One bar at a time.": "오늘도, 한 마디씩.",
     "One chord per bar": "한 마디에 코드 하나",
+    "Chord changes by bar": "마디별 코드 진행",
     "One tap saves your feedback. You can change it anytime.": "하나만 누르면 저장돼요. 나중에 바꿀 수 있어요.",
     "One task at a time. Several in a day.": "한 번에 한 과제, 하루에는 여러 과제.",
     "Only an unfinished task can be discarded.": "아직 결과를 남기지 않은 과제만 넘길 수 있어요.",
@@ -616,6 +617,23 @@
     "Right hand only": "오른손만 연주",
     "Go to score": "악보로 이동",
     "Practice plan": "연습 순서",
-    "Score and playback": "악보와 재생"
+    "Score and playback": "악보와 재생",
+    "Finding teaching material for your practice goal…": "연습 목표에 맞는 참고자료를 찾고 있어요…",
+    "Writing the exercise and score…": "연습과 악보를 구성하고 있어요…",
+    "Checking the music and correcting a notation issue…": "음악 데이터를 확인하고 표기 오류를 수정하고 있어요…",
+    "Your requested focus is included.": "요청한 연습 주제를 반영하고 있어요.",
+    "Musical phrase": "음악적 구문",
+    "Listen for": "귀 기울일 표현",
+    "Apply it": "응용하기",
+    "Practice references": "참고자료",
+    "Teaching concept reference": "교육 개념 참고",
+    "Original source example": "원문 예제",
+    "Adapted source example": "변형한 예제",
+    "PDF page {0}": "PDF {0}페이지",
+    "Tied notes": "타이로 이어지는 음",
+    "Triplet rhythm": "셋잇단음표 리듬",
+    "Independent voices": "독립된 성부",
+    "Written expression": "악보에 지정된 표현",
+    "Teaching material · not player performance": "참고자료의 내용 · 사용자 연주 관측이 아님"
   }
 }

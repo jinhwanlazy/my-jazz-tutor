@@ -1,0 +1,6 @@
+{
+  "name": "my-jazz-tutor-notation",
+  "private": true,
+  "scripts": {"build:notation": "node build-notation.mjs", "test": "node --test tests/*.test.mjs"},
+  "devDependencies": {"abcjs": "6.7.2", "esbuild": "0.28.1"}
+}

@@ -23,6 +23,7 @@ ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "te
           "audio.mjs": "text/javascript", "capture.mjs": "text/javascript",
           "i18n.mjs": "text/javascript", "translations.json": "application/json",
           "score.mjs": "text/javascript", "timeline.mjs": "text/javascript",
+          "abc-view.mjs": "text/javascript", "abcjs.min.js": "text/javascript",
           "Bravura.woff2": "font/woff2", "Bravura-LICENSE.txt": "text/plain"}
 
 
@@ -241,7 +242,11 @@ def make_server(root, data, port=8765, source=r.HERE, recommender=None, host="12
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; "
+            # Only abcjs 6.7.2's fixed measurement/drag CSS is permitted inline.
+            # No general unsafe-inline exemption, scripts remain same-origin.
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-hashes' "
+                             "'sha256-slvAeoOzvy3mPbO4szWUPitqjQh5R3Jihl2M50J2Zgk=' "
+                             "'sha256-BCpnf71gZdCsSCHDzyB1RsBbZ0qQdqseK6v+yJsgg30='; "
                              "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
             if filename:
                 self.send_header("Content-Disposition", f'attachment; filename="{filename}"')

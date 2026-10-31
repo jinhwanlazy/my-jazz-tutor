@@ -25,6 +25,8 @@ def publish(source, practice, activate=True, ref="HEAD"):
     version = manifest["version"]
     with log_lock(practice):
         destination = runtime.materialize(practice, manifest, contents)
+        if activate:
+            runtime.check_requirements(destination)
         data = curriculum(destination / "curriculum.yaml")
         require(data["version"] == version, "curriculum과 pyproject의 version이 다릅니다.")
         events = read_events(practice)

@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {mkdtemp,writeFile,rm,mkdir} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const root=await mkdtemp(join(tmpdir(),'jazz-browser-references-'));
+await writeFile(join(root,'profile.json'),'{"language":"en","daily_minutes":30}');
+await mkdir('build/references-browser',{recursive:true});
+const server=spawn('uv',['run','python','tests/serve_browser.py',root]);let browser;
+try {
+  const url=await new Promise((resolve,reject)=>{
+    let output='';const timeout=setTimeout(()=>reject(Error('Startup timeout')),10000);
+    server.stdout.on('data',chunk=>{output+=chunk;const match=output.match(/http:\/\/127\.0\.0\.1:\d+/);if(match){clearTimeout(timeout);resolve(match[0]);}});
+    server.on('error',reject);
+  });
+  browser=await chromium.launch({headless:true,executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});
+  const page=await browser.newPage({viewport:{width:1300,height:1000}});const errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection').textContent==='Connected locally');
+  await page.locator('#recommendation-focus').evaluate(e=>e.open=true);
+  await page.locator('#recommendation-request').fill('simulate:source-original');await page.locator('#new-practice').click();
+  await page.locator('.history-item').waitFor();await page.locator('.history-item').first().click();
+  await page.locator('#lesson-references .practice-reference').waitFor();
+  assert.match(await page.locator('#lesson-references').innerText(),/Original source example[\s\S]*Synthetic teacher[\s\S]*Synthetic two-bar example/);
+  assert.equal(await page.locator('#lesson-references a').getAttribute('href'),'https://example.test/lesson');
+  await page.locator('#lesson-guide').evaluate(e=>e.open=true);
+  assert.match(await page.locator('#lesson-development').innerText(),/Listen for[\s\S]*Apply it/);
+  await page.locator('#practice-btn').click();await page.waitForTimeout(400);await page.locator('#finish-btn').click();
+  await page.locator('#view-list').waitFor({state:'visible'});
+  const before=await page.evaluate(()=>fetch('/api/state').then(r=>r.json()));
+  await page.locator('.history-item').first().click();await page.locator('#history-dialog').waitFor({state:'visible'});
+  assert.match(await page.locator('#history-detail .practice-references').innerText(),/Original source example/);
+  await page.screenshot({path:'build/references-browser/detail-en.png',fullPage:true});
+  await page.locator('#dialog-close').click();await page.locator('[data-view="settings"]').click();
+  await page.locator('#language-select').selectOption('ko');await page.locator('#settings-back').click();
+  await page.waitForFunction(()=>document.querySelector('.history-item h3')?.textContent.startsWith('번역:'));
+  await page.locator('.history-item').first().click();await page.locator('#history-dialog').waitFor({state:'visible'});
+  assert.match(await page.locator('#history-detail .practice-references').innerText(),/원문 예제/);
+  const after=await page.evaluate(()=>fetch('/api/state?language=en').then(r=>r.json()));
+  assert.deepEqual(after.history[0].target.exercise.notation,before.history[0].target.exercise.notation);
+  assert.deepEqual(after.history[0].target.source_references,before.history[0].target.source_references);
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'build/references-browser/detail-ko-mobile.png',fullPage:true});
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  assert.deepEqual(errors,[]);
+  console.log('Reviewed source insertion, visible references/development, completion and Korean display preserve notation and source snapshots.');
+} finally {await browser?.close();server.kill();await rm(root,{recursive:true,force:true});}

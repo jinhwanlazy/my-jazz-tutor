@@ -15,8 +15,13 @@ import review as r
 import recommendation as rec
 from notation import score_for
 from webapp import Application
-from recommendation_fixture import result, SyntheticRunner
+from recommendation_fixture import abc_result as result, SyntheticRunner, plan
+from coaching_materials import prepare_context
 from test_webapp import chunk
+
+
+def prepared(root, data, language=None):
+    return prepare_context(root, data, rec.context_for(root, data, language), plan())
 
 
 class RecommendationTests(unittest.TestCase):
@@ -119,11 +124,11 @@ class RecommendationTests(unittest.TestCase):
                    lambda x: x['evidence'][0].update(source_ids=['event:invented']),
                    lambda x: x['exercise'].update(bpm=1000),
                    lambda x: x['exercise'].update(bars=4),
-                   lambda x: x['exercise']['notation']['bars'][0]['left'][0].update(duration=2),
-                   lambda x: x['exercise']['notation']['bars'][0]['left'][0].update(notes=['C9']),
-                   lambda x: x['exercise']['notation']['bars'][0]['left'][0].update(notes=['D3','D3']),
-                   lambda x: x['exercise']['accompaniment']['bars'][0].update(chord='wrong'),
-                   lambda x: x['exercise']['notation']['bars'][0]['left'][0].update(beat=1)]
+                   lambda x: x['exercise']['notation'].update(abc=x['exercise']['notation']['abc'].replace('D,8', 'D,4')),
+                   lambda x: x['exercise']['notation'].update(abc=x['exercise']['notation']['abc'].replace('D,8', "c''''8")),
+                   lambda x: x['exercise']['notation'].update(abc=x['exercise']['notation']['abc'].replace('[FA]', '[FF]')),
+                   lambda x: x['exercise']['accompaniment'].update(abc=x['exercise']['accompaniment']['abc'].replace('M:4/4', 'M:3/4')),
+                   lambda x: x['music_claims'][0].update(degree=5)]
         for index, change in enumerate(changes):
             bad = result(); change(bad)
             with self.subTest(index=index), patch.object(self.manager.runner, 'generate', return_value=(bad, {})):
@@ -132,13 +137,13 @@ class RecommendationTests(unittest.TestCase):
                 self.assertEqual(r.read_events(self.root), [])
 
     def test_stale_profile_or_runtime_rejects_the_candidate(self):
-        def generate(context):
+        def generate(context, **kwargs):
             (self.root/'profile.json').write_text('{"goal":"Changed synthetic goal"}')
             return result(), {}
         with patch.object(self.manager.runner, 'generate', side_effect=generate):
             self.assertEqual(self.generate()['error_code'], 'stale')
         self.assertEqual(r.read_events(self.root), [])
-        context = rec.context_for(self.root, self.data)
+        context = prepared(self.root, self.data)
         with patch.object(rec, 'assert_active', side_effect=rec.RecommendationError('stale')):
             with self.assertRaisesRegex(ValueError, 'active version'):
                 rec.accept(self.root, self.data, context, result(), 'R-'+'d'*32, {})
@@ -146,7 +151,7 @@ class RecommendationTests(unittest.TestCase):
 
     def test_single_flight_across_instances_and_context_change_during_generation(self):
         started, release = threading.Event(), threading.Event()
-        def generate(context):
+        def generate(context, **kwargs):
             started.set(); release.wait(5)
             return result(), {}
         with patch.object(self.manager.runner, 'generate', side_effect=generate):
@@ -181,7 +186,7 @@ class RecommendationTests(unittest.TestCase):
         self.assertEqual(len(r.records(r.read_events(self.root))),1)
 
     def test_conversational_coach_shares_format_context_and_storage(self):
-        context = rec.context_for(self.root, self.data, 'ko')
+        context = prepared(self.root, self.data, 'ko')
         saved = rec.accept_conversation(self.root, self.data, context, result(), self.request_id)
         self.assertEqual(rec.accept_conversation(self.root, self.data, context, result(), self.request_id), saved)
         task, = r.records(r.read_events(self.root))
@@ -212,10 +217,13 @@ class CodexProtocolTests(unittest.TestCase):
 
     def test_cli_contract_and_shared_login_are_used(self):
         body=f'''if sys.argv[1:]==['login','status']: print('Logged in using ChatGPT');sys.exit(0)
+if sys.argv[1:]==['--version']: print('synthetic-codex 1');sys.exit(0)
 args=sys.argv[1:]
 assert '--sandbox' in args and args[args.index('--sandbox')+1]=='read-only'
 assert '--ephemeral' in args and '--json' in args and '--ignore-user-config' in args
 assert '--output-schema' in args and '--disable' in args
+assert args[args.index('--model')+1]=='gpt-6.1-sol'
+assert 'model_reasoning_effort="high"' in args
 assert pathlib.Path.cwd()!=pathlib.Path({str(self.root)!r})
 prompt=sys.stdin.read()
 assert 'No previous conversation is shared' in prompt
@@ -246,6 +254,7 @@ print(json.dumps({{'type':'turn.completed','usage':{{'input_tokens':5}}}}))
         context,_=loc.translation_input(target,'ko','en')
         output={'strings':context['strings']}
         body=f'''if sys.argv[1:]==['login','status']: sys.exit(0)
+if sys.argv[1:]==['--version']: print('synthetic-codex 1');sys.exit(0)
 args=sys.argv[1:]
 schema=json.loads(pathlib.Path(args[args.index('--output-schema')+1]).read_text())
 assert set(schema['properties'])=={{'strings'}}
@@ -297,10 +306,10 @@ class GeneratedReleaseTests(unittest.TestCase):
     def test_edited_context_is_rejected_and_duplicate_accept_keeps_original_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);data=r.curriculum()
-            context=rec.context_for(root,data)
+            context=prepared(root,data)
             forged=copy.deepcopy(context)
             forged['sources'][0]['data']['invented_experience']='Synthetic forged mastery'
-            with self.assertRaises(rec.RecommendationError):
+            with self.assertRaisesRegex(ValueError, 'receipt'):
                 rec.accept_conversation(root,data,forged,result(),'R-'+'1'*32)
             self.assertEqual(r.read_events(root),[])
             request_id='R-'+'2'*32

@@ -33,6 +33,9 @@ def score_for(target):
             value = target["exercise"]["notation"]
             if value is None:
                 return None
+            if value.get('format') == 'abc':
+                from abc_score import parse_score
+                return parse_score(value, key=target['key'], bpm=target['bpm'], bars=target['bars'])
             return {"key": target["key"], "beats_per_bar": 4,
                     "bars": [{"chord": bar["chord"], **{hand: [event(e["beat"], e["duration"],
                               [pitches(p)[0] for p in e["notes"]]) for e in bar[hand]]

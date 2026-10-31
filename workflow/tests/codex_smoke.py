@@ -1,6 +1,7 @@
 """Opt-in real Codex integration; temporary synthetic records, never user data."""
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 import sys
@@ -10,7 +11,7 @@ import threading
 import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import review as r
-from recommendation import Recommendations, CodexRunner
+from recommendation import Recommendations, CodexRunner, GENERATION_SECONDS
 from recommendation_fixture import SyntheticRunner
 from webapp import Application, make_server
 from test_webapp import chunk
@@ -34,6 +35,7 @@ def main():
         parser.error('Use --run to explicitly enable the real connection test.')
     with tempfile.TemporaryDirectory(prefix='jazz-codex-synthetic-') as directory:
         root = Path(directory)
+        os.environ['JAZZ_MATERIALS_CACHE'] = str(root / 'materials')
         (root/'profile.json').write_text(json.dumps({'language':'en','timezone':'UTC','daily_minutes':20,
             'piano_experience':'Synthetic player: major triads are comfortable',
             'goal':'Synthetic preference: improve smooth chord connections'}))
@@ -58,7 +60,7 @@ def main():
             request = urllib.request.Request(address+'/api/recommend?lang=ko', data=payload,
                 headers={'Content-Type':'application/json','X-Jazz-Token':state['csrf_token']})
             job = json.load(urllib.request.urlopen(request))
-            while job['state'] == 'running' and time.monotonic()-started < 260:
+            while job['state'] == 'running' and time.monotonic()-started < GENERATION_SECONDS + 30:
                 time.sleep(.5)
                 state = json.load(urllib.request.urlopen(address+'/api/state'))
                 job = state['recommendation']
@@ -68,7 +70,7 @@ def main():
             debug_path=Path(__file__).resolve().parents[1]/'build/codex-candidate-synthetic.json'
             debug_path.parent.mkdir(exist_ok=True)
             debug_path.write_text(json.dumps(canonical,ensure_ascii=False,indent=2))
-            assert canonical['schema_version'] == 2
+            assert canonical['schema_version'] == 3
             assert len(canonical['difficulty']['axes']) == 7
             assert canonical['difficulty']['features']['source'] == 'assigned_notation'
             assert canonical['generation']['source_language'] == 'en'
