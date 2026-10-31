@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import coaching_context as cc
 import difficulty as d
@@ -40,6 +41,80 @@ def synthetic_events(count, note_length=0):
 
 
 class DifficultyTests(unittest.TestCase):
+    def test_old_rubric_is_preserved_and_new_assignments_use_the_supplied_version(self):
+        value = result()
+        value['difficulty']['rubric_version'] = 'task-demands-v1'
+        target = rec.make_target(value, r.curriculum(), {})
+        before = r.jdump(target)
+        rec.validate_target(target)
+        self.assertEqual(r.jdump(target), before)
+        with self.assertRaisesRegex(ValueError, 'supplied'):
+            rec.validate_result(value, {'difficulty_rubric': d.RUBRIC, 'sources': [{'id': 'profile'}]})
+        value['difficulty']['axes']['rhythm'].update(level=4, anchor_ids=['rhythm-4'])
+        with self.assertRaises(ValueError):
+            rec.validate_result(value)
+
+    def test_positive_levels_are_extensible_but_require_a_registered_axis_anchor(self):
+        rubric = copy.deepcopy(d.RUBRIC)
+        rubric['version'] = 'task-demands-v37'
+        rubric['axes']['rhythm']['anchors'].append({
+            'id': 'rhythm-synthetic-37', 'level': 37, 'exercise': 'Synthetic extension only',
+            'comparison': 'Tests representation, not a proposed musical rating.'})
+        value = result()
+        value['difficulty']['rubric_version'] = rubric['version']
+        value['difficulty']['axes']['rhythm'].update(level=37, anchor_ids=['rhythm-synthetic-37'])
+        with patch.dict(d.RUBRICS, {rubric['version']: rubric}):
+            rec.validate_result(value, {'difficulty_rubric': rubric, 'sources': [{'id': 'profile'}]})
+            for level in (0, -1, 3.5, 38):
+                value['difficulty']['axes']['rhythm']['level'] = level
+                with self.subTest(level=level), self.assertRaises(ValueError):
+                    rec.validate_result(value)
+        with self.assertRaisesRegex(ValueError, 'Unknown'):
+            value['difficulty']['axes']['rhythm']['level'] = 37
+            rec.validate_result(value)
+
+    def test_old_and_new_views_derive_characteristics_without_reassessing_history(self):
+        from webapp import display_target
+        values = [legacy_result(), result(), result()]
+        values[1]['difficulty']['rubric_version'] = 'task-demands-v1'
+        for value in values:
+            target = rec.make_target(value, r.curriculum(), {'source_language': 'en'})
+            before = r.jdump(target)
+            for language in ('en', 'ko'):
+                view = display_target(target, language)
+                self.assertEqual(view['task_characteristics'], {
+                    'source': 'assigned_notation', 'notation_available': True,
+                    'tags': ['Repeating left-hand rhythm', 'Notes played together', 'Hands enter together']})
+                self.assertEqual(view.get('difficulty'), target.get('difficulty'))
+            self.assertEqual(r.jdump(target), before)
+            self.assertNotIn('task_characteristics', target)
+
+    def test_traits_distinguish_offbeat_rests_from_unwritten_improvisation_and_missing_scores(self):
+        from webapp import display_target
+        value = result()
+        value['exercise']['notation']['bars'][0]['right'] = [
+            {'beat': 0, 'duration': .5, 'notes': []},
+            {'beat': .5, 'duration': .5, 'notes': ['F#4']},
+            {'beat': 1, 'duration': 1, 'notes': []},
+            {'beat': 2, 'duration': 2, 'notes': ['A4']},
+        ]
+        target = rec.make_target(value, r.curriculum(), {})
+        tags = display_target(target, 'en')['task_characteristics']['tags']
+        self.assertIn('Offbeat entries', tags)
+        self.assertIn('Rests in the written parts', tags)
+        self.assertIn('Different entries between hands', tags)
+        value['exercise']['notation'] = None
+        target = rec.make_target(value, r.curriculum(), {})
+        self.assertEqual(display_target(target, 'en')['task_characteristics'], {
+            'source': 'assigned_conditions', 'notation_available': False, 'tags': []})
+        legacy = r.target_for(r.curriculum(), 'E06', 'C')
+        before = r.jdump(legacy)
+        tags = display_target(legacy, 'ko')['task_characteristics']['tags']
+        self.assertIn('Improvisation with specified pitches', tags)
+        self.assertNotIn('Notes played together', tags)
+        self.assertNotIn('Hands enter together', tags)
+        self.assertEqual(r.jdump(legacy), before)
+
     def test_non_object_output_is_a_validation_failure(self):
         for bad in (None, [], 'invalid', 1):
             with self.assertRaises(ValueError):rec.validate_result(bad)

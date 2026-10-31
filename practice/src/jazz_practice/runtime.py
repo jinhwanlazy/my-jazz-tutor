@@ -18,7 +18,7 @@ LOCALIZATION = ['i18n.mjs', 'translations.json']
 NOTATION = ['notation.py', 'score.mjs', 'timeline.mjs', 'Bravura.woff2', 'Bravura-LICENSE.txt', 'THIRD_PARTY.md']
 RECOMMENDATION = ['recommendation.py', 'recommendation.schema.json']
 DIFFICULTY = ['difficulty.py', 'difficulty-rubric.json', 'recommendation.v1.schema.json', 'coaching_context.py']
-FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + DIFFICULTY + ['localization.py']
+FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + DIFFICULTY + ['localization.py', 'difficulty-rubric.v1.json']
 PIN = 'runtime.json'
 CACHE = '.runtime'
 

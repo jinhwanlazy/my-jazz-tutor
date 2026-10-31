@@ -341,9 +341,8 @@
       "properties": {
         "rubric_version": {
           "type": "string",
-          "enum": [
-            "task-demands-v1"
-          ]
+          "minLength": 1,
+          "maxLength": 64
         },
         "axes": {
           "type": "object",
@@ -364,11 +363,7 @@
                   "anyOf": [
                     {
                       "type": "integer",
-                      "enum": [
-                        1,
-                        2,
-                        3
-                      ]
+                      "minimum": 1
                     },
                     {
                       "type": "null"
@@ -415,11 +410,7 @@
                   "anyOf": [
                     {
                       "type": "integer",
-                      "enum": [
-                        1,
-                        2,
-                        3
-                      ]
+                      "minimum": 1
                     },
                     {
                       "type": "null"
@@ -466,11 +457,7 @@
                   "anyOf": [
                     {
                       "type": "integer",
-                      "enum": [
-                        1,
-                        2,
-                        3
-                      ]
+                      "minimum": 1
                     },
                     {
                       "type": "null"
@@ -517,11 +504,7 @@
                   "anyOf": [
                     {
                       "type": "integer",
-                      "enum": [
-                        1,
-                        2,
-                        3
-                      ]
+                      "minimum": 1
                     },
                     {
                       "type": "null"
@@ -568,11 +551,7 @@
                   "anyOf": [
                     {
                       "type": "integer",
-                      "enum": [
-                        1,
-                        2,
-                        3
-                      ]
+                      "minimum": 1
                     },
                     {
                       "type": "null"
@@ -619,11 +598,7 @@
                   "anyOf": [
                     {
                       "type": "integer",
-                      "enum": [
-                        1,
-                        2,
-                        3
-                      ]
+                      "minimum": 1
                     },
                     {
                       "type": "null"
@@ -670,11 +645,7 @@
                   "anyOf": [
                     {
                       "type": "integer",
-                      "enum": [
-                        1,
-                        2,
-                        3
-                      ]
+                      "minimum": 1
                     },
                     {
                       "type": "null"

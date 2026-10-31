@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 
 RUBRIC = json.loads((Path(__file__).with_name('difficulty-rubric.json')).read_text())
+LEGACY_RUBRIC = json.loads((Path(__file__).with_name('difficulty-rubric.v1.json')).read_text())
+RUBRICS = {rubric['version']: rubric for rubric in (LEGACY_RUBRIC, RUBRIC)}
 AXES = tuple(RUBRIC['axes'])
 
 
@@ -49,10 +51,13 @@ def score_features(exercise):
 
 
 def validate(assessment, context=None):
-    if assessment['rubric_version'] != RUBRIC['version']:
+    rubric = RUBRICS.get(assessment['rubric_version'])
+    if rubric is None:
         raise ValueError('Unknown difficulty rubric.')
+    if context is not None and context.get('difficulty_rubric', {}).get('version', rubric['version']) != rubric['version']:
+        raise ValueError('New assessments must use the supplied difficulty rubric.')
     for axis, rating in assessment['axes'].items():
-        anchors = {a['id']: a['level'] for a in RUBRIC['axes'][axis]['anchors']}
+        anchors = {a['id']: a['level'] for a in rubric['axes'][axis]['anchors']}
         if any(a not in anchors for a in rating['anchor_ids']):
             raise ValueError('Difficulty cites an anchor from another axis or rubric.')
         if rating['status'] == 'rated':
@@ -70,6 +75,47 @@ def validate(assessment, context=None):
             raise ValueError('Burden prediction cites evidence that was not supplied.')
         if prediction['burden'] != 'unknown' and not prediction['source_ids']:
             raise ValueError('A personal prediction requires supplied evidence.')
+
+
+def task_characteristics(score):
+    """Read-only presentation of saved conditions, shared by old and new tasks.
+
+    Display notation already distinguishes written notes from improvisation and
+    illustrative short attacks. Neither becomes evidence of actual performance.
+    """
+    tags = []
+    if score is None:
+        return {'source': 'assigned_conditions', 'tags': [], 'notation_available': False}
+    bars = score['bars']
+    events = {hand: [event for bar in bars for event in bar[hand]] for hand in ('left', 'right')}
+    active = {hand: any(e['kind'] != 'rest' for e in part) for hand, part in events.items()}
+    improvised = any(e['kind'] == 'improv' for part in events.values() for e in part)
+    # Descriptive facts are not inferred from rubric numbers or axis reasons.
+    if any(e['kind'] == 'notes' and e['beat'] % 1 != 0 for part in events.values() for e in part):
+        tags.append('Offbeat entries')
+    if any(active[hand] and any(e['kind'] == 'rest' for e in part) for hand, part in events.items()):
+        tags.append('Rests in the written parts')
+    if active['left'] and len(bars) > 1:
+        patterns = {tuple((e['beat'], e['duration'], e['kind']) for e in bar['left']) for bar in bars}
+        if len(patterns) == 1 and not any(e['kind'] == 'improv' for e in events['left']):
+            tags.append('Repeating left-hand rhythm')
+    if improvised:
+        tags.append('Improvisation with specified pitches')
+    if any(e['kind'] == 'notes' and len(e['pitches']) > 1 for part in events.values() for e in part):
+        tags.append('Notes played together')
+    if active['left'] and active['right']:
+        if improvised:
+            tags.append('Both hands have assigned roles')
+        else:
+            starts = {hand: {(i, e['beat']) for i, bar in enumerate(bars)
+                             for e in bar[hand] if e['kind'] != 'rest'} for hand in events}
+            tags.append('Different entries between hands' if starts['left'] != starts['right']
+                        else 'Hands enter together')
+    elif active['left']:
+        tags.append('Left hand only')
+    elif active['right']:
+        tags.append('Right hand only')
+    return {'source': 'assigned_notation', 'tags': tags, 'notation_available': True}
 
 
 def result_from_target(target):

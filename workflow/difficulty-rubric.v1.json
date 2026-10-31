@@ -1,0 +1,187 @@
+{
+  "version": "task-demands-v1",
+  "status": "provisional_unvalidated",
+  "scale": [
+    1,
+    2,
+    3
+  ],
+  "conditions": "Reference miniatures use four bars, quarter-note BPM 80 and 4/4 unless stated. They are comparison anchors, never mandatory assignments.",
+  "rules": [
+    "Levels are ordinal within an axis, not equal intervals or comparable between axes. Never sum them.",
+    "Compare to anchors at the assigned BPM. Explain tempo differences and combined demands; do not treat note count as difficulty.",
+    "Use unknown when instructions are insufficient, not_applicable when absent, out_of_range when anchors cannot support a rating.",
+    "An anchor is a provisional design hypothesis, not a validated international grade. Preserve assigned ratings; personal predictions are separate.",
+    "Whole-task labels cannot identify the difficult axis. Good means useful, not medium difficulty. No performance probability or ability score."
+  ],
+  "axes": {
+    "melody": {
+      "label": "Melody and patterns",
+      "guidance": "Compare pitch motion and pattern changes; tempo and fingering are separate conditions.",
+      "anchors": [
+        {
+          "id": "melody-1",
+          "level": 1,
+          "exercise": "Repeat C4-D4-E4-D4 in quarter notes for four bars; LH rests.",
+          "comparison": "Small repeated stepwise pattern."
+        },
+        {
+          "id": "melody-2",
+          "level": 2,
+          "exercise": "Quarter notes C4-E4-G4-E4 | D4-F4-A4-F4 | E4-G4-B4-G4 | C4-E4-G4-C5; LH rests.",
+          "comparison": "Changing arpeggio shapes within an octave."
+        },
+        {
+          "id": "melody-3",
+          "level": 3,
+          "exercise": "Quarter notes C4-C5-E4-B4 | D4-A4-F4-D5 | E4-C5-G4-E5 | C4-G4-D5-C5; LH rests.",
+          "comparison": "Frequent large leaps and changing patterns."
+        }
+      ]
+    },
+    "rhythm": {
+      "label": "Rhythm",
+      "guidance": "Compare onset/rest structure independently of pitch, accent and familiarity.",
+      "anchors": [
+        {
+          "id": "rhythm-1",
+          "level": 1,
+          "exercise": "Repeat C4 on each quarter beat for four bars; LH rests.",
+          "comparison": "Regular on-beat quarter notes."
+        },
+        {
+          "id": "rhythm-2",
+          "level": 2,
+          "exercise": "Repeat C4 in continuous even eighth notes for four bars; LH rests.",
+          "comparison": "Regular eighth-note subdivision."
+        },
+        {
+          "id": "rhythm-3",
+          "level": 3,
+          "exercise": "On C4, eighth notes/rests: bar 1 rest-note-note-rest-note-note-rest-note; bar 2 note-rest-note-note-rest-note-note-rest; repeat these two bars. LH rests.",
+          "comparison": "Changing eighth-rest patterns and offbeat entries."
+        }
+      ]
+    },
+    "meter": {
+      "label": "Meter and grouping",
+      "guidance": "The current renderer supports 4/4 only. Other meters are comparison references, not permission to render unsupported scores.",
+      "anchors": [
+        {
+          "id": "meter-1",
+          "level": 1,
+          "exercise": "Four bars of 4/4: C4 quarter notes with a regular four-beat grouping; LH rests.",
+          "comparison": "Stable simple meter and grouping."
+        },
+        {
+          "id": "meter-2",
+          "level": 2,
+          "exercise": "Four bars of 6/8: C4 eighth notes grouped 3+3, dotted-quarter pulse 80; LH rests.",
+          "comparison": "Stable compound meter; outside notation v1."
+        },
+        {
+          "id": "meter-3",
+          "level": 3,
+          "exercise": "Alternate 5/8 grouped 3+2 and 7/8 grouped 2+2+3, eighth-note pulse 160, four bars on C4; LH rests.",
+          "comparison": "Changing uneven groupings; outside notation v1."
+        }
+      ]
+    },
+    "tonality": {
+      "label": "Tonality",
+      "guidance": "Count changes in tonal reference, not sharps/flats as universal physical difficulty. Familiarity belongs to personal prediction.",
+      "anchors": [
+        {
+          "id": "tonality-1",
+          "level": 1,
+          "exercise": "C major throughout: C4-D4-E4-G4 in quarter notes, repeat four bars; LH rests.",
+          "comparison": "One stable diatonic tonal reference in any key."
+        },
+        {
+          "id": "tonality-2",
+          "level": 2,
+          "exercise": "C major: C4-D4-D#4-E4 | G4-F4-F#4-G4, quarter notes, repeat; LH rests.",
+          "comparison": "Chromatic approaches within a stable tonal reference."
+        },
+        {
+          "id": "tonality-3",
+          "level": 3,
+          "exercise": "Quarter-note broken triads, one key per bar: C4-E4-G4-C5 | Eb4-G4-Bb4-Eb5 | F#4-A#4-C#5-F#5 | A4-C#5-E5-A5; LH rests.",
+          "comparison": "Repeated shifts of tonal reference."
+        }
+      ]
+    },
+    "harmony": {
+      "label": "Harmony and voicing",
+      "guidance": "Compare simultaneous voices, chord function and voice movement; hand span facts do not imply a feasible fingering.",
+      "anchors": [
+        {
+          "id": "harmony-1",
+          "level": 1,
+          "exercise": "RH whole-note triads C4+E4+G4 | F4+A4+C5 | G4+B4+D5 | C4+E4+G4; LH rests.",
+          "comparison": "Simple triads or single-note harmonic roles."
+        },
+        {
+          "id": "harmony-2",
+          "level": 2,
+          "exercise": "RH whole-note guide tones F3+C4 | F3+B3 | E3+B3 | E3+B3 over Dm7-G7-Cmaj7-Cmaj7; LH rests.",
+          "comparison": "Guide-tone voice leading through changing seventh-chord functions."
+        },
+        {
+          "id": "harmony-3",
+          "level": 3,
+          "exercise": "RH whole-note voicings F3+A3+C4+E4 | F3+Ab3+B3+Eb4 | E3+G3+B3+D4 | E3+G3+A3+D4 over Dm9-G7alt-Cmaj9-C6/9; LH rests.",
+          "comparison": "Extensions/alterations and several moving voices; chord symbols describe the intended function."
+        }
+      ]
+    },
+    "expression": {
+      "label": "Accents and expression",
+      "guidance": "Assess only explicitly requested expression. Plain notation alone does not establish a demand.",
+      "anchors": [
+        {
+          "id": "expression-1",
+          "level": 1,
+          "exercise": "C4 quarter notes for four bars, even mezzo-forte and consistent articulation; LH rests.",
+          "comparison": "One consistent dynamic and articulation."
+        },
+        {
+          "id": "expression-2",
+          "level": 2,
+          "exercise": "Same C4 quarter notes, accent beat 2 lightly in every bar, keep other notes even; LH rests.",
+          "comparison": "One repeated displaced accent instruction."
+        },
+        {
+          "id": "expression-3",
+          "level": 3,
+          "exercise": "Same C4 quarter notes; alternate accent positions 2 and 4 between bars, crescendo across two bars then diminuendo, keep notes legato; LH rests.",
+          "comparison": "Several explicitly independent expression instructions."
+        }
+      ]
+    },
+    "coordination": {
+      "label": "Hand coordination",
+      "guidance": "Assess combined roles; do not sum individual hand ratings.",
+      "anchors": [
+        {
+          "id": "coordination-1",
+          "level": 1,
+          "exercise": "Both hands play whole notes together: LH C3, RH E4, repeat four bars.",
+          "comparison": "Shared attacks and releases, or a single active hand."
+        },
+        {
+          "id": "coordination-2",
+          "level": 2,
+          "exercise": "LH holds C3 whole notes; RH C4-D4-E4-D4 quarter notes in each of four bars.",
+          "comparison": "Steady support against a distinct moving part."
+        },
+        {
+          "id": "coordination-3",
+          "level": 3,
+          "exercise": "LH plays C3 on beats 1 and 3 as quarter notes with quarter rests on 2 and 4; RH plays C4 on every eighth-note offbeat with eighth rests on each beat, four bars.",
+          "comparison": "Independent, interlocking attacks between hands."
+        }
+      ]
+    }
+  }
+}

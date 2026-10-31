@@ -5,12 +5,13 @@ The request artifact is the private snapshot/cache of this view. Raw history and
 MIDI remain in their original stores, outside Git and outside the prompt.
 """
 from collections import Counter
+from itertools import zip_longest
 import json
 import re
 
 from difficulty import prediction_observation, score_features
 
-POLICY = 'bounded-evidence-v1'
+POLICY = 'bounded-evidence-v2'
 RECENT = 8
 RELATED = 4
 
@@ -178,13 +179,16 @@ def fit(context, tasks, sessions, events, budget):
     window = context['history_window']
     window.update(policy=POLICY, total_tasks=len(tasks), included_tasks=0, omitted_older_tasks=len(tasks),
                   included_task_ids=[], omitted_detail_tasks=len(tasks),
-                  selection='Up to 8 recent and 4 relevant/corrected older tasks; input budget takes precedence.',
+                  selection='Up to 8 recent and 4 relevant/corrected older tasks, interleaved before budget fitting.',
                   omissions='Omitted details and clipped text remain in the original local ledger. Absence is not lack of practice.')
     context['sources'].append(summary(tasks, events))
     if encoded_size(context) > budget:
         raise ValueError('The profile, request and required coaching rules exceed the input budget.')
     # Reserve space for accurate coverage counters and byte accounting.
-    for task in recent + related:
+    # Do not let recent tasks consume every slot before request-related or
+    # newly corrected older evidence can be considered.
+    ordered = [task for pair in zip_longest(recent, related) for task in pair if task is not None]
+    for task in ordered:
         group = task_sources(task, sessions)
         if encoded_size(context) + encoded_size(group) + 500 > budget:
             # Keep the source list intact while reducing individual descriptions.

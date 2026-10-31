@@ -95,7 +95,7 @@ def validate_result(value, context=None):
         raise ValueError('The recommendation must be an object.')
     validate_shape(value, LEGACY_SCHEMA if value.get('schema_version') == 1 else SCHEMA)
     if context is not None and 'difficulty_rubric' in context and value['schema_version'] != 2:
-        raise ValueError('New recommendations require a calibrated difficulty assessment.')
+        raise ValueError('New recommendations require a versioned demand assessment.')
     if value['schema_version'] == 2:
         validate_difficulty(value['difficulty'], context)
     if context is not None:
@@ -226,6 +226,10 @@ must still be specific. Otherwise supply notation. Chord accompaniment is option
 if supplied, use identical bar/chord labels and piano MIDI notes. State what is actually supported instead
 of pretending unavailable notation/audio exists. minutes is a proposed task budget, never actual duration.
 Do not manufacture accuracy checks or mastery scores. Result labels guide interpretation, not fixed rules.
+Keep user-facing exercise and personal-burden prose specific: describe rhythms, hand roles and conditions,
+without low/moderate/high demand labels, internal step numbers or claims of a highest difficulty.
+Internal levels are extensible ordinal references and must cite a registered anchor; otherwise use null
+with the appropriate status. Earlier saved predictions must never be fabricated for unassessed history.
 Provide difficulty using context.difficulty_rubric: all seven axes, status and ordinal level, matching
 anchor IDs and concrete comparisons at this task's BPM. Anchors are measuring references, never a syllabus
 or candidate restriction. Unknown/inapplicable/out-of-range axes have null level. Explain interactions;

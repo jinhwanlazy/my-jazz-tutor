@@ -595,6 +595,24 @@
     "Expected burden when assigned": "생성 당시 예상 부담",
     "Facts from the assigned score": "발급된 악보에서 확인한 특징",
     "{0}: {1} attacks · {2} offbeat attacks · up to {3} simultaneous notes": "{0}: 타건 {1}회 · 엇박 타건 {2}회 · 동시 음 최대 {3}개",
-    "Reference scale": "평가 기준"
+    "Reference scale": "평가 기준",
+    "Task characteristics and personal burden": "과제 특성과 개인 예상 부담",
+    "Task characteristics": "과제 특성",
+    "Personal burden · when assigned": "개인 예상 부담 · 출제 당시",
+    "No prediction was saved for this task.": "저장된 예상 없음",
+    "Written conditions and prediction evidence": "과제 조건과 예상의 근거",
+    "These characteristics describe the assigned task, not measured performance.": "과제에 주어진 조건입니다. 실제 연주를 측정한 결과는 아닙니다.",
+    "No fixed score is available. Follow the written conditions.": "고정 악보가 없는 과제입니다. 글로 적힌 조건을 따라 주세요.",
+    "Why this personal prediction?": "이렇게 예상한 이유",
+    "Offbeat entries": "엇박 진입",
+    "Rests in the written parts": "쉼표가 포함된 리듬",
+    "Repeating left-hand rhythm": "반복되는 왼손 리듬",
+    "Improvisation with specified pitches": "지정된 음으로 즉흥 연주",
+    "Notes played together": "여러 음을 동시에 연주",
+    "Both hands have assigned roles": "양손의 역할이 주어짐",
+    "Different entries between hands": "양손의 서로 다른 진입",
+    "Hands enter together": "양손이 함께 진입",
+    "Left hand only": "왼손만 연주",
+    "Right hand only": "오른손만 연주"
   }
 }

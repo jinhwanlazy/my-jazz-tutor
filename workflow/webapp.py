@@ -17,6 +17,7 @@ from notation import score_for
 from sessions import SessionStore, reflection_measurements
 from recommendation import Recommendations, ERRORS, repeat
 from localization import Translations, ERRORS as TRANSLATION_ERRORS
+from difficulty import task_characteristics
 
 ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "text/javascript",
           "audio.mjs": "text/javascript", "capture.mjs": "text/javascript",
@@ -26,12 +27,14 @@ ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "te
 
 
 def display_target(target, language, translations=None):
+    score = score_for(target)
+    presentation = {'notation': score, 'task_characteristics': task_characteristics(score)}
     if target.get("kind") == "generated" and translations is not None:
         display, state = translations.view(target, language)
         if state.get("error_code"):
             state["error"] = r.web_text(TRANSLATION_ERRORS.get(state["error_code"], TRANSLATION_ERRORS["connection"]), language)
-        return display | {"notation": score_for(target), "translation": state}
-    return (target if target.get("kind") == "generated" else r.display_builtin(target, language)) | {"notation": score_for(target)}
+        return display | presentation | {"translation": state}
+    return (target if target.get("kind") == "generated" else r.display_builtin(target, language)) | presentation
 
 
 def feedback(task, language="en"):

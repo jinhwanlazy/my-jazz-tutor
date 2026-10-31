@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {spawn, execFileSync} from 'node:child_process';
 import {once} from 'node:events';
-import {mkdtemp, mkdir, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -104,18 +104,24 @@ try {
   assert.equal((await state()).sessions.length,0);
   await hidden('#view-practice');
   assert.match(await item(first).textContent(),/Ready to practice/);
-  assert.equal(await item(first).locator('.demand-chip').count(),2);
+  assert.equal(await item(first).locator('.characteristic-chip').count(),3);
+  assert.match(await item(first).locator('.burden-prediction').innerText(),/Not enough evidence/);
+  assert.equal(await item(first).locator('.demand-chip').count(),0);
   assert.equal(await page.locator('#new-practice').isEnabled(),false);
   await page.reload();await visible('#view-list');
   await page.waitForFunction(()=>document.querySelector('.history-item'));
   await hidden('#view-practice');
   assert.equal((await state()).history.length,1);
   await enter(first);
-  await page.locator('#lesson-analysis .difficulty-detail summary').click();
-  assert.equal(await page.locator('#lesson-analysis .demand-chip').count(),7);
-  assert.match(await page.locator('#lesson-analysis .difficulty-detail').innerText(),/Not enough evidence/);
-  assert.match(await page.locator('#lesson-analysis .difficulty-detail').innerText(),/Facts from the assigned score/);
-  await page.locator('#lesson-analysis .difficulty-detail summary').click();
+  assert.match(await page.locator('#lesson-overview').innerText(),/Not enough evidence/);
+  assert.ok(await page.evaluate(()=>document.querySelector('#lesson-overview').getBoundingClientRect().bottom <=
+    document.querySelector('#lesson-instructions').getBoundingClientRect().top));
+  await page.locator('#lesson-overview .task-context-detail summary').click();
+  assert.equal(await page.locator('#lesson-overview .characteristic-chip').count(),3);
+  assert.match(await page.locator('#lesson-overview .task-context-detail').innerText(),/assigned task, not measured performance/);
+  assert.match(await page.locator('#lesson-overview .task-parts').innerText(),/Hold D3/);
+  assert.doesNotMatch(await page.locator('#lesson-overview').innerText(),/reference|[Ll]ow demand|[Hh]igh demand/);
+  await page.locator('#lesson-overview .task-context-detail summary').click();
   assert.equal(await page.getByRole('button',{name:'Start practice',exact:true}).count(),1);
   assert.equal(await page.getByRole('button',{name:'Complete practice',exact:true}).count(),1);
   assert.equal(await page.locator('#finish-btn').isEnabled(),false);
@@ -367,12 +373,13 @@ try {
   assert.deepEqual(saved.exercise,original.exercise);
   assert.deepEqual(saved.difficulty,original.difficulty);
   await enter(translationTask);
-  await page.locator('#lesson-analysis .difficulty-detail summary').click();
-  assert.equal(await page.locator('#lesson-analysis .demand-chip').count(),7);
-  assert.match(await page.locator('#lesson-analysis .difficulty-detail').innerText(),/생성 당시 예상 부담/);
-  assert.match(await page.locator('#lesson-analysis .demand-reasons').innerText(),/번역:/);
+  await page.locator('#lesson-overview .task-context-detail summary').click();
+  assert.equal(await page.locator('#lesson-overview .characteristic-chip').count(),3);
+  assert.match(await page.locator('#lesson-overview').innerText(),/개인 예상 부담 · 출제 당시/);
+  assert.match(await page.locator('#lesson-overview .task-parts').innerText(),/번역:/);
+  assert.equal(await page.locator('.demand-chip, .demand-reasons, .difficulty-detail').count(),0);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
-  await page.screenshot({path:join(project,'build/browser/difficulty-mobile-ko.png'),fullPage:true});
+  await page.screenshot({path:join(project,'build/browser/task-overview-mobile-ko.png'),fullPage:true});
   await page.screenshot({path:join(project,'build/browser/translation-recovered-mobile.png'),fullPage:true});
   // Validation repairs stay inside the original job, without a retry button or extra POST.
   await page.locator('#discard-btn').click();await page.locator('#discard-submit').click();await hidden('#discard-dialog');
@@ -385,8 +392,59 @@ try {
   assert.equal(repairPosts.filter(request=>request.task_id===repairTask).length,1);
   assert.equal(await item(repairTask).getByRole('button',{name:'번역 재시도'}).count(),0);
   assert.doesNotMatch(await item(repairTask).textContent(),/99 BPM/);
+  // Older schema and rubric snapshots use the same presentation without migration.
+  const oldTasks = JSON.parse(execFileSync('uv', ['run','python','-c', `
+import json, sys
+from pathlib import Path
+import review as r, recommendation as rec
+sys.path.insert(0, 'tests')
+from recommendation_fixture import result
+root = Path(sys.argv[1])
+assert root.name.startswith('jazz-browser-')
+data = r.curriculum(); data['version'] = '0.4.0'
+ids = []
+for i, version in enumerate((1, 2)):
+    value = result()
+    value['schema_version'] = version
+    if version == 1:
+        value.pop('difficulty')
+    else:
+        value['difficulty']['rubric_version'] = 'task-demands-v1'
+        value['difficulty']['axes']['rhythm'].update(level=3, anchor_ids=['rhythm-3'])
+        value['difficulty']['prediction'].update(burden='challenging', reason='Synthetic saved forecast.')
+    target = rec.make_target(value, data, {'source_language': 'en'})
+    tid = 'T-' + str(i)*10; ids.append(tid)
+    assigned = r.new_event('assigned', tid, data, target['exercise_id'])
+    assigned.update(recorded_at='2026-01-01T10:00:00+00:00', target_json=r.jdump(target))
+    reported = r.new_event('reported', tid, data, target['exercise_id'])
+    reported.update(recorded_at='2026-01-01T10:10:00+00:00', practice_date='2026-01-01',
+                    actual_json='{}', checks_json='{}', difficulty='good', raw_note='Synthetic historical report.')
+    for event in (assigned, reported): r.append_event(root, event)
+r.records(r.read_events(root))
+print(json.dumps(ids))
+`,root], {cwd:project}).toString());
+  const ledgerBefore = await readFile(join(root,'practice.csv'));
+  const sessionsBefore = (await state()).sessions;
+  await page.reload();await visible('#view-list');
+  for (const [index,id] of oldTasks.entries()) {
+    await item(id).waitFor({state:'visible'});
+    assert.equal(await item(id).locator('.characteristic-chip').count(),3);
+    assert.match(await item(id).locator('.burden-prediction').innerText(),index===0 ? /저장된 예상 없음/ : /도전/);
+    await item(id).locator('.history-item').click();
+    await visible('#history-dialog');
+    const detail=page.locator('#history-detail');
+    await detail.locator('.task-context-detail').evaluate(node=>node.open=true);
+    assert.equal(await detail.locator('.characteristic-chip').count(),3);
+    assert.equal(await detail.locator('.demand-chip, .difficulty-detail').count(),0);
+    assert.doesNotMatch(await detail.innerText(),/높은 요구 수준|보통 요구 수준|낮은 요구 수준|task-demands-v1|first reference/);
+    if(index===1) assert.match(await detail.innerText(),/Synthetic saved forecast/);
+    await page.screenshot({path:join(project,`build/browser/historical-overview-${index}-ko.png`),fullPage:true});
+    await page.locator('#dialog-close').click();
+  }
+  assert.deepEqual(await readFile(join(root,'practice.csv')),ledgerBefore);
+  assert.deepEqual((await state()).sessions,sessionsBefore);
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,checks:['Codex job progress and authentication failure','response loss without duplicate generation','custom tasks outside the catalog','list landing without writes','explicit create and enter','pending resume after reload','completion before feedback','no duplicate counts','notes and skip reasons inline','repeat creates another item','score continuity and MIDI','failed save and recovery','active discard preserves recordings','languages and mobile layout','translation retry and reload cache','BPM locked during playing and pause','MIDI stays visible in sidebar and mobile header'],screenshots:'workflow/build/browser'}));
+  console.log(JSON.stringify({passed:true,checks:['Codex job progress and authentication failure','response loss without duplicate generation','custom tasks outside the catalog','list landing without writes','explicit create and enter','pending resume after reload','completion before feedback','no duplicate counts','notes and skip reasons inline','repeat creates another item','score continuity and MIDI','failed save and recovery','active discard preserves recordings','languages and mobile layout','translation retry and reload cache','BPM locked during playing and pause','MIDI stays visible in sidebar and mobile header','task characteristics and saved prediction first','historical schema/rubric views without rewriting records'],screenshots:'workflow/build/browser'}));
 } finally {
   if(browser)await browser.close();
   const exited=once(server,'exit');server.kill('SIGTERM');await exited;

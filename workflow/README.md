@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.4.1`; create a new tag for later releases instead of moving an old tag:
+selects `v0.4.2`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.4.1
+uv run python publish.py --ref v0.4.2
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -346,7 +346,9 @@ show an interrupted error. Restart the server after activating a release.
 
 New schema-v2 tasks include seven separate demand axes: melody, rhythm, meter,
 tonality, harmony/voicing, expression and hand coordination. `difficulty-rubric.json`
-contains three concrete comparison anchors per axis with fixed reference conditions.
+uses an extensible ordinal scale with registered comparison anchors. Its initial
+anchors 1–3 are not low/moderate/high bands or a maximum musical difficulty.
+New anchors require a new rubric version; an unregistered level is rejected.
 They are provisional, unvalidated ordinal references, never a required curriculum,
 equal-interval scale or overall ability score. Unsupported meters in reference
 examples do not extend the notation renderer. Unknown, inapplicable and out-of-range
@@ -354,16 +356,23 @@ demands have no numerical level. The app validates axis/anchor/level consistency
 source IDs, and independently derives facts from assigned notation. It does not
 certify the musical judgment or infer a fingering from pitch distance.
 
-The list shows focus-axis labels; room and record details show all axes, reasons,
-score facts and the personal burden prediction made at generation. Prediction is
-separate from task demand, with evidence and explicit uncertainty, not a probability.
+The list, room and past records put concrete task characteristics and the personal
+burden prediction first. Characteristics come from the saved conditions and notation,
+such as offbeat entries, rests and differing hand entries. Internal stages, demand
+bands and anchor comparisons are hidden. Expand the conditions and prediction
+evidence for the written hand/rhythm instructions, reasoning and uncertainty.
+Prediction is the forecast saved when assigned, not a current ability score or probability.
 The next request compares it with latest feedback under comparable conditions;
 there is no label-to-BPM rule or automatic ability update. `good` means useful, not
 medium difficulty; `challenging` is not failure. Repeated copies retain the original
 prediction and are excluded from aggregate new-forecast counts. Translation changes
 only explanatory prose, preserving levels, anchor IDs, music and computed facts.
-Version-1 snapshots remain supported without retroactive assessments. Assessment
-snapshots and rubric versions never change when feedback is corrected.
+The same presentation applies to historical tasks without rewriting their snapshots,
+reports or MIDI. Tasks without a saved forecast say so; no earlier prediction is
+invented from later feedback. Schema-version-1 snapshots and the archived
+`difficulty-rubric.v1.json` remain supported. Assessment snapshots and rubric versions
+never change when feedback is corrected. Near the context budget, recent tasks and
+related/corrected older tasks are interleaved so recency cannot exhaust all space first.
 
 Calibration checks cover anchor validation, score facts under wording/tempo changes,
 translation invariance, prospective-feedback joins, corrections and long histories.
