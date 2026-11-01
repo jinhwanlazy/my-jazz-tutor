@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.5.0`; create a new tag for later releases instead of moving an old tag:
+selects `v0.6.0`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.5.0
+uv run python publish.py --ref v0.6.0
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -340,8 +340,16 @@ Sources are fetched only on request into
 another local cache (tests use temporary directories). Original bytes are addressed
 by SHA-256, with URL, retrieval time, ETag and Last-Modified metadata. Refresh uses
 conditional requests; old snapshots never follow a changed source. SQLite FTS5
-searches section/page text. At most two sources and three excerpts/page images are
-supplied per generation. Downloads are capped at 40 MB and PDFs at 300 pages;
+searches section/page text and reviewed units (objectives, tags and reviewed scope).
+Example queries use AND then at most one OR relaxation; no hit is explicit, without
+an unrelated first-page substitute. Only the current source hash is searched.
+At most two sources and three excerpts/page images are supplied per generation.
+The best match from each requested source gets a slot before either source gets
+another. Unavailable sources/pages do not consume a slot. `material_omissions`
+lists matched sections excluded by the shared budget; they are not unreadable or
+evidence of a failed search. Only supplied excerpts may be cited. PDF image numbers
+follow the final excerpt order, and omitted pages are not rendered for the request.
+Downloads are capped at 40 MB and PDFs at 300 pages;
 images are capped at three MB each. Text still fits the 64,000-byte prompt/schema
 budget; images are separately bounded and are not counted as text tokens.
 
@@ -356,9 +364,10 @@ concept references are distinct. Exact reuse requires a reviewed ABC cache asset
 the model selects its ID and the app inserts its notation. Review compares source
 bytes and the exact excerpt with pitch, duration, spelling, voice and expression.
 The review record identifies its author and method; it is not automatic proof of
-musical/source correctness. Broad unattended PDF/video OMR and audio transcription
-are not included. Keep original symbolic files when converting externally and
-record any lost/changed features instead of calling an adaptation unchanged.
+musical/source correctness. Goal plans include `example_requirements`: required
+key/bar count (null when flexible) and focus terms. The app blocks unchanged reuse
+when these conditions differ; educational suitability still requires the teacher's
+explanation. A lexical match is not a guarantee of learning-goal fit.
 
 For local material inspection and explicit reviewed imports:
 
@@ -374,6 +383,88 @@ The import JSON contains `source_id`, an exact returned `locator`, `notation`
 containing `pitches`, `durations`, `spelling`, `voices`, `expression`. This explicit
 review path is not available to the tool-free generation model. Downloaded content,
 transcriptions and personal contexts must never be committed.
+
+### Extraction workbench (0.6.0)
+
+`score_extract.py` creates **unreviewed** candidates in an explicit local cache.
+It never reads/writes practice records and is not a recommendation-model tool.
+Sources, crops/frames, raw MusicXML/MXL, logs, corrections and ABC remain outside
+Git. Extraction and registration are explicit operations, separate from generation.
+
+```sh
+uv run python score_extract.py --cache build/materials extract --input /tmp/extract.json
+uv run python score_extract.py --cache build/materials compare CAND-… --output build/source-review
+uv run python score_extract.py --cache build/materials compare CAND-… --notation /tmp/corrected-abc.json --output build/source-review
+uv run python score_extract.py --cache build/materials register CAND-… --input /tmp/source-review.json
+```
+
+Requests supply `source_id`, an exact returned `locator`, and `selection`. Example:
+`{"kind":"pdf","page":44,"crop":[0.06,0.25,0.53,0.15],"first":1,"last":4,
+"missing_key":"C","missing_meter":"4/4"}`. Crop is normalized x/y/width/height;
+inspect it before review. Missing headers require explicit source inspection and
+never override existing headers. `first`/`last` are measure positions within the
+extracted score, not printed numbers. `kind:"musicxml"` imports a cached XML/MXL
+source. `kind:"video"` uses `seconds` and `crop` to select one frame of a directly
+downloadable file within the 40 MB limit. `--catalog` can name a local pilot catalog.
+
+PDF/image OMR needs external [Audiveris](https://github.com/Audiveris/audiveris)
+(`JAZZ_AUDIVERIS_BIN`); video frames also need ffmpeg (`JAZZ_FFMPEG_BIN`). Tools are
+never installed automatically. Pin the tool version and bound Java's heap in a
+wrapper. The Linux 5.11.0 pilot used its embedded JRE with `-Xms128m -Xmx1500m`.
+The app runs `-batch -export` with a 120-second timeout and kills the process group
+on timeout. Missing tools/invalid output leave an issue and an unreviewed candidate.
+The pilot lacked English OCR data, so chord symbols required manual restoration.
+Tool installation/licensing stays separate from the small runtime dependencies.
+
+The conservative importer supports a single piano part, two fixed treble/bass
+staves, 3/4 or 4/4, 1–16 complete measures, up to two voices per staff, spelled
+chords, dots, ordinary triplets, ties, basic dynamics/articulations. It compares the
+MusicXML timeline with parsed ABC. Unsupported slurs, ornaments, repeats/endings,
+changing keys/clefs and incomplete bars stop conversion; no rests or notes are
+invented. Printed accidentals (including plain cautionary signs) are retained;
+other signs appear only when required by the key, current bar, octave and voice.
+Parenthesized/custom signs require review instead of silently losing their display.
+Layout/beaming normalization is disclosed. This
+is not a general MusicXML converter and does not certify image fidelity.
+
+Registration JSON contains `review` (the fields above plus `candidate_id` and
+`corrections`), optional corrected `notation`, and optional `learning` with
+`objectives` and `tags` arrays. Failed/changed extraction requires explicit
+corrections. Candidate/source hashes bind the receipt to the inspected bytes.
+Only registered examples enter retrieval. Transposition/rearrangement relative to
+the actual source is an adaptation, not an extraction correction.
+
+The OMR pilot covers one clean public PDF excerpt and synthetic XML/video transport.
+It does not establish real-video accuracy, broad library coverage, frame selection/
+deduplication, audio transcription or semantic search quality. Embeddings await a
+measured lexical-search limitation. `tests/materials_compare_smoke.py --run` compares
+complete recommendation paths with copied public caches and identical synthetic
+history in temporary directories. A single pair is a functional check, not a quality
+trend or proof of suitability for a real learner.
+
+`tests/coaching_consistency.py` adds three synthetic feedback cases: too easy,
+challenging but useful, and an unattempted task skipped because of repetition.
+It leaves musical choices to the coach rather than prescribing pitches, a source
+page or form length. Each run creates temporary records, copies the supplied public
+cache and preserves both successful and failed outputs. Use frozen source snapshots
+and the same cache for both versions; do not edit those snapshots during a batch.
+
+```sh
+# Setup check only; remove --prepare-only for an explicit real Codex call.
+uv run python tests/coaching_consistency.py --run --prepare-only \
+  --workflow build/coaching-consistency/candidate-source \
+  --cache-seed build/coaching-consistency/materials \
+  --output build/coaching-consistency/setup-example --scenario bored_skip --replicate 1
+# Render every paired run, its score/audio preview, source crops and review notes:
+uv run python tests/coaching_comparison_report.py --experiment build/coaching-consistency
+```
+
+The report reads local `protocol.json`, `runs/<scenario>-<replicate>-<version>/`,
+optional `review.json`, and optional `library-new.json` source-review artifacts.
+It does not invoke Codex or publish a release. Repeated fixed-history trials probe
+consistency and variety, not longitudinal learning or calibrated human difficulty.
+Keep public scores, downloaded PDFs, test outputs and source-review receipts local;
+the repository contains the harness, catalog links and schemas only.
 
 ## Codex recommendations and conversational coaching
 

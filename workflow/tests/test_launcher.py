@@ -168,6 +168,9 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(publish.runtime.read_pin(self.root)['revision'], self.revision)
 
     def test_first_launch_initializes_pin_from_default_ref_without_practice(self):
+        # Development may be ahead of the published bootstrap default. This
+        # disposable repository contains only its synthetic current-version tag.
+        (self.root / 'runtime-ref').write_text('v' + r.curriculum()['version'] + '\n')
         (self.root / 'runtime.json').unlink()
         (self.root / 'active-version').unlink()
         shutil.rmtree(self.release)

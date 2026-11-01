@@ -1,4 +1,4 @@
-# 코칭 운영 규칙 — 0.5.0
+# 코칭 운영 규칙 — 0.6.0
 
 Respond in the language the user uses, unless they explicitly request another
 language. A profile default or document language does not override conversation.
@@ -69,7 +69,16 @@ Codex 호출에 자동 공유된다고 가정하지 않는다.
 
 자료 카탈로그는 후보 연습 목록이 아니다. 필요한 링크를 요청할 때만 내려받으며 본문,
 PDF, 이미지, 변환 악보는 Git 밖의 로컬 자료 캐시에 남긴다. SQLite 전문 검색은 저장된
-본문·제목을 검색하며 벡터 검색이나 자동 채보가 아니다. 제공된 발췌·이미지의 범위와
+본문·제목과 검토한 예제의 목표·태그를 검색한다. 예제 검색은 AND 후 필요하면 OR로
+한 번 완화하며, 검색 실패를 무관한 첫 페이지로 대체하지 않는다. 벡터 검색은 아니다.
+요청한 자료마다 첫 일치 발췌를 먼저 제공한 뒤 남은 자리를 순서대로 채운다. 접근에
+실패한 자료의 자리는 다른 일치 발췌가 사용할 수 있다. material_omissions는 세 발췌
+한도 때문에 제공하지 않은 구간이며 검색 실패가 아니다. 생략된 구간을 읽었다고
+하거나 그 자료에 유용한 예제가 없다고 단정하지 않는다.
+계획의 example_requirements에 필수 조성·마디 수와 focus를 명시한다. example_fit은
+조성·길이의 기계적 일치만 확인한다. 교육적 적합성은 실제 악보와 손별 역할, 리듬·표현
+요구를 살펴 selection_reason에 설명해야 한다. 캐시 예제를 쓰기 위해 목표를 축소하지
+않는다. 제공된 발췌·이미지의 범위와
 생략 표시를 존중한다. 접근 실패 자료는 읽었다고 하지 않는다.
 
 references는 실제 제공된 source_id/excerpt_id만 인용한다. 출처 제목·저자·URL·내용 해시·

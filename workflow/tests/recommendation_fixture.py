@@ -44,7 +44,8 @@ class SyntheticRunner:
 def plan():
     return {'objective': 'Connect chord shapes in a musical phrase.', 'evidence_ids': ['profile'],
             'stretch': 'Keep the bass quiet while connecting upper voices.', 'form': 'A short original phrase.',
-            'material_reason': 'This synthetic transport test needs no external material.', 'material_requests': []}
+            'material_reason': 'This synthetic transport test needs no external material.', 'material_requests': [],
+            'example_requirements': {'key': None, 'bars': None, 'focus': ['voice leading']}}
 
 
 class SyntheticTranslator:

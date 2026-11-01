@@ -265,11 +265,15 @@ class MaterialStore:
             elif target.exists():
                 result = json.loads(target.read_text())
             else:
-                raw = (directory / 'original').read_bytes().decode('utf-8', errors='replace')
+                raw = '' if manifest['format'] in ('video', 'mxl') else (directory / 'original').read_bytes().decode('utf-8', errors='replace')
                 if manifest['format'] == 'html':
                     parser = Sections()
                     parser.feed(raw[:4_000_000]); parser.flush()
                     sections = parser.sections
+                elif manifest['format'] == 'video':
+                    sections = [('Video score', manifest['title'] + '\n' + ' '.join(manifest.get('topics', [])))]
+                elif manifest['format'] == 'mxl':
+                    sections = [('Compressed MusicXML score', manifest['title'] + '\n' + ' '.join(manifest.get('topics', [])))]
                 else:
                     sections = [('Source notation', raw)]
                 chunks = []
@@ -294,22 +298,42 @@ class MaterialStore:
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         db = sqlite3.connect(self.root / 'search.sqlite3', timeout=10)
         db.execute('CREATE VIRTUAL TABLE IF NOT EXISTS excerpts USING fts5(source_id UNINDEXED, content_hash UNINDEXED, chunk_index UNINDEXED, title, text)')
+        db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS reviewed_examples USING fts5(example_id UNINDEXED, source_id UNINDEXED, content_hash UNINDEXED, text, tokenize='porter unicode61')")
         try:
             with db:
                 yield db
         finally:
             db.close()
 
-    def retrieve(self, requests, *, deadline=None):
+    def index_examples(self, source_id, content_hash):
+        """Index reviewed units, including notation-independent teaching metadata."""
+        values = []
+        for path in sorted((self.root / 'examples').glob('EX-*.json')):
+            value = json.loads(path.read_text())
+            if (value.get('source_id'), value.get('source_sha256')) != (source_id, content_hash):
+                continue
+            if value.get('id') != 'EX-' + sha(encoded({k: v for k, v in value.items() if k != 'id'}))[:24]:
+                raise MaterialError('A cached example failed its integrity check.')
+            values.append(value)
+        with self.database() as db:
+            db.execute('DELETE FROM reviewed_examples WHERE source_id=?', (source_id,))
+            for value in values:
+                description = value['review']['scope'] + ' ' + ' '.join(value.get('learning', {}).get('objectives', [])) + ' ' + ' '.join(value.get('learning', {}).get('tags', []))
+                db.execute('INSERT INTO reviewed_examples VALUES (?,?,?,?)', (value['id'], source_id, content_hash, description))
+        return {v['id']: v for v in values}
+
+    def retrieve(self, requests, *, deadline=None, requirements=None):
         if not isinstance(requests, list) or len(requests) > 2:
             raise MaterialError('At most two sources can be requested.')
+        source_ids = [request['source_id'] for request in requests]
+        if len(source_ids) != len(set(source_ids)):
+            raise MaterialError('Request each source only once.')
+        for source_id in source_ids:
+            self.source(source_id)  # Contract errors must not depend on the excerpt budget.
         deadline = deadline or time.monotonic() + 90
-        packets, images, failures = [], [], []
+        batches, packets, images, failures = [], [], [], []
         for request in requests:
             source_id = request['source_id']
-            self.source(source_id)  # Invented IDs are a contract error, never a network fallback.
-            if len(packets) >= MAX_EXCERPTS:
-                break
             try:
                 manifest = self.fetch(source_id, deadline=deadline)
                 pages = request.get('pages', [])
@@ -318,20 +342,37 @@ class MaterialStore:
                 if any(type(p) is not int or not 1 <= p <= 300 for p in pages) or len(pages) > 2:
                     raise MaterialError('At most two PDF pages per source can be requested.')
                 document = self.extract(manifest, deadline=deadline)
+                examples = self.index_examples(source_id, manifest['sha256'])
+                search = {'method': 'explicit_pages', 'attempts': [], 'matched_examples': []}
                 if pages:
                     selected = [p - 1 for p in dict.fromkeys(pages)]
                     if any(p >= len(document['chunks']) for p in selected):
                         raise MaterialError('Requested PDF page does not exist.')
                 else:
                     terms = re.findall(r'[\w-]{2,40}', request.get('query', ''), flags=re.UNICODE)[:12]
-                    query = ' OR '.join('"' + term.replace('"', '') + '"' for term in terms)
+                    if not terms:
+                        raise MaterialError('Provide search words or explicit page numbers.')
+                    quoted = ['"' + term.replace('"', '') + '"' for term in terms]
+                    query = ' OR '.join(quoted)
                     with self.database() as db:
+                        # One bounded query relaxation, never substitute an unrelated first page.
+                        exact = ' AND '.join(quoted)
+                        example_rows = db.execute('SELECT example_id FROM reviewed_examples WHERE reviewed_examples MATCH ? AND source_id=? AND content_hash=? ORDER BY rank LIMIT 2',
+                                                  (exact, source_id, manifest['sha256'])).fetchall()
+                        search['attempts'].append({'index': 'reviewed_examples', 'query': exact, 'hits': len(example_rows)})
+                        if not example_rows and exact != query:
+                            example_rows = db.execute('SELECT example_id FROM reviewed_examples WHERE reviewed_examples MATCH ? AND source_id=? AND content_hash=? ORDER BY rank LIMIT 2',
+                                                      (query, source_id, manifest['sha256'])).fetchall()
+                            search['attempts'].append({'index': 'reviewed_examples', 'query': query, 'hits': len(example_rows)})
                         rows = db.execute('SELECT chunk_index FROM excerpts WHERE excerpts MATCH ? AND source_id=? AND content_hash=? ORDER BY rank LIMIT 2',
-                                          (query or '"piano"', source_id, manifest['sha256'])).fetchall()
-                    selected = [int(row[0]) for row in rows] or list(range(min(1, len(document['chunks']))))
-                selected = selected[:MAX_EXCERPTS - len(packets)]
-                if manifest['format'] == 'pdf':
-                    self.extract(manifest, pages=[p + 1 for p in selected], deadline=deadline)
+                                          (query, source_id, manifest['sha256'])).fetchall()
+                    search.update(method='reviewed_examples_then_page_text', matched_examples=[r[0] for r in example_rows])
+                    search['attempts'].append({'index': 'excerpts', 'query': query, 'hits': len(rows)})
+                    selected = [i for row in example_rows for i, c in enumerate(document['chunks']) if c['locator'] == examples[row[0]]['locator']]
+                    selected = list(dict.fromkeys(selected + [int(row[0]) for row in rows]))
+                    if not selected:
+                        raise MaterialError('No matching reviewed example or source text. Try different terms or inspect an explicit page; no unrelated page was substituted.')
+                batch = {'source_id': source_id, 'manifest': manifest, 'candidates': [], 'supplied': []}
                 for index in selected:
                     chunk = document['chunks'][index]
                     locator = chunk['locator']
@@ -346,15 +387,51 @@ class MaterialStore:
                               'source': {k: manifest[k] for k in ('title', 'author', 'publisher', 'url', 'resolved_url', 'sha256', 'retrieved_at')},
                               'locator': locator, 'text': excerpt,
                               'text_truncated': chunk['truncated'] or len(excerpt) < len(text),
-                              'text_start': start, 'image_number': None, 'verified_examples': []}
-                    if manifest['format'] == 'pdf' and len(images) < MAX_IMAGES:
-                        images.append(str(self.root / 'objects' / manifest['sha256'] / f'page-{index + 1}.png'))
-                        packet['image_number'] = len(images)
-                    packet['verified_examples'] = self.examples(source_id, manifest['sha256'], locator)
-                    packets.append(packet)
+                              'text_start': start, 'image_number': None, 'verified_examples': [], 'retrieval': copy.deepcopy(search)}
+                    candidates = [e for e in examples.values() if e['locator'] == locator]
+                    candidates.sort(key=lambda e: (e['id'] not in search['matched_examples'], e['id']))
+                    packet['verified_examples'] = candidates[:2]
+                    packet['example_fit'] = {e['id']: example_fit(e, requirements) for e in packet['verified_examples']}
+                    batch['candidates'].append(packet)
+                batches.append(batch)
             except MaterialError as exc:
                 failures.append({'source_id': source_id, 'reason': str(exc)[:300]})
-        return {'materials': packets, 'material_failures': failures, 'images': images}
+
+        # Take the best match from each source before spending another slot on
+        # either one. Failed pages consume no slot; another match can fill it.
+        # Render only pages that will actually be supplied to the model.
+        while len(packets) < MAX_EXCERPTS and any(b['candidates'] for b in batches):
+            for batch in batches:
+                if len(packets) >= MAX_EXCERPTS:
+                    break
+                if not batch['candidates']:
+                    continue
+                packet = batch['candidates'].pop(0)
+                manifest = batch['manifest']
+                try:
+                    if manifest['format'] == 'pdf':
+                        if len(images) >= MAX_IMAGES:
+                            raise MaterialError('The page image budget is exhausted; this page was not supplied.')
+                        page = packet['locator']['page']
+                        self.extract(manifest, pages=[page], deadline=deadline)
+                        images.append(str(self.root / 'objects' / manifest['sha256'] / f'page-{page}.png'))
+                        packet['image_number'] = len(images)
+                    packets.append(packet)
+                    batch['supplied'].append(packet['locator'])
+                except MaterialError as exc:
+                    failures.append({'source_id': batch['source_id'], 'locator': packet['locator'], 'reason': str(exc)[:300]})
+
+        omissions = [{'source_id': b['source_id'], 'reason': 'excerpt_budget',
+                      'locators': [p['locator'] for p in b['candidates']]}
+                     for b in batches if b['candidates']]
+        for batch in batches:
+            for packet in packets:
+                if packet['source_id'] == batch['source_id']:
+                    packet['retrieval']['allocation'] = {
+                        'method': 'round_robin_by_source', 'excerpt_limit': MAX_EXCERPTS,
+                        'supplied': copy.deepcopy(batch['supplied']),
+                        'omitted': [p['locator'] for p in batch['candidates']]}
+        return {'materials': packets, 'material_failures': failures, 'material_omissions': omissions, 'images': images}
 
     def examples(self, source_id, content_hash, locator):
         result = []
@@ -366,7 +443,7 @@ class MaterialStore:
                 result.append(value)
         return result[:2]
 
-    def import_example(self, source_id, locator, notation, review):
+    def import_example(self, source_id, locator, notation, review, *, learning=None):
         """Explicit local review/import, never called by the recommendation model.
 
         A review records who compared which source bytes and which musical aspects.
@@ -387,7 +464,21 @@ class MaterialStore:
         value = {'source_id': source_id, 'source_sha256': manifest['sha256'], 'locator': locator,
                  'notation': copy.deepcopy(notation), 'notation_sha256': parsed['sha256'],
                  'bars': len(parsed['bars']), 'key': parsed['key'], 'review': copy.deepcopy(review)}
+        if learning is not None:
+            if (not isinstance(learning, dict) or set(learning) != {'objectives', 'tags'} or
+                    any(not isinstance(learning[k], list) or not 1 <= len(learning[k]) <= 12 or
+                        any(not isinstance(s, str) or not 1 <= len(s.strip()) <= 400 for s in learning[k]) for k in learning)):
+                raise MaterialError('Learning metadata needs 1–12 explicit objectives and tags; it is not a mastery assessment.')
+            value['learning'] = copy.deepcopy(learning)
         value['id'] = 'EX-' + sha(encoded(value))[:24]
         atomic(self.root / 'examples' / (value['id'] + '.json'), encoded(value))
         return value
+
+
+def example_fit(example, requirements=None):
+    """Mechanical fit only. A teacher must still judge the actual learning goal."""
+    requirements = requirements or {}
+    mismatches = [name for name in ('key', 'bars') if requirements.get(name) is not None and example[name] != requirements[name]]
+    return {'exact_conditions_match': not mismatches, 'mismatches': mismatches,
+            'pedagogical_fit': 'requires_teacher_judgment', 'requested_focus': requirements.get('focus', [])}
 

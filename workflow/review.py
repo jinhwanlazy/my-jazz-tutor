@@ -879,7 +879,7 @@ def main(argv=None):
         elif args.command == "material-import":
             from materials import MaterialStore
             value = json.loads(args.input.read_text())
-            result = MaterialStore().import_example(value['source_id'], value['locator'], value['notation'], value['review'])
+            result = MaterialStore().import_example(value['source_id'], value['locator'], value['notation'], value['review'], learning=value.get('learning'))
         elif args.command == "recommend-materials":
             from coaching_materials import prepare_context
             context = prepare_context(args.practice_root, data, json.loads(args.context.read_text()), json.loads(args.plan.read_text()))

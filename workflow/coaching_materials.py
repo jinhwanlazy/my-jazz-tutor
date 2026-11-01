@@ -33,6 +33,9 @@ Do not restrict the goal to the catalog. Give a musically useful phrase/form (4,
 and explain how it differs from recent work. Unknown performance remains unknown.
 Then choose up to TWO potentially useful sources from material_catalog. Supply English search words
 for a lesson/example, and PDF page numbers only when known; [] asks the app to search extracted text.
+Set example_requirements to the planned key/bar count when essential (otherwise null), with precise
+focus terms. A library match must serve this goal; never shrink an eight-bar phrasing goal into a
+one-bar shell exercise simply because that excerpt is available. Retrieval is lexical, not proof of fit.
 The app will fetch and search those sources and supply the selected text and score images. You have NOT
 read those sources yet. URLs and catalog titles alone do not establish what their scores contain.
 Request no materials when none is relevant, and explain why in material_reason. The curriculum is not
@@ -57,7 +60,8 @@ def prepare_context(root, data, context, plan, *, store=None, deadline=None):
         current = context_for(root, data, context.get('display_language'), context.get('request', ''))
         if digest(context) != digest(current):
             raise RecommendationError('stale')
-    fetched = (store or MaterialStore()).retrieve(plan['material_requests'], deadline=deadline or time.monotonic() + 90)
+    fetched = (store or MaterialStore()).retrieve(plan['material_requests'], deadline=deadline or time.monotonic() + 90,
+                                                requirements=plan['example_requirements'])
     preparation = {'version': 1, 'goal_plan': copy.deepcopy(plan), **fetched}
     result = copy.deepcopy(context) | {'preparation': preparation}
     # Retain whole music examples, never truncate ABC. Text excerpts may be shortened explicitly.
@@ -109,6 +113,9 @@ def hydrate_result(candidate, context):
             example = examples.get(ref['example_id'])
             if not example or ref['changes'] or ref['source_excerpt']:
                 raise ValueError('Exact source reuse requires a supplied reviewed example, without changes.')
+            fit = packet.get('example_fit', {}).get(ref['example_id'], {})
+            if fit.get('exact_conditions_match') is False:
+                raise ValueError('Exact source reuse does not match planned key/bar conditions: ' + ', '.join(fit['mismatches']))
             originals.append(example['notation'])
         elif ref['mode'] == 'source_adapted':
             if not ref['changes'] or not result['exercise']['notation'] or not ref['source_excerpt']:

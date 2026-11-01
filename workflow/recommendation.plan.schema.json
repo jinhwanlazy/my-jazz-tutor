@@ -7,7 +7,8 @@
     "stretch",
     "form",
     "material_reason",
-    "material_requests"
+    "material_requests",
+    "example_requirements"
   ],
   "properties": {
     "objective": {
@@ -72,6 +73,51 @@
               "minimum": 1,
               "maximum": 300
             }
+          }
+        }
+      }
+    },
+    "example_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "bars",
+        "focus"
+      ],
+      "properties": {
+        "key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bars": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "focus": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
           }
         }
       }

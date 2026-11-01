@@ -49,6 +49,25 @@ class MaterialTests(unittest.TestCase):
                 'reviewer': 'Synthetic verifier', 'checked': ['pitches', 'durations', 'spelling', 'voices', 'expression'],
                 'notes': 'Synthetic comparison receipt for a fixture; not real publication evidence.'}
 
+    def two_sources(self, format='html'):
+        sources = [dict(self.source, format=format),
+                   dict(self.source, id=m.catalog()[1]['id'], url='https://example.test/second', format=format)]
+        self.store = m.MaterialStore(self.cache, sources, self.fetch)
+        return [{'source_id': s['id'], 'query': 'syncopation offbeat', 'pages': []} for s in sources]
+
+    def reviewed_sources(self):
+        self.body = (b'<h1>Written example</h1><p>Synthetic notes.</p>'
+                     b'<h2>Syncopation method</h2><p>Clap offbeat attacks.</p>'
+                     b'<h2>Syncopation application</h2><p>Place offbeat answers.</p>')
+        requests = self.two_sources()
+        for request in requests:
+            manifest = self.store.fetch(request['source_id'])
+            locator = self.store.extract(manifest)['chunks'][0]['locator']
+            self.store.import_example(request['source_id'], locator, abc_result()['exercise']['notation'],
+                                      self.review_record(manifest),
+                                      learning={'objectives': ['Play syncopation.'], 'tags': ['offbeat']})
+        return requests
+
     def test_lazy_download_cache_hit_conditional_refresh_and_content_versions(self):
         self.assertFalse(self.cache.exists())
         first = self.store.retrieve(self.requests())
@@ -95,6 +114,129 @@ class MaterialTests(unittest.TestCase):
         self.assertFalse(result['materials'])
         self.assertIn('time limit', result['material_failures'][0]['reason'])
         self.assertEqual(self.calls, [])
+
+    def test_each_requested_source_gets_its_best_match_before_more_slots_are_used(self):
+        requests = self.reviewed_sources()
+        for ordered in (requests, requests[::-1]):
+            with self.subTest(order=[r['source_id'] for r in ordered]):
+                result = self.store.retrieve(ordered)
+                first, second = [r['source_id'] for r in ordered]
+                self.assertEqual([p['source_id'] for p in result['materials']], [first, second, first])
+                self.assertTrue(all(p['verified_examples'] for p in result['materials'][:2]))
+                self.assertFalse(result['material_failures'])
+                for source_id in (first, second):
+                    shown = [p['locator'] for p in result['materials'] if p['source_id'] == source_id]
+                    omitted = next(o for o in result['material_omissions'] if o['source_id'] == source_id)
+                    self.assertEqual(omitted['reason'], 'excerpt_budget')
+                    self.assertEqual(len(shown) + len(omitted['locators']), 3)
+                    self.assertFalse(any(locator in shown for locator in omitted['locators']))
+                    for packet in result['materials']:
+                        if packet['source_id'] == source_id:
+                            self.assertEqual(packet['retrieval']['allocation']['supplied'], shown)
+                            self.assertEqual(packet['retrieval']['allocation']['omitted'], omitted['locators'])
+
+    def test_single_available_source_can_fill_the_budget_and_failures_remain_explicit(self):
+        requests = self.reviewed_sources()
+        alone = self.store.retrieve(requests[:1])
+        self.assertEqual(len(alone['materials']), 3)
+        self.assertEqual(alone['material_omissions'], [])
+        fetch = self.store.fetch
+        for missing in requests:
+            def unavailable(source_id, **kwargs):
+                if source_id == missing['source_id']:
+                    raise m.MaterialError('Synthetic HTTP 403')
+                return fetch(source_id, **kwargs)
+            with self.subTest(missing=missing['source_id']), patch.object(self.store, 'fetch', side_effect=unavailable):
+                result = self.store.retrieve(requests)
+            self.assertEqual(len(result['materials']), 3)
+            self.assertTrue(all(p['source_id'] != missing['source_id'] for p in result['materials']))
+            self.assertEqual(result['material_omissions'], [])
+            self.assertEqual(result['material_failures'], [{'source_id': missing['source_id'], 'reason': 'Synthetic HTTP 403'}])
+
+    def test_source_validation_does_not_depend_on_remaining_slots(self):
+        requests = self.reviewed_sources()
+        calls = len(self.calls)
+        with self.assertRaisesRegex(m.MaterialError, 'Unknown'):
+            self.store.retrieve([requests[0], dict(requests[1], source_id='invented')])
+        with self.assertRaisesRegex(m.MaterialError, 'only once'):
+            self.store.retrieve([requests[0], requests[0]])
+        self.assertEqual(len(self.calls), calls)
+
+    def test_review_metadata_is_searchable_but_old_source_versions_and_unrelated_pages_are_not(self):
+        manifest = self.store.fetch(self.source['id'])
+        locator = self.store.extract(manifest)['chunks'][0]['locator']
+        asset = self.store.import_example(self.source['id'], locator, abc_result()['exercise']['notation'],
+                                          self.review_record(manifest),
+                                          learning={'objectives': ['Approach a target chromatically.'], 'tags': ['enclosure']})
+        requests = self.requests(query='approaching enclosure missingterm')
+        result = self.store.retrieve(requests)
+        packet = result['materials'][0]
+        self.assertEqual(packet['verified_examples'][0]['id'], asset['id'])
+        self.assertEqual([a['hits'] for a in packet['retrieval']['attempts'][:2]], [0, 1])
+        empty = self.store.retrieve(self.requests(query='unmatchedsyntheticterm'))
+        self.assertEqual(empty['materials'], [])
+        self.assertIn('No matching', empty['material_failures'][0]['reason'])
+        self.body = b'<h1>New edition</h1><p>Different synthetic content.</p>'
+        self.store.fetch(self.source['id'], refresh=True)
+        self.assertEqual(self.store.retrieve(requests)['materials'], [])
+        self.assertTrue((self.cache / 'examples' / (asset['id'] + '.json')).is_file())
+
+    def test_planned_key_and_length_block_exact_reuse_without_changing_the_source(self):
+        manifest = self.store.fetch(self.source['id'])
+        locator = self.store.extract(manifest)['chunks'][1]['locator']
+        notation = abc_result()['exercise']['notation']
+        asset = self.store.import_example(self.source['id'], locator, notation, self.review_record(manifest))
+        context = rec.context_for(self.practice, self.data)
+        goal = plan(); goal['material_requests'] = self.requests()
+        goal['example_requirements'] = {'key': 'C', 'bars': 8, 'focus': ['melodic phrasing']}
+        prepared = cm.prepare_context(self.practice, self.data, context, goal, store=self.store)
+        packet = prepared['preparation']['materials'][0]
+        self.assertEqual(packet['example_fit'][asset['id']]['mismatches'], ['key', 'bars'])
+        value = abc_result(); value['exercise']['notation'] = None
+        value['references'] = [{'source_id': self.source['id'], 'excerpt_id': packet['excerpt_id'],
+                                'example_id': asset['id'], 'role': 'exercise_source', 'mode': 'source_original',
+                                'source_excerpt': None, 'changes': []}]
+        with self.assertRaisesRegex(ValueError, 'planned key/bar'):
+            cm.hydrate_result(value, prepared)
+        self.assertEqual(json.loads((self.cache / 'examples' / (asset['id'] + '.json')).read_text())['notation'], notation)
+
+    def test_pdf_allocation_preserves_image_order_and_does_not_render_omitted_pages(self):
+        from PIL import Image, ImageDraw
+        requests = self.two_sources('pdf')
+        paths = {}
+        for index, request in enumerate(requests):
+            pages = [Image.new('RGB', (500, 250), 'white') for _ in range(2)]
+            for number, page in enumerate(pages):
+                ImageDraw.Draw(page).text((10, 10), f'Synthetic source {index}, page {number + 1}', fill='black')
+            path = self.root / f'source-{index}.pdf'
+            pages[0].save(path, 'PDF', save_all=True, append_images=pages[1:])
+            for page in pages:
+                page.close()
+            self.body = path.read_bytes()
+            paths[request['source_id']] = self.store.fetch(request['source_id'])
+            request['pages'] = [1, 2]
+        result = self.store.retrieve(requests)
+        self.assertEqual([p['source_id'] for p in result['materials']], [requests[0]['source_id'], requests[1]['source_id'], requests[0]['source_id']])
+        self.assertEqual([p['image_number'] for p in result['materials']], [1, 2, 3])
+        for packet in result['materials']:
+            path = Path(result['images'][packet['image_number'] - 1])
+            self.assertEqual(path.parent.name, packet['source']['sha256'])
+            self.assertEqual(path.name, f"page-{packet['locator']['page']}.png")
+            self.assertTrue(path.is_file())
+        second = paths[requests[1]['source_id']]
+        self.assertFalse((self.cache / 'objects' / second['sha256'] / 'page-2.png').exists())
+        self.assertEqual(result['material_omissions'][0]['source_id'], requests[1]['source_id'])
+        extract = self.store.extract
+        def failed_page(manifest, *, pages=None, **kwargs):
+            if manifest['id'] == requests[0]['source_id'] and pages == [1]:
+                raise m.MaterialError('Synthetic page-render failure')
+            return extract(manifest, pages=pages or [], **kwargs)
+        with patch.object(self.store, 'extract', side_effect=failed_page):
+            recovered = self.store.retrieve(requests)
+        self.assertEqual(len(recovered['materials']), 3)
+        self.assertEqual([p['image_number'] for p in recovered['materials']], [1, 2, 3])
+        self.assertEqual(recovered['material_failures'][0]['locator']['page'], 1)
+        self.assertEqual(recovered['material_omissions'], [])
 
     def test_pdf_text_and_selected_images_are_cached_without_claiming_ocr_verification(self):
         from PIL import Image, ImageDraw
