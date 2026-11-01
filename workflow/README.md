@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.6.0`; create a new tag for later releases instead of moving an old tag:
+selects `v0.6.1`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.6.0
+uv run python publish.py --ref v0.6.1
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -152,12 +152,12 @@ origin, so recover any unsent input at its original address first.
 - **Score and live input:** a grand staff shows the assigned parts, chord symbols,
   key signature, and rhythm. Blue MIDI marks keep fractional timing against the
   playback clock; their tails show physical key holds, excluding pedal sustain.
-  All bars share one continuous horizontal staff and beat scale. **Follow playback**
-  scrolls within the score as the cursor advances, without jumps at bar boundaries
-  or page turns. A score that fits the viewport stays still; the cursor returns to
-  the beginning at each loop. Turn following off to scroll manually. Note size
-  stays consistent across short and long exercises; longer scores scroll rather
-  than shrinking to fit. Whole-note
+  Scores wrap every four bars at every screen size and fit
+  the available width. The cursor moves continuously within each line and then
+  moves to the next line. **Follow playback** brings that line into view when
+  needed; turn it off to scroll manually. MIDI holds crossing a line continue
+  on the following staff without an extra attack mark. Resizing preserves the
+  current beat and MIDI buffer; layout never changes the saved music. Whole-note
   centers are transparent, and the score omits bar numbers and hand labels.
   Improvisation has allowed pitches and rest bars, with no invented melody; bass
   diamonds mean a beat-1 attack whose

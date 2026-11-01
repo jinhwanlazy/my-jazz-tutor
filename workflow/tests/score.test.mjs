@@ -7,7 +7,7 @@ const event = pitches => ({pitches: pitches.map(midi => spell(midi))});
 const score = {bars: Array.from({length: 4}, () => ({left: [event([38])], right: [event([53, 60])]})), allowed_pitches: []};
 const at = absolute => ({absolute, bar: Math.floor(absolute / 4) % 4, pass: Math.floor(absolute / 16), beat: absolute % 4});
 
-test('score spacing stays continuous at every bar, including the former page boundary', () => {
+test('the local score time scale has no gap at a bar boundary', () => {
   const step = scoreX(.01) - scoreX(0);
   for (const boundary of [4, 8, 12, 16, 20, 24, 28, 32]) {
     assert.ok(Math.abs(scoreX(boundary) - scoreX(boundary - .01) - step) < 1e-9);

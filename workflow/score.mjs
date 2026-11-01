@@ -2,6 +2,7 @@ import {tr, locale} from './i18n.mjs';
 import {ABCLayout} from './abc-view.mjs';
 
 const NS = 'http://www.w3.org/2000/svg';
+const BARS_PER_LINE = 4;
 const HEIGHT = 320, START = 144, BAR = 208, TOP = {right: 90, left: 205};
 const LETTERS = 'CDEFGAB', SEMITONES = [0, 2, 4, 5, 7, 9, 11];
 const FLATS = {C: [], F: ['B'], Bb: ['B', 'E']};
@@ -16,7 +17,7 @@ function svg(tag, attributes = {}, text) {
 }
 function line(parent, x1, y1, x2, y2, cls) { parent.append(svg('line', {x1, y1, x2, y2, class: cls})); }
 function symbol(parent, name, x, y) { parent.append(svg('text', {x, y, class: 'score-glyph'}, glyphs[name])); }
-// One time scale for targets, the cursor and live input, including bar boundaries.
+// One time scale within each line, shared by targets, the cursor and live input.
 export function scoreX(beat) { return START + 20 + beat * BAR / 4; }
 function noteX(bar, beat) { return scoreX(bar * 4 + beat); }
 
@@ -103,9 +104,13 @@ export class ScoreView {
   }
   resize() {
     if (!this.svg || !this.root.clientWidth) return;
-    // Scale notation consistently across bar counts. SVG dimensions work under
-    // the server's CSP; inline style attributes are deliberately blocked.
-    const scale = this.abcLayout ? 1.2 : Math.min(1, Math.max(760, this.root.clientWidth) / (scoreX(16) + 24));
+    if (this.abcLayout && this.layoutWidth !== this.root.clientWidth) {
+      this.render(); return;
+    }
+    // Fit the written lines, without changing the stored score or beat clock.
+    // SVG attributes work under the server's CSP; inline styles are blocked.
+    const lineWidth = this.abcLayout ? this.width : scoreX(BARS_PER_LINE * 4) + 24;
+    const scale = Math.min(this.abcLayout ? 1.2 : 1, this.root.clientWidth / lineWidth);
     this.svg.setAttribute('width', this.width * scale);
     this.svg.setAttribute('height', this.height * scale);
   }
@@ -148,14 +153,23 @@ export class ScoreView {
     const passChanged = position.pass !== this.pass;
     if (passChanged) { this.pass = position.pass; this.input.prune(this.pass); this.caption(); }
     this.cursor.setAttribute('visibility', this.playing ? 'visible' : 'hidden');
-    const x = this.x(position.bar * (this.score.beats_per_bar || 4) + position.beat);
-    this.cursor.setAttribute('transform', `translate(${x} 0)`);
-    // Follow every frame, without threshold jumps or animation lag behind audio.
-    // Clamping keeps a fitting score still; only a loop resets to the beginning.
-    if (this.playing && this.follow.checked && this.root.clientWidth > 0) {
-      const pixel = x * this.svg.getBoundingClientRect().width / this.width;
-      const limit = Math.max(0, this.root.scrollWidth - this.root.clientWidth);
-      this.root.scrollLeft = Math.min(limit, Math.max(0, pixel - this.root.clientWidth * .55));
+    const beat = position.bar * (this.score.beats_per_bar || 4) + position.beat;
+    const system = this.system(beat), x = this.x(beat, system);
+    const top = this.bounds('right', system).top - 25, bottom = this.bounds('left', system).bottom + 25;
+    this.cursor.setAttribute('transform', `translate(${x} ${top})`);
+    this.cursor.dataset.system = system.index;
+    this.cursor.querySelector('line').setAttribute('y2', bottom - top);
+    // Follow only when entering a line. Manual scrolling stays possible within it.
+    const following = `${position.pass}:${system.index}`;
+    if (!this.follow.checked) this.followedSystem = null;
+    if (this.playing && this.follow.checked && this.root.clientWidth > 0 && this.followedSystem !== following) {
+      this.followedSystem = following;
+      const rect = this.svg.getBoundingClientRect(), scale = rect.width / this.width;
+      const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-header-height')) || 0;
+      const visibleTop = header + 20;
+      if (rect.top + top * scale < visibleTop || rect.top + bottom * scale > window.innerHeight - 20) {
+        window.scrollBy({top: rect.top + top * scale - visibleTop, behavior: 'instant'});
+      }
     }
     if (passChanged || (this.input.held.size && (!this.lastDraw || performance.now() - this.lastDraw > 50))) this.drawNotes();
   }
@@ -163,22 +177,36 @@ export class ScoreView {
     const count = this.score?.bars.length || 0;
     this.status.textContent = count ? tr`Pass ${this.pass + 1}` : '';
   }
-  x(beat) { return this.abcLayout ? this.abcLayout.x(beat) : scoreX(beat); }
+  system(beat) { return this.systems.find(system => beat < system.end) || this.systems.at(-1); }
+  x(beat, system = this.system(beat)) {
+    return this.abcLayout ? this.abcLayout.x(beat, system) : scoreX(beat - system.start);
+  }
+  bounds(hand, system) {
+    return this.abcLayout ? this.abcLayout.bounds(hand, system) :
+      {top: TOP[hand] + system.offset, bottom: TOP[hand] + 40 + system.offset};
+  }
+  overlays() {
+    this.liveLayer = svg('g', {class: 'score-live-layer', 'aria-hidden': 'true'});
+    this.cursor = svg('g', {class: 'score-cursor', visibility: 'hidden', 'aria-hidden': 'true'});
+    line(this.cursor, 0, 0, 0, 0, 'score-cursor-line');
+    this.cursor.append(svg('path', {d: 'M-5 -5 L5 -5 L0 2 Z'}));
+    this.svg.append(this.liveLayer, this.cursor);
+  }
   renderABC(scroll) {
-    this.abcLayout = new ABCLayout(this.root, this.score);
+    this.abcLayout = new ABCLayout(this.root, this.score, this.lineBars);
+    this.systems = this.abcLayout.systems;
     this.svg = this.abcLayout.svg;
     this.width = this.abcLayout.width; this.height = this.abcLayout.height;
     this.svg.setAttribute('aria-label', tr`Practice score in ${this.score.key}, ${this.score.bars.length} bars`);
-    this.liveLayer = svg('g', {class: 'score-live-layer', 'aria-hidden': 'true'});
-    this.cursor = svg('g', {class: 'score-cursor', visibility: 'hidden', 'aria-hidden': 'true'});
-    line(this.cursor, 0, this.abcLayout.bounds('right').top - 20,
-      0, this.abcLayout.bounds('left').bottom + 20, 'score-cursor-line');
-    this.svg.append(this.liveLayer, this.cursor);
+    this.overlays();
     this.resize(); this.drawNotes(); this.root.scrollLeft = scroll;
     if (this.position) this.frame(this.position);
   }
   render() {
     const scroll = this.root.scrollLeft;
+    this.layoutWidth = this.root.clientWidth;
+    this.lineBars = BARS_PER_LINE;
+    this.followedSystem = null;
     this.root.replaceChildren(); this.help?.replaceChildren(); this.caption();
     this.svg = this.cursor = this.liveLayer = this.abcLayout = null;
     if (!this.score) {
@@ -188,50 +216,55 @@ export class ScoreView {
     }
     if (this.score.format === 'abc') { this.renderABC(scroll); return; }
     const score = this.score;
-    this.width = scoreX(score.bars.length * 4) + 24;
+    this.width = scoreX(Math.min(this.lineBars, score.bars.length) * 4) + 24;
     const written = score.bars.flatMap(bar => ['left', 'right'].flatMap(hand => bar[hand].flatMap(e => e.pitches.map(p => noteY(p, hand)))));
     const minY = Math.min(0, ...written.map(y => y - 42)), maxY = Math.max(HEIGHT, ...written.map(y => y + 16));
-    this.height = maxY - minY;
-    this.svg = svg('svg', {viewBox: `0 ${minY} ${this.width} ${maxY - minY}`, role: 'img', class: 'practice-score',
+    const rowHeight = maxY - minY;
+    this.systems = Array.from({length: Math.ceil(score.bars.length / this.lineBars)}, (_, index) =>
+      ({index, start: index * this.lineBars * 4, end: Math.min(score.bars.length, (index + 1) * this.lineBars) * 4,
+        offset: index * rowHeight - minY}));
+    this.height = rowHeight * this.systems.length;
+    this.svg = svg('svg', {viewBox: `0 0 ${this.width} ${this.height}`, role: 'img', class: 'practice-score',
       width: this.width, height: this.height,
       'aria-label': tr`Practice score in ${score.key}, ${score.bars.length} bars`});
-    const canvas = this.svg;
-    const bars = score.bars;
-    for (const staff of ['right', 'left']) {
-      const top = TOP[staff];
-      for (let row = 0; row < 5; row++) line(canvas, 33, top + row * 10, this.width - 24, top + row * 10, 'score-staff-line');
-      symbol(canvas, staff === 'right' ? 'treble' : 'bass', 39, top + (staff === 'right' ? 30 : 10));
-      for (const [i, letter] of (FLATS[score.key] || []).entries()) {
-        const pitch = {letter, octave: staff === 'right' ? 4 : 2};
-        if (letter === 'E') pitch.octave++;
-        symbol(canvas, 'flat', 78 + i * 12, noteY(pitch, staff));
-      }
-      canvas.append(svg('text', {x: 116, y: top + 18, class: 'score-meter'}, '4'),
-                    svg('text', {x: 116, y: top + 39, class: 'score-meter'}, '4'));
-    }
-    // Brace and barlines join the treble and bass staves into one grand staff.
-    canvas.append(svg('path', {d: 'M26 89 C12 89 21 150 12 167 C21 184 12 245 26 245', class: 'score-brace'}));
-    line(canvas, 33, TOP.right, 33, TOP.left + 40, 'score-bar-line');
-    for (const [at, bar] of bars.entries()) {
-      const x = noteX(at, 0);
-      canvas.append(svg('text', {x, y: 49, class: 'score-chord'}, bar.chord));
-      for (let beat = 0; beat < 4; beat++) {
-        const bx = noteX(at, beat);
-        line(canvas, bx, 275, bx, 280, 'score-beat-tick');
-        canvas.append(svg('text', {x: bx, y: 298, class: 'score-beat-label'}, String(beat + 1)));
-      }
+    for (const system of this.systems) {
+      const canvas = svg('g', {transform: `translate(0 ${system.offset})`, 'data-score-system': system.index});
+      this.svg.append(canvas);
+      const bars = score.bars.slice(system.start / 4, system.end / 4);
+      const rowWidth = scoreX(bars.length * 4) + 24;
       for (const staff of ['right', 'left']) {
-        const accidentals = new Map();
-        for (const event of bar[staff]) this.drawEvent(canvas, event, staff, at, accidentals);
+        const top = TOP[staff];
+        for (let row = 0; row < 5; row++) line(canvas, 33, top + row * 10, rowWidth - 24, top + row * 10, 'score-staff-line');
+        symbol(canvas, staff === 'right' ? 'treble' : 'bass', 39, top + (staff === 'right' ? 30 : 10));
+        for (const [i, letter] of (FLATS[score.key] || []).entries()) {
+          const pitch = {letter, octave: staff === 'right' ? 4 : 2};
+          if (letter === 'E') pitch.octave++;
+          symbol(canvas, 'flat', 78 + i * 12, noteY(pitch, staff));
+        }
+        canvas.append(svg('text', {x: 116, y: top + 18, class: 'score-meter'}, '4'),
+                      svg('text', {x: 116, y: top + 39, class: 'score-meter'}, '4'));
       }
-      const end = x + BAR - (at === bars.length - 1 ? 0 : 20);
-      line(canvas, end, TOP.right, end, TOP.left + 40, 'score-bar-line');
+      // Brace and barlines join the treble and bass staves into one grand staff.
+      canvas.append(svg('path', {d: 'M26 89 C12 89 21 150 12 167 C21 184 12 245 26 245', class: 'score-brace'}));
+      line(canvas, 33, TOP.right, 33, TOP.left + 40, 'score-bar-line');
+      for (const [at, bar] of bars.entries()) {
+        const x = noteX(at, 0);
+        canvas.append(svg('text', {x, y: 49, class: 'score-chord'}, bar.chord));
+        for (let beat = 0; beat < 4; beat++) {
+          const bx = noteX(at, beat);
+          line(canvas, bx, 275, bx, 280, 'score-beat-tick');
+          canvas.append(svg('text', {x: bx, y: 298, class: 'score-beat-label'}, String(beat + 1)));
+        }
+        for (const staff of ['right', 'left']) {
+          const accidentals = new Map();
+          for (const event of bar[staff]) this.drawEvent(canvas, event, staff, system.start / 4 + at, accidentals, at);
+        }
+        const end = x + BAR - (at === bars.length - 1 ? 0 : 20);
+        line(canvas, end, TOP.right, end, TOP.left + 40, 'score-bar-line');
+      }
     }
-    this.liveLayer = svg('g', {class: 'score-live-layer', 'aria-hidden': 'true'}); canvas.append(this.liveLayer);
-    this.cursor = svg('g', {class: 'score-cursor', visibility: 'hidden', 'aria-hidden': 'true'});
-    line(this.cursor, 0, 60, 0, 270, 'score-cursor-line');
-    this.cursor.append(svg('path', {d: 'M-5 56 L5 56 L0 63 Z'})); canvas.append(this.cursor);
-    this.root.append(canvas);
+    this.overlays();
+    this.root.append(this.svg);
     this.resize();
     if (score.allowed_pitches.length) {
       const note = document.createElement('p'); note.className = 'score-improv-help';
@@ -247,8 +280,8 @@ export class ScoreView {
     this.root.scrollLeft = scroll;
     if (this.position) this.frame(this.position);
   }
-  drawEvent(canvas, event, staff, bar, accidentals) {
-    const x = noteX(bar, event.beat), top = TOP[staff];
+  drawEvent(canvas, event, staff, bar, accidentals, localBar = bar) {
+    const x = noteX(localBar, event.beat), top = TOP[staff];
     const group = svg('g', {class: 'score-target', 'data-hand': staff, 'data-bar': bar, 'data-beat': event.beat,
       'data-kind': event.kind, 'data-duration': event.duration ?? ''});
     canvas.append(group);
@@ -290,37 +323,44 @@ export class ScoreView {
       const bar = Math.floor(note.start / beats) % this.score.bars.length;
       const candidates = this.score.bars[bar][note.staff].flatMap(e => e.pitches).concat(this.score.allowed_pitches);
       const pitch = candidates.find(p => p.midi === note.midi) || spell(note.midi, this.score.key);
-      const bounds = this.abcLayout?.bounds(note.staff);
-      const rawY = this.abcLayout ? this.abcLayout.y(pitch, note.staff) : noteY(pitch, note.staff);
-      const min = (bounds?.top ?? TOP[note.staff]) - 35, max = (bounds?.bottom ?? TOP[note.staff] + 40) + 45;
-      const y = Math.max(min, Math.min(max, rawY));
       const group = svg('g', {class: 'score-live-note', 'data-midi': note.midi, 'data-start': note.start,
         'data-end': note.end ?? '', 'data-hand': note.staff});
       group.append(svg('title', {}, pitch.name));
-      const from = Math.max(note.start, passStart), to = Math.min(end, passEnd);
-      if (to > from) {
-        line(group, this.x(from - passStart), y, this.x(to - passStart), y,
-          note.interrupted ? 'score-hold interrupted' : 'score-hold');
-      }
-      if (note.start >= passStart) {
-        const x = this.x(bar * beats + note.start % beats);
-        if (y !== rawY) {
-          group.append(svg('text', {x, y, class: 'score-edge-note'}, `${rawY < min ? '↑' : '↓'}${pitch.name}`));
-        } else {
-          if (bounds) {
-            const gap = (bounds.bottom - bounds.top) / 4;
-            for (let at = bounds.top - gap; at >= y - .1; at -= gap) line(group, x - 9, at, x + 9, at, 'score-ledger');
-            for (let at = bounds.bottom + gap; at <= y + .1; at += gap) line(group, x - 9, at, x + 9, at, 'score-ledger');
-            const alteredInScore = this.score.key_signature?.[pitch.letter] ||
-              candidates.some(p => p.letter === pitch.letter && p.octave === pitch.octave && p.alter);
-            if (pitch.alter || alteredInScore) {
-              const mark = {'-2':'𝄫', '-1':'♭', 0:'♮', 1:'♯', 2:'𝄪'}[pitch.alter];
-              group.append(svg('text', {x: x - 17, y: y + 5, 'font-size': 17}, mark));
-            }
+      const from = Math.max(note.start, passStart) - passStart, to = Math.min(end, passEnd) - passStart;
+      for (const system of this.systems) {
+        const start = Math.max(from, system.start), stop = Math.min(to, system.end);
+        const onset = note.start - passStart;
+        const hasHead = onset >= system.start && onset < system.end;
+        if (stop <= start && !hasHead) continue;
+        const segment = svg('g', {'data-system': system.index}); group.append(segment);
+        const bounds = this.bounds(note.staff, system);
+        const rawY = this.abcLayout ? this.abcLayout.y(pitch, note.staff, system) : noteY(pitch, note.staff) + system.offset;
+        const min = bounds.top - 35, max = bounds.bottom + 45;
+        const y = Math.max(min, Math.min(max, rawY));
+        if (stop > start) {
+          line(segment, this.x(start, system), y, this.x(stop, system), y,
+            note.interrupted ? 'score-hold interrupted' : 'score-hold');
+        }
+        if (hasHead) {
+          const x = this.x(onset, system);
+          if (y !== rawY) {
+            segment.append(svg('text', {x, y, class: 'score-edge-note'}, `${rawY < min ? '↑' : '↓'}${pitch.name}`));
           } else {
-            ledger(group, x, y, note.staff); accidental(group, pitch, x, y, this.score.key, true);
+            const gap = (bounds.bottom - bounds.top) / 4;
+            for (let at = bounds.top - gap; at >= y - .1; at -= gap) line(segment, x - 9, at, x + 9, at, 'score-ledger');
+            for (let at = bounds.bottom + gap; at <= y + .1; at += gap) line(segment, x - 9, at, x + 9, at, 'score-ledger');
+            if (this.abcLayout) {
+              const alteredInScore = this.score.key_signature?.[pitch.letter] ||
+                candidates.some(p => p.letter === pitch.letter && p.octave === pitch.octave && p.alter);
+              if (pitch.alter || alteredInScore) {
+                const mark = {'-2':'𝄫', '-1':'♭', 0:'♮', 1:'♯', 2:'𝄪'}[pitch.alter];
+                segment.append(svg('text', {x: x - 17, y: y + 5, 'font-size': 17}, mark));
+              }
+            } else {
+              accidental(segment, pitch, x, y, this.score.key, true);
+            }
+            segment.append(svg('ellipse', {cx: x, cy: y, rx: 5, ry: 3.7, class: 'score-input-head'}));
           }
-          group.append(svg('ellipse', {cx: x, cy: y, rx: 5, ry: 3.7, class: 'score-input-head'}));
         }
       }
       this.liveLayer.append(group);

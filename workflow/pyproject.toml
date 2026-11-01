@@ -1,6 +1,6 @@
 [project]
 name = "my-jazz-tutor-workflow"
-version = "0.6.0"
+version = "0.6.1"
 description = "Local, versioned jazz practice workflow and evidence log"
 requires-python = ">=3.11"
 dependencies = [

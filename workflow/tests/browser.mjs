@@ -92,7 +92,7 @@ try {
   await hidden('#recommendation-focus');
   await visible('#generation-panel');
   await page.waitForFunction(()=>document.querySelector('#generation-panel').getAttribute('aria-busy')==='true');
-  assert.match(await page.locator('#generation-message').textContent(),/Your focus is included/);
+  assert.match(await page.locator('#generation-message').textContent(),/Your (?:requested )?focus is included/);
   await visible('#retry-recommendation');
   await visible('#recommendation-focus');
   assert.equal(await page.locator('#recommendation-request').inputValue(),'simulate:auth');
@@ -178,50 +178,53 @@ try {
     view.midi([0x90, 50, 100], 'test', at(8.1, 4)); // D3 belongs to the right hand here.
     const low = root.querySelector('.score-live-note[data-midi="50"]');
     const lowRight = low.dataset.hand === 'right' && Boolean(low.querySelector('.score-input-head')) && !low.querySelector('.score-edge-note');
-    const alignedY = low.querySelector('.score-input-head').getAttribute('cy') === root.querySelector('.score-target[data-bar="2"][data-hand="right"] [data-midi="50"] ellipse').getAttribute('cy');
+    const centerY = node => new DOMPoint(+node.getAttribute('cx'), +node.getAttribute('cy')).matrixTransform(node.getCTM()).y;
+    const alignedY = Math.abs(centerY(low.querySelector('.score-input-head')) -
+      centerY(root.querySelector('.score-target[data-bar="2"][data-hand="right"] [data-midi="50"] ellipse'))) < .001;
     view.setScore(score('E06')); view.begin();
     const consistentNoteSize=Math.abs(root.querySelector('.score-glyph').getBoundingClientRect().height-shortGlyphHeight)<.1;
     const canvas = root.querySelector('svg');
     const cursorX = () => view.cursor.transform.baseVal.consolidate().matrix.e;
     const positions = [];
     for (let beat = 0; beat <= 31.9; beat += .1) {
-      view.frame(at(beat, 8)); positions.push({x: cursorX(), scroll: root.scrollLeft});
+      view.frame(at(beat, 8)); positions.push({x: cursorX(), row: +view.cursor.dataset.system});
     }
     const continuous = positions.every((value, i) => !i ||
-      (Math.abs(value.x - positions[i - 1].x - 5.2) < .001 &&
-       value.scroll >= positions[i - 1].scroll && value.scroll - positions[i - 1].scroll <= 5));
+      (value.row !== positions[i - 1].row ? value.row === positions[i - 1].row + 1 && value.x < positions[i - 1].x :
+       Math.abs(value.x - positions[i - 1].x - 5.2) < .001));
     const oneCanvas = canvas === root.querySelector('svg') && root.querySelectorAll('.score-chord').length === 8;
     view.begin(); view.frame(at(15.8, 8));
     const tailStart = cursorX();
     view.midi([0x90, 62, 100], 'test', at(15.8, 8));
     view.frame(at(16.2, 8)); view.midi([0x80, 62, 0], 'test', at(16.2, 8));
-    const tail = root.querySelector('.score-hold');
-    const joinedTail = root.querySelectorAll('.score-hold').length === 1 &&
-      Math.abs(Number(tail.getAttribute('x1')) - tailStart) < .001 &&
-      Math.abs(Number(tail.getAttribute('x2')) - cursorX()) < .001;
+    const tails = [...root.querySelectorAll('.score-hold')];
+    const wrappedTail = tails.length === 2 &&
+      Math.abs(Number(tails[0].getAttribute('x1')) - tailStart) < .001 &&
+      Math.abs(Number(tails[1].getAttribute('x2')) - cursorX()) < .001 &&
+      Number(tails[1].getAttribute('y1')) > Number(tails[0].getAttribute('y1'));
     view.frame(at(20, 8));
-    const followingScroll = root.scrollLeft;
-    follow.checked = false; root.scrollLeft = 90;
+    const followingScroll = window.scrollY;
+    follow.checked = false; window.scrollTo(0, 0);
     view.frame(at(22, 8));
-    const manualScroll = root.scrollLeft === 90 && followingScroll > 90;
+    const manualScroll = window.scrollY === 0 && followingScroll > 0;
     follow.checked = true;
     view.frame(at(31.8, 8));
     view.midi([0x90, 62, 100], 'test', at(31.8, 8));
     view.frame(at(32.2, 8)); view.drawNotes();
-    const loop = /Pass 2/.test(status.textContent) && root.scrollLeft === 0;
+    const loop = /Pass 2/.test(status.textContent) && view.cursor.dataset.system === '0' && root.scrollLeft === 0;
     const continuedHold = Boolean(root.querySelector('.score-hold')) && !root.querySelector('.score-input-head');
     view.pause(at(32.4, 8));
     const interrupted = Boolean(root.querySelector('.score-hold.interrupted'));
     view.begin();
     const reset = root.querySelectorAll('.score-live-note').length === 0;
     view.frame(at(14, 8));
-    const localScroll = root.scrollLeft > 0;
+    const verticalFollow = window.scrollY > 0 && root.scrollWidth === root.clientWidth;
     host.style.width = '1200px'; view.setScore(score('E04')); view.begin(); view.frame(at(14, 4));
     const fittingScore = root.scrollLeft === 0 && root.scrollWidth === root.clientWidth;
     view.setScore(null); view.frame(at(15, 4));
     const fallback = !root.querySelector('svg') && root.textContent.includes('not available');
-    host.remove();
-    return {hollowWhole, lowRight, alignedY, consistentNoteSize, continuous, oneCanvas, joinedTail, manualScroll, loop, continuedHold, interrupted, reset, localScroll, fittingScore, fallback};
+    view.resizeObserver.disconnect(); host.remove();
+    return {hollowWhole, lowRight, alignedY, consistentNoteSize, continuous, oneCanvas, wrappedTail, manualScroll, loop, continuedHold, interrupted, reset, verticalFollow, fittingScore, fallback};
   }, notationFixtures);
   assert.ok(Object.values(displayChecks).every(Boolean), JSON.stringify(displayChecks));
   await page.locator('#playback-settings > summary').click();

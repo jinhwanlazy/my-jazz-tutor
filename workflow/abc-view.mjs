@@ -10,22 +10,24 @@ export function interpolate(anchors, beat) {
 }
 
 export class ABCLayout {
-  constructor(root, score) {
+  constructor(root, score, barsPerLine = 4) {
     if (!globalThis.ABCJS) throw new Error('The score library could not be loaded. Reload the page.');
+    const breaks = Array.from({length: Math.floor((score.bars.length - 1) / barsPerLine)},
+      (_, i) => (i + 1) * barsPerLine - 1);
     const tune = globalThis.ABCJS.renderAbc(root, score.abc, {
-      add_classes: true, lineBreaks: [[]], staffwidth: Math.max(550, score.bars.length * 180),
+      add_classes: true, lineBreaks: [breaks],
+      staffwidth: Math.max(250, (root.clientWidth || 900) / 1.2 - 40),
       paddingtop: 15, paddingbottom: 30, paddingleft: 20, paddingright: 20,
       foregroundColor: '#364b40',
       afterParsing: tune => { tune.metaText = {}; tune.formatting.stretchlast = true; }
     })[0];
-    // abcjs sizes its wrapper for a static engraving. Our viewport owns scrolling
-    // and the SVG is scaled with width/height attributes below.
+    // Our viewport sizes the SVG using attributes, compatible with the app's CSP.
     for (const property of ['overflow', 'width', 'height']) root.style.removeProperty(property);
     if (tune.warnings?.length) throw new Error('The score could not be rendered without warnings.');
     const groups = tune.engraver.staffgroups;
-    if (groups.length !== 1 || groups[0].staffs.length !== 2) throw new Error('The score must use one continuous grand staff.');
-    const group = groups[0];
-    this.staffs = {right: group.staffs[0], left: group.staffs[1]};
+    if (groups.length !== breaks.length + 1 || groups.some(group => group.staffs.length !== 2)) {
+      throw new Error('The score must use two staves on each line.');
+    }
     this.svg = root.querySelector('svg');
     this.width = Number(this.svg.getAttribute('width'));
     this.height = Number(this.svg.getAttribute('height'));
@@ -33,26 +35,35 @@ export class ABCLayout {
     this.svg.setAttribute('class', 'practice-score abc-score');
     this.svg.setAttribute('role', 'img');
     const byChar = new Map(score.events.map(e => [e.start_char, e]));
-    const positions = new Map();
-    let end = 0;
-    for (const voice of group.voices) for (const item of voice.children) {
-      if (item.type === 'bar') end = Math.max(end, item.x);
-      const event = byChar.get(item.abcelem?.startChar);
-      if (item.abcelem?.el_type !== 'note' || !event) continue;
-      const beat = event.bar * score.beats_per_bar + event.beat;
-      positions.set(beat, Math.min(positions.get(beat) ?? Infinity, item.x + 4));
-    }
-    positions.set(score.bars.length * score.beats_per_bar, end);
-    this.anchors = [...positions].sort((a, b) => a[0] - b[0]);
-    if (this.anchors[0]?.[0] !== 0 || this.anchors.some((p, i) => i && p[1] <= this.anchors[i - 1][1])) {
-      throw new Error('The rendered score does not have a continuous time axis.');
-    }
+    this.systems = groups.map((group, index) => {
+      const start = index * barsPerLine * score.beats_per_bar;
+      const end = Math.min(score.bars.length, (index + 1) * barsPerLine) * score.beats_per_bar;
+      const positions = new Map();
+      let endX = 0;
+      for (const voice of group.voices) for (const item of voice.children) {
+        if (item.type === 'bar') endX = Math.max(endX, item.x);
+        const event = byChar.get(item.abcelem?.startChar);
+        if (item.abcelem?.el_type !== 'note' || !event) continue;
+        const beat = event.bar * score.beats_per_bar + event.beat;
+        positions.set(beat, Math.min(positions.get(beat) ?? Infinity, item.x + 4));
+      }
+      positions.set(end, endX);
+      const anchors = [...positions].sort((a, b) => a[0] - b[0]);
+      if (anchors[0]?.[0] !== start || anchors.some((p, i) => i && p[1] <= anchors[i - 1][1])) {
+        throw new Error('A score line does not have a continuous time axis.');
+      }
+      return {index, start, end, anchors, staffs: {right: group.staffs[0], left: group.staffs[1]}};
+    });
   }
-  x(beat) { return interpolate(this.anchors, beat); }
-  y(pitch, hand) {
+  system(beat) { return this.systems.find(system => beat < system.end) || this.systems.at(-1); }
+  x(beat, system = this.system(beat)) { return interpolate(system.anchors, beat); }
+  y(pitch, hand, system = this.systems[0]) {
     const bottom = hand === 'right' ? 30 : 18; // E4 / G2, in diatonic steps.
-    const step = (this.staffs[hand].bottomLine - this.staffs[hand].topLine) / 8;
-    return this.staffs[hand].bottomLine - (pitch.octave * 7 + 'CDEFGAB'.indexOf(pitch.letter) - bottom) * step;
+    const staff = system.staffs[hand];
+    const step = (staff.bottomLine - staff.topLine) / 8;
+    return staff.bottomLine - (pitch.octave * 7 + 'CDEFGAB'.indexOf(pitch.letter) - bottom) * step;
   }
-  bounds(hand) { const staff = this.staffs[hand]; return {top: staff.topLine, bottom: staff.bottomLine}; }
+  bounds(hand, system = this.systems[0]) {
+    const staff = system.staffs[hand]; return {top: staff.topLine, bottom: staff.bottomLine};
+  }
 }
