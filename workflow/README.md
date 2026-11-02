@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.6.1`; create a new tag for later releases instead of moving an old tag:
+selects `v0.6.2`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.6.1
+uv run python publish.py --ref v0.6.2
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -153,7 +153,8 @@ origin, so recover any unsent input at its original address first.
   key signature, and rhythm. Blue MIDI marks keep fractional timing against the
   playback clock; their tails show physical key holds, excluding pedal sustain.
   Scores wrap every four bars at every screen size and fit
-  the available width. The cursor moves continuously within each line and then
+  the available width. Note spacing is proportional to time, so the cursor moves
+  at constant speed within each line at a fixed BPM and then
   moves to the next line. **Follow playback** brings that line into view when
   needed; turn it off to scroll manually. MIDI holds crossing a line continue
   on the following staff without an extra attack mark. Resizing preserves the
@@ -294,6 +295,8 @@ up a temporary workspace and server without using actual practice records:
 npm install --prefix build/browser-tools playwright
 PLAYWRIGHT_MODULE="$PWD/build/browser-tools/node_modules/playwright/index.mjs" \
 CHROME_EXECUTABLE=/usr/bin/google-chrome node tests/browser.mjs
+PLAYWRIGHT_MODULE="$PWD/build/browser-tools/node_modules/playwright/index.mjs" \
+CHROME_EXECUTABLE=/usr/bin/google-chrome node tests/abc-timing-browser.mjs
 ```
 
 Screenshots go to `build/browser/`. Checks cover MIDI permission denial, synthetic
@@ -304,6 +307,9 @@ Checks also cover translated descriptions during capture, fixed BPM while playin
 and paused, and the MIDI connection control remaining visible on mobile. Layout
 checks cover 320–1440 px, aligned journal content, expandable plans, keyboard
 navigation to the player and consistent notation size under the server's CSP.
+ABC timing checks use mixed durations, accidentals, triplets, ties, independent
+voices and partial final lines to verify constant speed and rendered note/MIDI
+alignment at desktop and mobile widths. They preserve the original score data.
 
 The optional LAN browser check requires this computer's actual non-loopback IPv4
 address. It uses temporary synthetic records and verifies an ordinary HTTP origin,

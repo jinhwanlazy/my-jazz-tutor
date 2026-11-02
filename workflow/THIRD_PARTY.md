@@ -22,6 +22,10 @@ Run `npm ci` and `npm run build:notation` to reproduce them using the locked
 esbuild development dependency. No CDN, soundfont download or remote script is used.
 The parser adapter and rendering geometry use version-specific internals: update
 them only together with parser/rendering/playback regression checks.
+The timing layout uses the pinned `EngraverController.constructTuneElements` hook
+before `timeBasedLayout` draws the glyphs. It reserves consistent header/accidental
+space and a common duration scale across voices and lines; no vendor bundle is
+patched. Run `tests/abc-timing-browser.mjs` when changing this integration.
 
 ## PDF material extraction
 
