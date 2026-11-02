@@ -26,10 +26,12 @@ try {
   assert.equal(await page.locator('#lesson-references a').getAttribute('href'),'https://example.test/lesson');
   await page.locator('#lesson-guide').evaluate(e=>e.open=true);
   assert.match(await page.locator('#lesson-development').innerText(),/Listen for[\s\S]*Apply it/);
-  await page.locator('#practice-btn').click();await page.waitForTimeout(400);await page.locator('#finish-btn').click();
+  await page.locator('#tempo').fill('240');await page.locator('#tempo').dispatchEvent('change');
+  await page.locator('#practice-btn').click();await page.waitForFunction(()=>!document.querySelector('#finish-btn').disabled);
+  await page.locator('#finish-btn').click();await page.locator('#manual-confirm').check();await page.locator('#complete-confirm').click();
   await page.locator('#view-list').waitFor({state:'visible'});
   const before=await page.evaluate(()=>fetch('/api/state').then(r=>r.json()));
-  await page.locator('.history-item').first().click();await page.locator('#history-dialog').waitFor({state:'visible'});
+  await page.locator('#close-record').click();await page.locator('.history-item').first().click();await page.locator('#history-dialog').waitFor({state:'visible'});
   assert.match(await page.locator('#history-detail .practice-references').innerText(),/Original source example/);
   await page.screenshot({path:'build/references-browser/detail-en.png',fullPage:true});
   await page.locator('#dialog-close').click();await page.locator('[data-view="settings"]').click();

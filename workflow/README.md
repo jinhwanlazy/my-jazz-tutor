@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.6.2`; create a new tag for later releases instead of moving an old tag:
+selects `v0.7.0`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.6.2
+uv run python publish.py --ref v0.7.0
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -83,25 +83,32 @@ evidence retain their original wording.
 
 The first screen is your **Practice list**, grouped by date. Each item shows its
 exercise, key and target tempo, ready/in-progress/completed/skipped status, feedback,
-memo and optional skip reason. The navigation contains Practice and Settings.
+memo and skip reason. The navigation contains Practice and Settings.
 The former history tab is part of this list; the progress dashboard is removed.
+The list, practice room and record details show the same stable **Practice ID**
+(`T-…`) with a copy button. Use it to refer to the task. Each recorded attempt has its own A- ID. Resuming a
+completed task retains its T- ID; copying it creates another task.
 
 **New practice** analyzes the explicit profile, recent records, feedback, notes and
 skip reasons, shows generation status, then adds a validated item without opening
-the room or starting playback. Click the new item to enter. Only one unfinished assignment is
-allowed; return to that item to continue or skip it before adding another.
+the room or starting playback. Click the new item to enter. Several assignments can stay active. Choose which one to practice; only one
+recording attempt can run at a time.
 The optional focus field sits immediately above **New practice**. It hides while
 the request is being submitted or generated, and the progress message acknowledges
 an included focus. Successful generation clears the submitted text; a failure keeps
 it available for editing or retry. Practice filters follow these creation controls.
-**Complete practice** saves input, closes the task, and returns to the list. Add
+**Start attempt** gives a one-bar count-in, records one score sweep and saves it
+automatically, including a one-beat note-release tail. Every attempt is retained.
+**Complete practice** requires a successful current-cycle attempt at the target BPM
+or an explicit goal confirmation for a complete unscored attempt, then asks for confirmation and returns to the list. Add
 feedback in the completed item: 😈 Impossible, 💪 Challenging, 🙂 Good practice,
 or 🙄 Too easy to be useful. A tap saves it; a memo is optional. Completion does not
 wait for feedback, and adding or editing feedback never counts the practice twice.
 
 Completed items open their saved details. **Practice again** prepares a separate
-new assignment, which is added to the list before you enter it. Returning to the
-list during practice saves the current recording while leaving the task unfinished.
+new assignment, which is added to the list before you enter it. **Resume this practice**
+reopens the same task, preserving its history and requiring a fresh successful attempt.
+Returning to the list stops and saves the current attempt while leaving the task unfinished.
 No page load, item creation or recording recovery automatically enters the room.
 
 Once a web-capable version is active, run this from the repository root. `uv`
@@ -144,11 +151,11 @@ origin, so recover any unsent input at its original address first.
   the mobile MIDI header. Start, complete and tempo controls sit above the score;
   narrow screens stack them without squeezing the buttons. Target BPM and current
   metronome BPM are separate. Choose tempo before starting: the input, slider and
-  buttons stay locked until the recording ends, including pauses. Expand **Sound
-  settings** for volume and chord pad. MIDI connection, status and input selection
+  buttons stay locked throughout the count-in and take. **Accompaniment** has independent
+  metronome, pad and basic drum controls, each with volume. MIDI connection, status and input selection
   stay in the sidebar, or the sticky top area on mobile. Click and pad share the same
-  beat clock. Resuming starts from the first bar; switching away from the tab
-  pauses playback.
+  beat clock. Every attempt starts at the first bar; switching away from the tab
+  stops and saves the interrupted attempt.
 - **Score and live input:** a grand staff shows the assigned parts, chord symbols,
   key signature, and rhythm. Blue MIDI marks keep fractional timing against the
   playback clock; their tails show physical key holds, excluding pedal sustain.
@@ -166,13 +173,18 @@ origin, so recover any unsent input at its original address first.
   range, not detected hands. This view does not assess correctness or fill reports.
   Charleston eighth notes illustrate short attacks on 1 and 2&; the illustration
   does not add an exact hold-duration requirement to the assignment.
-- **Complete practice:** save recording and measured time, close the task, and return
-  to the list. Feedback is editable there. A completed task without a label has
-  unknown musical correctness; it is not an unfinished assignment.
-- **Discard task:** close an unfinished item with an optional reason. The room saves
-  any active recording first. A failed save leaves the task open for retry. Existing
-  input is preserved. The optional reason is context for future coaching, not a
-  performance report or mastery credit. An empty reason stays unknown.
+- **Attempt feedback:** each bar receives pitch/onset feedback. Final feedback separates
+  key holds, pedal sounding duration, timing and relative attack velocity. Matching is
+  deterministic and versioned, shared by the browser and server. Velocity is not an
+  acoustic loudness measurement or a musical-expression grade.
+- **Listen and compare:** play the written notes or your recording with pause/stop,
+  playback speed and bar seeking. Playback never creates attempts or success credit.
+- **Complete practice:** confirmation closes the task after a qualifying attempt.
+  Unscored goals (swing, improvisation, no score or no MIDI) use explicit self-report
+  after a complete target-tempo take. Feedback remains optional and editable.
+- **Discard task:** beside attempt/complete, a confirmation dialog requires a written
+  reason. Existing input is preserved. A skip is coaching context, not a performance
+  result or mastery credit. Historical empty reasons remain unknown.
 - **Saved details:** inspect the original conditions, notes, edits and raw MIDI.
   Corrections preserve earlier reports. Feedback is also visible directly in the list.
 
@@ -497,7 +509,10 @@ conservative text-token upper bound, not a tokenizer count or total CLI input us
 Descriptions are shortened with explicit omission metadata and fewer cases are
 included when necessary. A profile/request/rules bundle that alone exceeds the
 budget fails explicitly. Original records are never shortened. Coverage and omitted
-detail counts are supplied; omitted history does not mean unpracticed. Raw MIDI is
+detail counts are supplied; omitted history does not mean unpracticed. The latest
+five compact attempt analyses and all-history attempt/pass counts are included with
+source IDs. They are versioned MIDI observations, distinct from labels and acoustic
+verification; note-level matches remain local. Raw MIDI is
 not sent. The private request artifact preserves the exact assembled context. Context
 sent to Codex uses the account's remote model service; local files are not model
 write targets. Login expiry, quota, connection, timeout and invalid
@@ -617,7 +632,7 @@ feedback, and metronome settings are never analyzed playing tempo.
 local records without creating a recommendation. The explicit legacy `assign E01`,
 `record`, `correct`, and `cancel` commands remain for historical compatibility;
 they do not define the new recommendation route. `discard TASK --reason ...` accepts
-an optional reason and preserves recordings. `reflection TASK --input /tmp/feedback.json`
+a required reason and preserves recordings. `reflection TASK --input /tmp/feedback.json`
 uses the same four labels and optional note as the web: `{"rating":"good","note":""}`.
 When editing, include the current `expected_event_id`. Actual observations and old
 notes are preserved. Never fill unknown checks from a difficulty label.
@@ -654,7 +669,7 @@ results; `event_id` identifies each event. Writes use a file lock.
 
 | Main column | Meaning |
 | --- | --- |
-| event_type | assigned / completed / reported / corrected / discarded / cancelled / retired |
+| event_type | assigned / completed / reopened / reported / corrected / discarded / cancelled / retired |
 | target_json | Assigned key, BPM, hands, rhythm, bass, voicing, melody, material, and criteria |
 | actual_json | Conditions the user reports actually practicing |
 | checks_json | Notes, pulse, and uninterrupted playing: true / false / null |
@@ -667,3 +682,18 @@ results; `event_id` identifies each event. Writes use a file lock.
 
 Scripts calculate metrics. The LLM must not store invented overall ability scores.
 Reports do not alter evidence and can be deleted and regenerated.
+
+### Finite attempt checks
+
+`node --test tests/*.test.mjs` covers shared MIDI matching and audio scheduling.
+`tests/test_attempts.py` covers cycle gating, additive storage, retries and bounded
+recommendation evidence. Run `tests/attempts-browser.mjs` with the same Playwright
+setup as the browser checks above. All use synthetic records and MIDI. SQLite v2
+adds attempts and immutable versioned analyses; legacy recordings remain unchanged
+and receive no retrospective grades. Existing recorded audio is not stored: MIDI
+replay uses an in-browser synthesized voice. Swing/rubato and improvisation remain
+unscored; deterministic backing supports a conservative subset of chord symbols.
+The launcher refuses to activate a runtime that cannot read the saved database
+version. `attempts --task-id TASK`, `complete TASK --expected-event-id EVENT` and
+`reopen TASK --expected-event-id EVENT` share the web operations and storage.
+Independent accompaniment continues after a take and stops when leaving the room.

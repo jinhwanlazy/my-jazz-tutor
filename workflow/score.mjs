@@ -96,8 +96,8 @@ function accidental(parent, pitch, x, y, key, live = false, state = null) {
 }
 
 export class ScoreView {
-  constructor({root, status, follow, help}) {
-    Object.assign(this, {root, status, follow, help});
+  constructor({root, status, follow, help, finite=false}) {
+    Object.assign(this, {root, status, follow, help, finite});
     this.pass = 0; this.playing = false;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(root);
@@ -122,12 +122,14 @@ export class ScoreView {
       this.identity = identity; this.score = score; this.pass = 0;
       this.input = score ? new LiveInput(score) : null; this.position = null;
       this.root.scrollLeft = 0;
+      this.feedback = [];
     }
     this.render(); // Language refresh keeps the live buffer and play position.
   }
   begin() {
     this.input = this.score ? new LiveInput(this.score) : null;
     this.position = null; this.pass = 0; this.playing = true;
+    this.feedback = [];
     this.render(); this.root.scrollLeft = 0;
   }
   pause(position) {
@@ -175,7 +177,7 @@ export class ScoreView {
   }
   caption() {
     const count = this.score?.bars.length || 0;
-    this.status.textContent = count ? tr`Pass ${this.pass + 1}` : '';
+    this.status.textContent = count && !this.finite ? tr`Pass ${this.pass + 1}` : '';
   }
   system(beat) { return this.systems.find(system => beat < system.end) || this.systems.at(-1); }
   x(beat, system = this.system(beat)) {
@@ -201,6 +203,7 @@ export class ScoreView {
     this.overlays();
     this.resize(); this.drawNotes(); this.root.scrollLeft = scroll;
     if (this.position) this.frame(this.position);
+    this.setFeedback(this.feedback || []);
   }
   render() {
     const scroll = this.root.scrollLeft;
@@ -279,6 +282,20 @@ export class ScoreView {
     this.drawNotes();
     this.root.scrollLeft = scroll;
     if (this.position) this.frame(this.position);
+    this.setFeedback(this.feedback || []);
+  }
+  setFeedback(bars) {
+    this.feedback = bars;
+    this.svg?.querySelector('.score-feedback')?.remove();
+    if (!this.svg || !this.systems) return;
+    const layer = svg('g', {class:'score-feedback','aria-hidden':'true'}),beats=this.score.beats_per_bar||4;
+    for (const item of bars) {
+      if (!['correct','incorrect'].includes(item.state)) continue;
+      const start=item.bar*beats,system=this.system(start),x=this.x(start,system),right=this.x(start+beats,system);
+      const top=this.bounds('right',system).top-30,bottom=this.bounds('left',system).bottom+35;
+      layer.append(svg('rect',{x,y:top,width:Math.max(0,right-x),height:bottom-top,rx:4,class:`score-bar-mark ${item.state}`}));
+    }
+    this.svg.insertBefore(layer,this.svg.firstChild);
   }
   drawEvent(canvas, event, staff, bar, accidentals, localBar = bar) {
     const x = noteX(localBar, event.beat), top = TOP[staff];

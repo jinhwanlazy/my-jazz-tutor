@@ -1,4 +1,4 @@
-"""Quick feedback uses synthetic sessions and never implies musical correctness."""
+"""Legacy feedback compatibility; current completion gating lives in test_attempts."""
 import copy
 from datetime import date, datetime, timezone
 import json
@@ -25,7 +25,7 @@ class ReflectionTests(unittest.TestCase):
         return r.assign(self.root, self.data, exercise, key, bpm)["task_id"]
 
     def reflect(self, task, rating="good", **values):
-        return self.app.post("/api/reflection", {"task_id": task, "rating": rating, **values})
+        return self.app.store.reflect(self.data,task,rating,values.pop('note',''),values.pop('expected_event_id',None))
 
     def tasks(self):
         return r.records(r.read_events(self.root))
@@ -121,7 +121,7 @@ class ReflectionTests(unittest.TestCase):
         self.app.store.finish(sid, 0)
         for values in ({"rating": "easy"}, {"note": None}, {"actual_minutes": 10}, {"practice_date": "2026-01-01"}):
             with self.subTest(values=values), self.assertRaises(ValueError):
-                self.reflect(task, **values)
+                self.app.post('/api/reflection', {'task_id':task, **values})
         self.assertEqual(len(r.read_events(self.root)), 1)
 
     def test_multi_session_totals_are_not_limited_to_a_single_day(self):

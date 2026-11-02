@@ -37,13 +37,12 @@ try {
   assert.equal(await page.locator('#view-practice').isVisible(),false);
   await page.locator('.history-item').first().click();
   await page.locator('#view-practice').waitFor({state:'visible'});
-  await page.locator('#playback-settings > summary').click();
+
   await page.locator('#midi-connect').click();
   assert.match(await page.locator('#midi-status').textContent(),/HTTPS or localhost/);
-  await page.locator('#practice-btn').click();
-  await page.waitForFunction(()=>document.querySelector('#practice-btn').textContent==='Pause');
-  await page.waitForTimeout(700);
-  await page.locator('#finish-btn').click();
+  await page.locator('#tempo').fill('240');await page.locator('#tempo').dispatchEvent('change');
+  await page.locator('#practice-btn').click();await page.waitForFunction(()=>!document.querySelector('#finish-btn').disabled);
+  await page.locator('#finish-btn').click();await page.locator('#manual-confirm').check();await page.locator('#complete-confirm').click();
   await page.locator('#view-list').waitFor({state:'visible'});
   let data=await state();
   assert.equal(data.history.length,1);assert.equal(data.history[0].completed,true);

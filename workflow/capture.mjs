@@ -27,6 +27,18 @@ export function base64(bytes) {
   return btoa(text);
 }
 
+export function decodeMidiFrames(buffer) {
+  const data=new Uint8Array(buffer),view=new DataView(buffer),messages=[];
+  let offset=data[0]===74&&data[1]===80&&data[2]===77&&data[3]===49?4:0;
+  while(offset<data.length){
+    if(offset+12>data.length)throw Error('The MIDI recording is truncated.');
+    const at_ms=view.getFloat64(offset,true),port=view.getUint16(offset+8,true),size=view.getUint16(offset+10,true);offset+=12;
+    if(!Number.isFinite(at_ms)||at_ms<0||!size||offset+size>data.length)throw Error('Invalid MIDI recording.');
+    messages.push({at_ms,port,data:[...data.slice(offset,offset+size)]});offset+=size;
+  }
+  return messages;
+}
+
 export class Outbox {
   constructor(workspace) { this.workspace = workspace; }
   async database() {

@@ -11,7 +11,7 @@ import re
 
 from difficulty import prediction_observation, score_features
 
-POLICY = 'bounded-evidence-v2'
+POLICY = 'bounded-evidence-v3'
 RECENT = 8
 RELATED = 4
 
@@ -22,6 +22,8 @@ def evidence_ids(context):
     for source in context['sources']:
         if source['id'] == 'history-summary':
             ids.update(quote['source_id'] for quote in source['data'].get('latest_reported_excerpts_per_label_or_skip_reason', []))
+        if source['id'] == 'attempts-summary':
+            ids.update('attempt:' + attempt['id'] for attempt in source['data']['recent'])
     return ids
 
 
@@ -76,8 +78,8 @@ def task_sources(task, sessions):
     sources = [{'id': 'task:' + tid, 'kind': 'assigned_conditions',
                 'data': {'task_id': tid, 'exercise_id': a['exercise_id'], 'assigned_at': a['recorded_at'],
                          'conditions': conditions(task['target']), 'state': state(task)}}]
-    for field in ('completion', 'report', 'cancellation'):
-        event = task[field]
+    for field in ('completion', 'report', 'cancellation', 'reopening'):
+        event = task.get(field)
         if event:
             data = {k: event[k] for k in ('event_id', 'task_id', 'event_type', 'recorded_at', 'practice_date',
                     'difficulty', 'raw_note', 'reason', 'actual_minutes', 'supersedes')}
@@ -102,10 +104,11 @@ def task_sources(task, sessions):
 
 
 def updated_at(task):
-    return max(e['recorded_at'] for e in (task['assignment'], task['report'], task['completion'], task['cancellation']) if e)
+    return max(e['recorded_at'] for e in (task['assignment'], task['report'], task['completion'], task['cancellation'], task.get('reopening')) if e)
 
 
 def summary(tasks, events):
+    import review as r
     labels, statuses, forecasts = Counter(), Counter(), Counter()
     samples, quotes = {}, {}
     # Newest corrections take precedence in samples; totals use latest reports only.
@@ -130,6 +133,7 @@ def summary(tasks, events):
             forecasts[pair['rubric_version'] + '/' + pair['predicted_burden_at_assignment'] + '/' + pair['reported_label']] += 1
     return {'id': 'history-summary', 'kind': 'ledger_facts_not_ability_assessment', 'data': {
         'policy': POLICY, 'task_count': len(tasks), 'event_count': len(events),
+        'completed_cycles': sum(len(r.practice_records(task)) for task in tasks),
         'last_event_id': events[-1]['event_id'] if events else None,
         'date_range': [min((t['assignment']['recorded_at'] for t in tasks), default=None),
                        max((updated_at(t) for t in tasks), default=None)],
@@ -144,11 +148,13 @@ def summary(tasks, events):
 
 
 def select(tasks, request):
+    import review as r
     recent = list(reversed(tasks[-RECENT:]))
     recent_ids = {t['assignment']['task_id'] for t in recent}
     older = [t for t in tasks if t['assignment']['task_id'] not in recent_ids]
     # Surface recently corrected older feedback as well as text/condition similarity.
     corrected = sorted([t for t in older if t['report'] and t['report']['event_type'] == 'corrected'], key=updated_at, reverse=True)[:2]
+    active = sorted([t for t in older if r.is_pending(t)],key=updated_at,reverse=True)[:2]
     query = set(re.findall(r'[\w#]+', request.lower()))
     last = tasks[-1]['target'] if tasks else {}
     focus = set(last.get('difficulty', {}).get('focus_axes', []))
@@ -161,7 +167,7 @@ def select(tasks, request):
         overlap = len(focus & set(target.get('difficulty', {}).get('focus_axes', [])))
         return matches * 5 + overlap * 2 + int(target['key'] == last.get('key')), updated_at(task)
     related = []
-    for task in corrected + sorted(older, key=relevance, reverse=True):
+    for task in active + corrected + sorted(older, key=relevance, reverse=True):
         if task not in related:
             related.append(task)
         if len(related) == RELATED:

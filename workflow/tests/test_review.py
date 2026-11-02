@@ -50,8 +50,9 @@ class PracticeTests(unittest.TestCase):
         task_id = self.task()
         self.assertEqual(r.status(self.root, self.data)["reported_attempts"], 0)
         self.assertEqual(r.legacy_suggestion(self.data, self.history())["task_id"], task_id)
-        with self.assertRaises(ValueError):
-            self.task("E02")
+        second=self.task("E02")
+        self.assertNotEqual(second,task_id)
+        self.assertEqual(r.next_action(self.history())['action'],'choose')
 
     def test_lower_bpm_and_changed_hand_do_not_pass_target(self):
         task_id = self.task()
@@ -521,7 +522,7 @@ class ReleaseTests(unittest.TestCase):
         path.write_text(path.read_text().replace('def records(events):',
                         'def records(events):\n    raise ValueError("Synthetic incompatible reader")'))
         git_fixture.commit(self.source)
-        with self.assertRaisesRegex(ValueError, '런타임이 연습 기록을 읽을 수 없어'):
+        with self.assertRaisesRegex(ValueError, '런타임이 연습 기록 또는 녹음 형식을 읽을 수 없어'):
             p.publish(self.source, self.practice)
         for name, content in before.items():
             self.assertEqual((self.practice / name).read_bytes(), content)

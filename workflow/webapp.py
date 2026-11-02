@@ -15,6 +15,7 @@ import webbrowser
 import review as r
 from notation import score_for
 from sessions import SessionStore, reflection_measurements
+from attempts import AttemptStore
 from recommendation import Recommendations, ERRORS, repeat
 from localization import Translations, ERRORS as TRANSLATION_ERRORS
 from difficulty import task_characteristics
@@ -24,6 +25,8 @@ ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "te
           "i18n.mjs": "text/javascript", "translations.json": "application/json",
           "score.mjs": "text/javascript", "timeline.mjs": "text/javascript",
           "abc-view.mjs": "text/javascript", "abcjs.min.js": "text/javascript",
+          "midi-analysis.mjs": "text/javascript", "attempt-audio.mjs": "text/javascript",
+          "midi-analysis-worker.mjs": "text/javascript", "backing.mjs": "text/javascript",
           "Bravura.woff2": "font/woff2", "Bravura-LICENSE.txt": "text/plain"}
 
 
@@ -88,6 +91,7 @@ class Application:
         self.preview = (self.source / "publish.py").exists()
         self.revision = None if self.preview else json.loads((self.source / "manifest.json").read_text())["revision"]
         self.store = SessionStore(self.root)
+        self.attempts = AttemptStore(self.root)
         self.token = secrets.token_urlsafe(32)
         self.mutations = threading.RLock()
         self.recommendations = Recommendations(self.root, data, recommender)
@@ -105,6 +109,7 @@ class Application:
         profile_path = self.root / "profile.json"
         profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
         sessions = self.store.list()
+        attempts = self.attempts.list()
         history = []
         for task in reversed(tasks):
             report = task["report"]
@@ -116,7 +121,11 @@ class Application:
                             "discard_choice": r.discard_details(task)["choice"],
                             "reason": r.discard_details(task)["note"] if task["discarded"] else (task["cancellation"] or task["assignment"])["reason"],
                             "report": report, "outcome": r.outcome(task), "feedback": feedback(task, language),
-                            "completion": task["completion"], "completed": bool(r.practice_record(task)),
+                            "completion": task["completion"], "completed": not r.is_pending(task) and bool(r.practice_record(task)) and not task['cancelled'],
+                            "lifecycle_event_id": task['lifecycle_event_id'], "reopening": task.get('reopening'),
+                            "completions": task.get('completions', []),
+                            "attempts": [a for a in attempts if a['task_id'] == task['assignment']['task_id']],
+                            "assessment": self.attempts.summary(task, attempts),
                             "started": bool(started), "pending": r.is_pending(task),
                             "observations": r.reflection_observations(r.practice_record(task)) if r.practice_record(task) else reflection_measurements(task_sessions, profile),
                             "revisions": [e for e in events if e["task_id"] == task["assignment"]["task_id"]
@@ -152,9 +161,20 @@ class Application:
                 return r.assign(self.root, self.data, payload["exercise_id"], payload.get("key"),
                                 payload.get("bpm"), "practice", payload.get("reason", "Practice selected in the web app"), payload.get("task_id"))
             if path == "/api/complete":
-                return self.store.complete(self.data, payload["task_id"])
+                r.require(set(payload) <= {'task_id','expected_event_id','manual_confirmed','attempt_id'}, 'Invalid completion request.')
+                return self.attempts.complete(self.data, payload['task_id'], payload.get('expected_event_id'),
+                                              payload.get('manual_confirmed', False), payload.get('attempt_id'))
+            if path == '/api/reopen':
+                r.require(set(payload) == {'task_id','expected_event_id'}, 'Invalid reopen request.')
+                return r.reopen(self.root, self.data, payload['task_id'], payload['expected_event_id'])
+            if path == '/api/attempts/start':
+                r.require(set(payload) <= {'task_id','attempt_id','bpm','manual','latency_ms'}, 'Invalid attempt request.')
+                return self.attempts.start(payload['task_id'], payload['attempt_id'], payload['bpm'],
+                                           payload.get('manual', False), payload.get('latency_ms', 0))
             if path == "/api/reflection":
                 r.require(set(payload) <= {"task_id", "rating", "note", "expected_event_id"}, "The feedback contains unknown fields.")
+                task = next((t for t in r.records(r.read_events(self.root)) if t['assignment']['task_id'] == payload['task_id']), None)
+                r.require(task is not None and not r.is_pending(task), 'Complete the practice before leaving feedback.')
                 return self.store.reflect(self.data, payload["task_id"], payload.get("rating"),
                                           payload.get("note", ""), payload.get("expected_event_id"))
             if path == "/api/discard":
@@ -178,7 +198,9 @@ class Application:
             if path == "/api/sessions/chunk":
                 return self.store.append(payload["session_id"], payload["packet"])
             if path == "/api/sessions/finish":
-                return self.store.finish(payload["session_id"], payload["expected_chunks"], payload.get("interrupted", False))
+                result = self.store.finish(payload["session_id"], payload["expected_chunks"], payload.get("interrupted", False))
+                attempt = self.attempts.finish_session(payload['session_id'])
+                return result | ({'attempt': attempt} if attempt else {})
             raise KeyError("Unknown API path.")
 
 
@@ -259,6 +281,8 @@ def make_server(root, data, port=8765, source=r.HERE, recommender=None, host="12
                 path = urlsplit(self.path).path
                 if path == "/api/state":
                     self.respond(200, app.state(self.language()))
+                elif path.startswith('/api/attempts/'):
+                    self.respond(200, app.attempts.details(path.removeprefix('/api/attempts/')))
                 elif path.startswith("/api/recommendations/"):
                     request_id = path.removeprefix("/api/recommendations/")
                     artifact = app.recommendations._path(request_id)

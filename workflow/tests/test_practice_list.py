@@ -1,4 +1,8 @@
-"""Temporary evidence only: task completion, feedback, reminders and optional skips."""
+"""Legacy session compatibility and list behavior, using temporary evidence only.
+
+The gated attempt API is exercised in test_attempts; legacy sessions retain their
+original completion/measurement semantics rather than receiving new MIDI grades.
+"""
 import copy
 from datetime import date, datetime, timedelta, timezone
 import json
@@ -33,7 +37,7 @@ class PracticeListTests(unittest.TestCase):
         return sid
 
     def complete(self, task):
-        return self.app.post('/api/complete', {'task_id': task})
+        return self.app.store.complete(self.data, task)
 
     def tasks(self):
         return r.records(r.read_events(self.root))
@@ -88,7 +92,7 @@ class PracticeListTests(unittest.TestCase):
     def test_open_recordings_must_be_saved_before_completion_or_discard(self):
         task = self.assign()
         sid = self.app.store.start(task)['id']
-        for operation in (lambda: self.complete(task), lambda: r.discard(self.root, self.data, task)):
+        for operation in (lambda: self.complete(task), lambda: r.discard(self.root, self.data, task, 'Synthetic skip reason')):
             with self.assertRaisesRegex(ValueError, 'Finish'):
                 operation()
         self.app.store.append(sid, chunk(raw((1000, 0, [0x90, 60, 80])), [{'type': 'play', 'at_ms': 0, 'bpm': 60}]))
@@ -97,15 +101,15 @@ class PracticeListTests(unittest.TestCase):
         self.assertEqual(self.tasks()[0]['completion']['actual_minutes'], '')
         self.assertEqual(self.app.state()['status']['minutes_unknown'], 1)
 
-    def test_discard_is_optional_and_preserves_input_without_counting_a_result(self):
+    def test_discard_preserves_input_without_counting_a_result(self):
         task = self.assign()
         sid = self.play(task)
         archive = self.app.store.export(sid)
-        result = self.app.post('/api/discard', {'task_id': task})
-        self.assertEqual(result, self.app.post('/api/discard', {'task_id': task}))
+        result = self.app.post('/api/discard', {'task_id': task, 'reason':'Synthetic skip reason'})
+        self.assertEqual(result, self.app.post('/api/discard', {'task_id': task, 'reason':'Synthetic skip reason'}))
         entry = self.app.state()['history'][0]
         self.assertTrue(entry['discarded'])
-        self.assertEqual(entry['reason'], '')
+        self.assertEqual(entry['reason'], 'Synthetic skip reason')
         self.assertFalse(entry['completed'])
         self.assertEqual(self.app.state()['status']['reported_attempts'], 0)
         self.assertEqual(self.app.store.export(sid), archive)
@@ -121,7 +125,7 @@ class PracticeListTests(unittest.TestCase):
         note = 'Synthetic reason, "quoted"\n원문'
         first = self.assign()
         self.app.post('/api/discard', {'task_id': first, 'choice': 'already_practiced', 'reason': note})
-        self.app.post('/api/discard', {'task_id': self.assign('E02'), 'choice': 'too_easy'})
+        self.app.post('/api/discard', {'task_id': self.assign('E02'), 'choice': 'too_easy', 'reason':'Synthetic skip reason'})
         self.assertEqual(self.app.state()['status']['next']['action'], 'generate')
         self.assertEqual(r.discard_details(self.tasks()[0])['note'], note)
         self.assertTrue(r.practice_ready(self.data, self.tasks(), 'E01', 'C'))
@@ -217,7 +221,7 @@ class ListReleaseTests(unittest.TestCase):
             app.store.append(sid, chunk(events=[{'type':'play','at_ms':0,'bpm':60}]))
             app.store.finish(sid, 1)
             app.store.complete(data, task)
-            r.discard(root, data, r.assign(root, data, 'E02')['task_id'])
+            r.discard(root, data, r.assign(root, data, 'E02')['task_id'], 'Synthetic skip reason')
             before = (root/'practice.csv').read_bytes()
             after_version = '9.9.9'
             new_revision = git_fixture.bump(source, data['version'], after_version)

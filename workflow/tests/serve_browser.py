@@ -23,6 +23,11 @@ class BrowserRunner(SyntheticRunner):
         if context['request'] == 'simulate:auth':
             raise RecommendationError('auth')
         result, provenance = super().generate(context)
+        if context['request'].startswith('simulate:attempt'):
+            result=abc_result(2,4)
+            result['exercise']['bpm']=240
+            result['exercise']['notation']['abc']=result['exercise']['notation']['abc'].replace('K:D','Q:1/4=240\nK:D')
+            result['exercise']['accompaniment']=None
         if context['request'].startswith('simulate:abc'):
             result = abc_result(12 if '12' in context['request'] else 8, 3 if '3/4' in context['request'] else 4)
         if context['request'].startswith('simulate:source'):

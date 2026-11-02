@@ -32,12 +32,30 @@ try {
   await page.locator('#new-practice').click();
   await page.waitForFunction(()=>document.querySelector('.history-item'));
   assert.equal(await page.locator('#view-practice').isVisible(),false);
+  const taskId = await page.locator('.practice-item .task-id').first().innerText();
+  assert.match(taskId,/^T-/);
+  await page.context().grantPermissions(['clipboard-read','clipboard-write']);
+  await page.locator('.practice-item .copy-task-id').first().click();
+  assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),taskId);
+  assert.equal(await page.locator('#view-practice').isVisible(),false);
   await page.locator('.history-item').first().click();
   await page.locator('.abc-score').waitFor();
   assert.match(await page.locator('#target-meta').innerText(),/3\/4/);
   assert.equal(await page.locator('#beats span').count(),3);
   assert.equal(await page.locator('.abcjs-staff').count()>0,true);
   assert.ok(await page.locator('#score-viewport').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
+  assert.equal(await page.locator('#lesson-id .task-id').innerText(),taskId);
+  await page.evaluate(()=>{
+    window.testClipboard=navigator.clipboard;
+    Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined});
+  });
+  await page.locator('#lesson-id .copy-task-id').click();
+  assert.equal(await page.evaluate(()=>window.testClipboard.readText()),taskId);
+  await page.evaluate(()=>{window.testCopy=document.execCommand;document.execCommand=()=>false;});
+  await page.locator('#lesson-id .copy-task-id').click();
+  assert.equal(await page.evaluate(()=>getSelection().toString()),taskId);
+  assert.match(await page.locator('#lesson-id .copy-status').innerText(),/ID selected/);
+  await page.evaluate(()=>{document.execCommand=window.testCopy;delete navigator.clipboard;getSelection().removeAllRanges();});
   const layout = await page.evaluate(async()=>{
     const {ScoreView}=await import('/score.mjs');
     const score=(await fetch('/api/state').then(r=>r.json())).history[0].target.notation;
@@ -111,8 +129,9 @@ print(json.dumps([parse_score(n) for n in values]))
   }
   await page.locator('#midi-connect').click();
   await page.locator('#tempo').fill('240');await page.locator('#tempo').dispatchEvent('change');
+  await page.locator('#manual-mode').check();
   await page.locator('#practice-btn').click();
-  await page.waitForTimeout(400);
+  await page.waitForFunction(()=>document.querySelector('#transport-state').textContent==='Recording one pass');
   assert.equal(await page.locator('#tempo').isDisabled(),true);
   await page.evaluate(()=>sendMidi([0x90,66,90]));
   await page.waitForTimeout(700);
@@ -133,20 +152,20 @@ print(json.dumps([parse_score(n) for n in values]))
   assert.ok(samples.every((p,i)=>!i||p.row!==samples[i-1].row||p.x>=samples[i-1].x));
   assert.ok(samples.every((p,i)=>!i||p.row!==samples[i-1].row||p.x-samples[i-1].x<40),'cursor jumped within a line');
   await page.screenshot({path:'build/abc-browser/desktop.png',fullPage:true});
-  await page.locator('#practice-btn').click();
   assert.equal(await page.locator('#tempo').isDisabled(),true);
   await page.setViewportSize({width:390,height:844});
   await page.waitForFunction(()=>document.querySelector('#score-viewport').scrollWidth<=document.querySelector('#score-viewport').clientWidth+1);
   await page.screenshot({path:'build/abc-browser/mobile.png',fullPage:true});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  await page.locator('#finish-btn').click();
+  await page.locator('#finish-btn').click();await page.locator('#manual-confirm').check();await page.locator('#complete-confirm').click();
   await page.locator('#view-list').waitFor({state:'visible'});
   const state=await page.evaluate(()=>fetch('/api/state').then(r=>r.json()));
   assert.equal(state.history[0].pending,false);
   assert.equal(state.history[0].target.schema_version,3);
   assert.ok(state.sessions[0].status!=='recording');
-  await page.locator('.history-item').first().click();
+  await page.locator('#close-record').click();await page.locator('.history-item').first().click();
+  assert.equal(await page.locator('#history-detail .task-id').innerText(),taskId);
   await writeFile('build/abc-browser/result.json',JSON.stringify({errors,hold,samples,sessionStatus:state.sessions[0].status},null,2));
   assert.deepEqual(errors,[]);
-  console.log('ABC browser: wrapped 12 bars, cursor and MIDI across lines/loops, resize, BPM lock and completion passed.');
+  console.log('ABC browser: wrapped 12 bars, cursor and MIDI across lines/loops, resize, task ID copy/fallback, BPM lock and completion passed.');
 } finally {await browser?.close();server.kill();await rm(root,{recursive:true,force:true});}

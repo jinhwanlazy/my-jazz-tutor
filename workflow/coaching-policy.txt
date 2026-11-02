@@ -48,7 +48,11 @@ rule, and a clear landing. A demonstration is not the only allowed answer. Clear
 separate this variation from the written core and automatic accompaniment. Do not
 pretend the application is already in the score or MIDI analysis. If application
 would distract from a focused diagnostic goal, explain the reason for postponing it.
-Tempo is chosen before a recording and stays fixed throughout that recording.
+Tempo is chosen before an attempt and stays fixed through its count-in and single score sweep.
+Several tasks may remain active. Distinguish versioned MIDI attempt observations from
+labels, manual goal confirmation and acoustic verification. Recent attempt summaries
+are bounded evidence; never infer omitted notes or reinterpret legacy recordings.
+An automatic take pass does not establish retention, transfer or jazz mastery.
 
 Retrieve materials for the goal; do not choose the goal just to fit the catalog.
 Only supplied content has actually been read. A URL, title or syllabus is not a

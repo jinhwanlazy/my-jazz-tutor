@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
 
@@ -51,11 +52,21 @@ def publish(source, practice, activate=True, ref="HEAD"):
             records(events + retirements)
             # A selected snapshot must understand the entire resulting history,
             # including retirement events, before any evidence or pin is changed.
+            database_version = -1
+            if (practice / 'sessions.sqlite3').exists():
+                with sqlite3.connect((practice / 'sessions.sqlite3').as_uri() + '?mode=ro', uri=True) as db:
+                    database_version = db.execute('PRAGMA user_version').fetchone()[0]
             validation = subprocess.run(
-                [sys.executable, "-c", "import json, sys, review; review.records(json.load(sys.stdin))"],
+                [sys.executable, "-c", """import json, sys, review
+review.records(json.load(sys.stdin))
+version = int(sys.argv[1])
+if version >= 0:
+    import sessions
+    review.require(version in getattr(sessions, 'SUPPORTED_DATABASE_VERSIONS', (0, 1)), 'Unsupported recording database version.')
+""", str(database_version)],
                 cwd=destination, input=json.dumps(events + retirements), text=True,
                 capture_output=True, timeout=30)
-            require(validation.returncode == 0, "선택한 런타임이 연습 기록을 읽을 수 없어 활성화하지 않았습니다.")
+            require(validation.returncode == 0, "선택한 런타임이 연습 기록 또는 녹음 형식을 읽을 수 없어 활성화하지 않았습니다.")
             before = {name: (practice / name).read_bytes() if (practice / name).exists() else None
                       for name in ("practice.csv", "runtime.json", "active-version")}
             try:

@@ -1,6 +1,8 @@
 import {tr, locale, setLocale, loadTranslations, translatePage} from './i18n.mjs';
-import {Transport} from './audio.mjs';
-import {Capture, Outbox, uploadPending, randomHex} from './capture.mjs';
+import {AttemptTransport} from './attempt-audio.mjs';
+import {backingFor} from './backing.mjs';
+import {decodeNotes,expectedNotes} from './midi-analysis.mjs';
+import {Capture, Outbox, uploadPending, randomHex, decodeMidiFrames} from './capture.mjs';
 import {ScoreView} from './score.mjs';
 
 const $ = id => document.getElementById(id);
@@ -10,7 +12,9 @@ new ResizeObserver(() => {
   const height = getComputedStyle(sidebar).position === 'sticky' ? sidebar.getBoundingClientRect().height : 0;
   document.documentElement.style.setProperty('--app-header-height', `${height}px`);
 }).observe(sidebar);
-const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, openedTaskId: null, view: 'list', reflectionSaving: false, ports: new Map()};
+const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, openedTaskId: null, view: 'list', reflectionSaving: false, ports: new Map(), phase:'idle', midiFrames:[], replayTrack:null};
+const heldKeys=new Map(), heldPedals=new Map();
+let analysisWorker,analysisSerial=0;
 let outbox, midiAccess, midiSelection = 'all', timer, detailTask;
 const labels = {success: 'Criteria met', unmet: 'Target not met', unknown: 'Assessment pending'};
 const ratings = {impossible: 'Impossible', challenging: 'Challenging', good: 'Good practice', too_easy: 'Too easy to be useful'};
@@ -18,12 +22,32 @@ const discardChoices = {already_practiced: 'Already familiar', too_easy: 'Too ea
 const ratingEmoji = {impossible: '😈', challenging: '💪', good: '🙂', too_easy: '🙄'};
 const ratingText = rating => `${ratingEmoji[rating]} ${tr(ratings[rating])}`;
 function el(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
+function taskIdentity(id) {
+  const box = el('div', undefined, 'task-identity'), value = el('code', id, 'task-id');
+  const button = el('button', tr('Copy ID'), 'text-button copy-task-id'); button.type = 'button';
+  button.setAttribute('aria-label', tr`Copy practice ID ${id}`);
+  const status = el('span', '', 'copy-status'); status.setAttribute('role', 'status');
+  button.addEventListener('click', async () => {
+    let copied = false;
+    try { await navigator.clipboard.writeText(id); copied = true; } catch {
+      // Plain LAN HTTP may not provide Clipboard API. Keep the ID selectable
+      // even if the browser also refuses the user-initiated copy fallback.
+      const selection = window.getSelection(), range = document.createRange();
+      range.selectNodeContents(value); selection.removeAllRanges(); selection.addRange(range);
+      try { copied = document.execCommand('copy'); } catch { /* Leave the ID selected. */ }
+      if (copied) selection.removeAllRanges();
+    }
+    status.textContent = tr(copied ? 'ID copied.' : 'ID selected. Use your device’s copy command.');
+  });
+  box.append(el('span', tr('Practice ID')), value, button, status);
+  return box;
+}
 function option(value, text, disabled = false) { const node = el('option', text); node.value = value; node.disabled = disabled; return node; }
 function clock(ms) { const s = Math.max(0, Math.floor((ms || 0) / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
 function fail(error) { ui.error = error; $('error').textContent = tr(error.message || String(error)); $('error').hidden = false; }
 function clearError() { ui.error = null; $('error').hidden = true; }
 function pending() { return ui.data?.history.find(t => t.pending); }
-function openedTask() { return ui.data?.history.find(t => t.id === ui.openedTaskId && t.pending); }
+function openedTask() { return ui.data?.history.find(t => t.id === ui.openedTaskId); }
 function openSessions() { return ui.data?.sessions.filter(s => s.status === 'recording' && s.id !== ui.capture?.session.id) || []; }
 function taskSessions(id) { return ui.data.sessions.filter(s => s.task_id === id); }
 
@@ -40,25 +64,159 @@ async function api(path, body) {
 }
 
 const score = new ScoreView({root: $('score-viewport'), status: $('score-position'),
-  follow: $('score-follow'), help: $('score-material-help')});
-const transport = new Transport({
-  onStart: () => score.begin(),
-  onPause: position => score.pause(position),
-  onFrame: position => score.frame(position),
-  onBeat: ({bar, beat}) => {
-    ui.beat = {bar, beat};
-    [...$('beats').children].forEach((node, i) => node.classList.toggle('active', i === beat));
-    [...$('chords').children].forEach((node, i) => node.classList.toggle('current', i === bar));
-    $('bar-position').textContent = tr`Bar ${bar + 1} · beat ${beat + 1}`;
+  follow: $('score-follow'), help: $('score-material-help'), finite:true});
+const transport = new AttemptTransport({
+  onStart: () => beginRecordedPass(),
+  onFrame: position => {
+    if (!position) return;
+    beginRecordedPass(); score.frame(position);
+    if (ui.phase === 'playing') $('elapsed').textContent = clock(Math.max(0,performance.now()-ui.plannedStart));
+    if (ui.capture && position.bar !== ui.analysisBar) {ui.analysisBar=position.bar;requestAnalysis();}
   },
-  onEvent: (type, values, at) => ui.capture?.event(type, values, at),
+  onCountIn: (beat,beats) => { $('transport-state').textContent=tr`Count-in ${beat} / ${beats}`; },
+  onBeat: ({bar,beat,counting}) => {
+    [...$('beats').children].forEach((node,i)=>node.classList.toggle('active',i===beat));
+    if (ui.capture && !counting) $('bar-position').textContent=tr`Bar ${bar+1} · beat ${beat+1}`;
+  },
+  onAttemptEnd: at => {
+    beginRecordedPass();ui.phase='tail';ui.capture?.event('attempt_end',{},at);ui.capture?.event('pause',{},at);
+    requestAnalysis();updateTransport();
+  },
+  onAttemptFinished: () => {stopCapture().catch(fail);},
+  onAbort: () => {ui.capture?.event('aborted');ui.capture?.event('pause');ui.phase='aborted';score.pause(score.position);},
   onInterrupt: message => {
-    ui.capture?.event('audio_interrupted', {message});
-    ui.capture?.event('pause');
-    fail(new Error(message));
-    updateTransport();
-  }
+    for(const id of ['click-toggle','pad-toggle','drum-toggle'])$(id).checked=false;
+    ui.capture?.event('audio_interrupted',{message});
+    if(ui.capture)stopCapture().catch(fail);
+    fail(new Error(message));updateTransport();
+  },
+  onReplayFrame: (position,ms) => {score.frame(position);$('elapsed').textContent=clock(ms);},
+  onReplayStop: () => {score.pause(score.position);updateTransport();}
 });
+
+function beginRecordedPass() {
+  if(!ui.capture||ui.phase==='playing'||ui.phase==='tail'||ui.capture.ended)return;
+  const captured=new Set(ui.midiFrames.filter(f=>(f.data[0]&0xf0)===0x90&&f.data[2]>0).map(f=>`${f.port}:${f.data[0]&15}:${f.data[1]}`));
+  const initial_state={held:[...heldKeys.values()].map(v=>({...v,port:ui.ports.get(v.port)})).filter(v=>v.port!==undefined&&!captured.has(`${v.port}:${v.channel}:${v.pitch}`)),
+    pedals:[...heldPedals.values()].map(v=>({...v,port:ui.ports.get(v.port)})).filter(v=>v.port!==undefined)};
+  ui.capture.event('play',{bpm:ui.lockedBpm,initial_state},ui.plannedStart);
+  ui.initialMidi=initial_state;ui.phase='playing';score.begin();
+  for(const frame of ui.midiFrames)score.midi(frame.data,String([...ui.ports].find(([,index])=>index===frame.port)?.[0]||frame.port),scorePositionAt(ui.capture.origin+frame.at_ms));
+  updateTransport();
+}
+function scorePositionAt(at) {
+  const beats=ui.attemptContract.beats_per_bar,total=ui.attemptContract.bars*beats;
+  const absolute=Math.max(0,Math.min(total,(at-ui.plannedStart-ui.attemptContract.latency_ms)*ui.lockedBpm/60000));
+  return {absolute,pass:0,bar:Math.min(ui.attemptContract.bars-1,Math.floor(absolute/beats)),beat:absolute>=total?beats:absolute%beats};
+}
+function requestAnalysis() {
+  if(!ui.capture||!ui.attemptContract||!ui.plannedStart||ui.analysisLimited)return;
+  try {
+    analysisWorker ||= new Worker('/midi-analysis-worker.mjs',{type:'module'});
+    analysisWorker.onmessage=event=>{
+      if(!ui.capture||event.data.id!==analysisSerial||!event.data.analysis)return;
+      renderBarResults(event.data.analysis.bars);
+    };
+    analysisWorker.postMessage({id:++analysisSerial,contract:ui.attemptContract,messages:ui.midiFrames,
+      options:{origin_ms:ui.plannedStart-ui.capture.origin,end_ms:performance.now()-ui.capture.origin,
+        initial_state:ui.initialMidi||{},final:false}});
+  } catch { /* Saved input will still receive the server's final analysis. */ }
+}
+function renderBarResults(bars=[]) {
+  $('bar-results').replaceChildren(...bars.map(bar=>{
+    const icon={correct:'✓',incorrect:'!',waiting:'·',unknown:'?'}[bar.state];
+    return el('span',tr`${bar.bar+1}: ${icon}`,`bar-result ${bar.state}`);
+  }));
+  score.setFeedback(bars);
+}
+
+function attemptLabel(attempt) {
+  if(attempt.state==='aborted')return tr('Stopped');
+  if(attempt.state==='interrupted')return tr('Interrupted');
+  if(attempt.qualified_pass)return tr('Successful take');
+  if(attempt.result==='passed')return tr('Accurate at this BPM · target BPM not reached');
+  if(attempt.mode==='manual')return tr('Direct confirmation needed');
+  if(attempt.result==='needs_work')return tr('Needs another try');
+  return tr('Analysis incomplete');
+}
+function renderAttempts(task) {
+  const list=$('attempt-list');list.replaceChildren();
+  const attempts=task.attempts||[];
+  if(!attempts.length)list.append(el('p',tr('Your recorded attempts will appear here.'),'field-note'));
+  for(const [i,attempt] of [...attempts].reverse().entries()) {
+    const row=el('article',undefined,'attempt-row');row.dataset.attemptId=attempt.id;
+    row.append(el('strong',tr`Attempt ${attempts.length-i} · ${attemptLabel(attempt)}`),
+      el('small',`${attempt.created_at.slice(0,16).replace('T',' ')} · ${attempt.bpm} BPM`));
+    const buttons=el('div',undefined,'attempt-row-actions');
+    const detail=el('button',tr('View feedback'),'text-button');detail.type='button';
+    detail.addEventListener('click',()=>loadAttempt(attempt.id).catch(fail));
+    const play=el('button',tr('Play my take'),'text-button');play.type='button';play.disabled=Boolean(ui.capture)||attempt.state==='recording';
+    play.addEventListener('click',()=>playSession(attempt.session_id,task,attempt.id).catch(fail));
+    buttons.append(detail,play);row.append(buttons);list.append(row);
+  }
+}
+async function loadAttempt(id) {
+  const value=await api('/api/attempts/'+id);ui.selectedAttemptId=id;showAttemptFeedback(value);return value;
+}
+function showAttemptFeedback(attempt) {
+  if(!openedTask()||attempt.task_id!==openedTask().id)return;
+  const box=$('attempt-feedback'),analysis=attempt.analysis;box.replaceChildren();box.hidden=false;
+  box.append(el('h3',attemptLabel(attempt)));
+  if(!analysis){box.append(el('p',tr('The recording is still being saved.')));return;}
+  if(analysis.reason)box.append(el('p',tr(analysis.reason)));
+  const c=analysis.counts||{};
+  box.append(el('p',tr`${c.matched||0} matched · ${c.missing||0} missing · ${c.extra||0} extra · ${c.timing_errors||0} timing errors`));
+  if(attempt.mode==='manual')box.append(el('p',tr(attempt.manual_reason||'Direct confirmation needed')));
+  if(analysis.interrupted)box.append(el('p',tr('Input is incomplete. Release keys and pedal, check the connection, and try again.')));
+  if(analysis.timing?.median_ms!=null)box.append(el('p',tr`Median onset offset: ${Math.round(analysis.timing.median_ms)} ms`));
+  box.append(el('p',tr`${c.duration_errors||0} note-length issues · ${c.unknown_durations||0} unknown note lengths`));
+  const expression=analysis.expression;
+  box.append(el('p',tr('Velocity describes MIDI attack strength; it does not measure acoustic loudness or musical expression.'),'field-note'));
+  if(expression)box.append(el('p',expression.status==='unknown'?tr('Accent analysis unavailable: not enough velocity variation.'):
+    tr`Attack velocity: ${expression.velocity_range[0]}–${expression.velocity_range[1]} · accented median ${expression.accented_median??'—'} · other median ${expression.other_median??'—'}`));
+  const accents={not_marked:'No written accents',unknown:'Not enough comparable notes',distinguished:'Written accents had stronger attacks',not_distinguished:'Written accents were not clearly stronger'};
+  for(const group of expression?.groups||[])box.append(el('p',`${group.voice} · ${tr(accents[group.status])}${group.delta===null?'':tr` · velocity difference ${group.delta}`}`));
+  for(const bar of analysis.bars||[])if(bar.missing.length||bar.extra.length||bar.timing_errors.length){
+    const pitch=n=>`${['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'][n%12]}${Math.floor(n/12)-1}`;
+    box.append(el('p',tr`Bar ${bar.bar+1}: missing ${bar.missing.map(n=>n.name).join(', ')||'—'} · extra ${bar.extra.map(n=>pitch(n.pitch)).join(', ')||'—'} · timing ${bar.timing_errors.map(n=>`${pitch(n.pitch)} ${Math.round(n.timing_ms)} ms`).join(', ')||'—'}`));
+  }
+  const details=el('details'),summary=el('summary',tr('Note timing and duration'));details.append(summary);
+  for(const note of (analysis.matches||[]).slice(0,100))details.append(el('p',
+    tr`Bar ${note.bar+1} · ${note.name} · onset ${Math.round(note.timing_ms)} ms · key ${note.key_ms==null?'?':Math.round(note.key_ms)} ms · sounding ${note.sounding_ms==null?'?':Math.round(note.sounding_ms)} ms · written ${Math.round(note.expected_ms)} ms`));
+  box.append(details);renderBarResults(analysis.bars||[]);
+}
+async function playSession(sessionId,task=openedTask(),attemptId=null) {
+  if(ui.capture)throw Error(tr('Finish the current attempt before replaying.'));
+  await transport.unlock();
+  attemptId ||= task.attempts?.find(a=>a.session_id===sessionId)?.id;
+  let attempt=attemptId?await loadAttempt(attemptId):null;
+  const [response,metadata]=await Promise.all([fetch(`/api/recordings/${sessionId}/midi`),api(`/api/recordings/${sessionId}/metadata`)]);
+  if(!response.ok)throw Error('Recording not found.');
+  const frames=decodeMidiFrames(await response.arrayBuffer()),play=metadata.events.find(e=>e.type==='play');
+  const origin=attempt?.analysis?.origin_ms??play?.at_ms??0;
+  const duration=Math.max(0,(metadata.summary?.elapsed_ms||0)-origin);
+  const initial=play?.initial_state||{};
+  const notes=decodeNotes(frames,{initial_state:initial}).filter(n=>n.at_ms>=origin-120).map(n=>({...n,
+    at_ms:Math.max(0,n.at_ms-origin),key_end:n.key_end==null?null:n.key_end-origin,
+    sound_end:n.sound_end==null?duration:n.sound_end-origin}));
+  ui.replayTrack={notes,bpm:attempt?.bpm||play?.bpm||task.target.bpm,beats:task.target.notation?.beats_per_bar||4,bars:task.target.bars,duration,
+    title:tr('My recorded performance')};
+  startReplay(0);
+  if(attempt?.analysis)score.setFeedback(attempt.analysis.bars||[]);
+}
+function startReplay(from=0) {
+  const track=ui.replayTrack;if(!track)return;
+  score.begin();
+  const total=track.bars*track.beats;
+  for(const note of score.input?track.notes:[]){
+    const at=ms=>{const absolute=Math.max(0,ms*track.bpm/60000);return {absolute,pass:0,bar:Math.min(track.bars-1,Math.floor(absolute/track.beats)),beat:absolute%track.beats};};
+    if(note.at_ms*track.bpm/60000>=total)continue;
+    score.input.midi([0x90,note.pitch,note.velocity],String(note.port||0),at(note.at_ms));
+    score.input.midi([0x80,note.pitch,0],String(note.port||0),at(note.key_end??track.duration));
+  }
+  score.drawNotes();transport.playRecording(track.notes,{...track,from,rate:Number($('replay-rate').value)});
+  $('replay-title').textContent=track.title;$('replay-pause').textContent=tr('Pause playback');updateTransport();
+}
 
 async function refresh(keep = false, skipUnchanged = false) {
   const previous = openedTask()?.id;
@@ -156,13 +314,14 @@ function renderGeneration() {
 }
 function renderChoices() {
   const generating = ui.creating || ui.data.recommendation?.state === 'running';
-  const lock = Boolean(pending()) || ui.busy || generating;
+  const lock = ui.busy || generating;
   for (const id of ['tempo', 'tempo-range']) { $(id).min = ui.data.minimum_bpm; $(id).max = ui.data.maximum_bpm; }
   $('new-practice').disabled = lock || Boolean(ui.capture) || openSessions().length > 0;
   $('retry-recommendation').disabled = $('new-practice').disabled;
   $('recommendation-request').disabled = generating || ui.busy;
   $('recommendation-focus').hidden = Boolean(generating);
-  $('pending-hint').textContent = pending() ? tr('Open your unfinished practice below to continue or skip it.') : '';
+  const active=ui.data.history.filter(t=>t.pending).length;
+  $('pending-hint').textContent=active?tr`${active} active practices · choose one or add another.`:'';
   const exerciseFilter = $('filter-exercise').value, keyFilter = $('filter-key').value;
   const exercises = new Map(ui.data.history.map(t => [t.exercise_id, t.target.title]));
   const keys = [...new Set(ui.data.history.map(t => t.target.key))];
@@ -269,8 +428,9 @@ function renderLesson(resetTempo = false) {
     $('lesson-material').open = !t.notation;
     $('view-practice').dataset.taskId = current.id;
   }
-  $('lesson-kind').textContent = tr('Current task');
+  $('lesson-kind').textContent = tr(current.completed?'Completed practice':'Current task');
   $('lesson-title').textContent = t.title;
+  $('lesson-id').replaceChildren(taskIdentity(current.id));
   $('lesson-translation').replaceChildren(translationNotice(current));
   $('lesson-phase').textContent = t.kind === 'generated' ? tr('Personal practice') : tr('Practice');
   $('lesson-purpose').textContent = t.exercise?.objective || t.material.title;
@@ -305,9 +465,17 @@ function renderLesson(resetTempo = false) {
   $('lesson-overview').replaceChildren();
   appendTaskOverview($('lesson-overview'), t, false, contextOpen);
   appendAnalysis($('lesson-analysis'), t, coachOpen);
-  $('discard-btn').hidden = false;
-  $('pad-toggle').disabled = !t.playback;
-  if (!t.playback) { $('pad-toggle').checked = false; transport.setPad(false); }
+  $('discard-btn').hidden = !current.pending;
+  const backing=backingFor(t);ui.backing=backing;
+  const available=backing.source!=='unavailable';$('pad-toggle').disabled=!available;
+  if(!available){$('pad-toggle').checked=false;transport.setPad(false);}
+  $('backing-status').textContent=tr(backing.source==='assigned'?'Assigned accompaniment':available?'Backing from written chord symbols':'No supported chord progression for a pad.')+
+    (backing.unavailable.length?' · '+backing.unavailable.join(', '):'');
+  if(!ui.capture)transport.configure(backing.playback,Number($('tempo').value)||t.bpm);
+  $('reference-play').disabled=!t.notation||Boolean(ui.capture);
+  $('replay-bar').replaceChildren(...Array.from({length:t.bars},(_,i)=>option(String(i),String(i+1))));
+  if(!ui.capture&&!ui.manualTouched)$('manual-mode').checked=selectedPorts().length===0;
+  renderAttempts(current);
   if (resetTempo && !ui.capture) setTempo(t.bpm);
 }
 function setTempo(value) {
@@ -320,20 +488,34 @@ function setTempo(value) {
   transport.setTempo(numeric);
 }
 function updateTransport() {
-  if (!ui.data) return;
-  const recording = ui.capture, recovery = openSessions().length > 0;
-  const eligible = Boolean(openedTask());
-  const tempoLocked = Boolean(recording) || ui.busy || recovery;
-  for (const id of ['tempo', 'tempo-range', 'tempo-down', 'tempo-up']) $(id).disabled = tempoLocked;
-  if (ui.lockedBpm != null) $('tempo').value = $('tempo-range').value = ui.lockedBpm;
-  $('tempo-hint').textContent = tr(recording ? 'BPM is fixed for this recording, including pauses.' : 'Choose BPM before starting. It stays fixed until this recording ends.');
-  $('practice-btn').disabled = ui.busy || recovery || !eligible || Boolean(recording?.ended);
-  $('practice-btn').textContent = recording ? transport.playing ? tr('Pause') : recording.ended ? tr('Waiting to save') : tr('Resume') : tr('Start practice');
-  $('finish-btn').disabled = ui.busy || recovery || !eligible || (!recording && !openedTask()?.started);
-  $('finish-btn').textContent = recording?.ended ? tr('Retry save') : tr('Complete practice');
-  $('transport-state').textContent = recording ? transport.playing ? tr('Practicing') : recording.ended ? tr('Waiting to save') : tr('Paused') : tr('Ready');
-  $('discard-btn').disabled = recovery || ui.busy || ui.reflectionSaving || !eligible;
-  $('back-list').disabled = ui.busy;
+  if(!ui.data)return;
+  const recording=ui.capture,recovery=openSessions().length>0,task=openedTask(),eligible=Boolean(task?.pending);
+  const locked=Boolean(recording)||ui.busy||recovery;
+  for(const id of ['tempo','tempo-range','tempo-down','tempo-up','manual-mode','latency-ms'])$(id).disabled=locked;
+  if(ui.lockedBpm!=null)$('tempo').value=$('tempo-range').value=ui.lockedBpm;
+  $('tempo-hint').textContent=tr(recording?'BPM is fixed for this attempt.':'Choose BPM before an attempt.');
+  $('practice-btn').disabled=ui.busy||recovery||!eligible||Boolean(recording)||Boolean(transport.replay);
+  for(const id of ['practice-btn','finish-btn','discard-btn'])$(id).hidden=!eligible;
+  $('resume-practice').hidden=!task?.completed;
+  $('resume-practice').disabled=ui.busy||recovery||Boolean(recording);
+  document.querySelector('.attempt-preferences').hidden=!eligible;
+  $('practice-btn').textContent=tr('Start attempt');
+  $('abort-attempt').hidden=!recording;
+  $('abort-attempt').textContent=tr(recording?.ended?'Retry save':'Stop attempt');
+  $('abort-attempt').disabled=Boolean(ui.finishing);
+  $('finish-btn').disabled=ui.busy||recovery||!eligible||Boolean(recording)||!(task?.assessment?.eligible||task?.assessment?.manual_available);
+  $('finish-btn').textContent=tr('Complete practice');
+  const phases={idle:'Ready for an attempt',countin:'Count-in',playing:'Recording one pass',tail:'Release the final keys',saving:'Saving and analyzing',aborted:'Stopped'};
+  if(ui.phase!=='countin')$('transport-state').textContent=tr(transport.replay?'Playing recording':phases[ui.phase]||'Ready');
+  if(task?.completed&&!transport.replay){$('transport-state').textContent=tr('Completed practice');$('save-status').textContent=tr('Resume this practice to record another attempt.');}
+  $('discard-btn').disabled=ui.busy||recovery||!eligible||Boolean(recording);
+  $('back-list').disabled=ui.busy||Boolean(ui.finishing);
+  $('reference-play').disabled=!task?.target.notation||Boolean(recording);
+  $('replay-pause').disabled=!transport.replay;
+  $('replay-stop').disabled=!transport.replay;
+  $('manual-confirm-label').hidden=Boolean(task?.assessment?.eligible);
+  $('attempt-mode-note').textContent=tr($('manual-mode').checked?'This attempt needs your direct goal confirmation; it will not receive an automatic pass.':'MIDI input is recorded only during the take.');
+  if(recording&&ui.attemptContract?.manual_reason)$('attempt-mode-note').textContent=tr(ui.attemptContract.manual_reason);
 }
 
 function registerPort(port) {
@@ -357,104 +539,163 @@ function midiBindings() {
       $('midi-light').classList.add('received');
       clearTimeout(port.indicatorTimer);
       port.indicatorTimer = setTimeout(() => $('midi-light').classList.remove('received'), 110);
-      if (ui.capture && !ui.capture.ended) {
-        registerPort(port);
-        ui.capture.midi(message.data, ui.ports.get(port.id), message.timeStamp);
-        score.midi(message.data, port.id, transport.position(message.timeStamp));
-        $('midi-status').textContent = tr`Recording input · ${ui.capture.noteCount} note-ons`;
+      const position=transport.inputPosition(message.timeStamp),data=message.data,type=data[0]&0xf0,channel=data[0]&15;
+      if(ui.capture&&!ui.capture.ended&&message.timeStamp>=ui.plannedStart-ui.attemptContract.tolerance_ms&&
+          ['countin','playing','tail'].includes(ui.phase)) {
+        if(position)beginRecordedPass();
+        registerPort(port);const index=ui.ports.get(port.id);
+        ui.capture.midi(data,index,message.timeStamp);
+        if([0x80,0x90].includes(type)||type===0xb0&&[64,120,121,123].includes(data[1])){
+          if(ui.midiFrames.length<30000)ui.midiFrames.push({at_ms:Math.max(0,Math.min(message.timeStamp,performance.now())-ui.capture.origin),port:index,data:[...data]});
+          else ui.analysisLimited=true;
+        }
+        if(ui.phase!=='countin')score.midi(data,port.id,scorePositionAt(message.timeStamp));
+        $('midi-status').textContent=tr`Recording input · ${ui.capture.noteCount} note-ons`;
       }
+      const key=`${port.id}:${channel}:${data[1]}`,pedalKey=`${port.id}:${channel}`;
+      if(type===0x90&&data[2]>0)heldKeys.set(key,{port:port.id,channel,pitch:data[1]});
+      if(type===0x80||type===0x90&&data[2]===0)heldKeys.delete(key);
+      if(type===0xb0&&data[1]===64){if(data[2]>=64)heldPedals.set(pedalKey,{port:port.id,channel});else heldPedals.delete(pedalKey);}
+      if(type===0xb0&&[120,123].includes(data[1]))for(const [id,note] of heldKeys)if(note.port===port.id&&note.channel===channel)heldKeys.delete(id);
+      if(type===0xb0&&[120,121].includes(data[1]))heldPedals.delete(pedalKey);
+
     };
   }
   ui.midiNotice = null;
   $('midi-light').classList.toggle('connected', selectedPorts().length > 0);
-  $('midi-status').textContent = midiSelection === 'none' ? tr('MIDI recording is off.') : selectedPorts().length ? tr`${selectedPorts().length} input(s) ready · raw input is recorded during practice.` : tr('No inputs connected. The metronome is still available.');
+  $('midi-status').textContent = midiSelection === 'none' ? tr('MIDI recording is off.') : selectedPorts().length ? tr`${selectedPorts().length} input(s) ready · MIDI is recorded only during an attempt.` : tr('No inputs connected. The metronome is still available.');
   $('midi-connect').textContent = tr('Refresh');
+  if(!ui.capture&&!ui.manualTouched)$('manual-mode').checked=selectedPorts().length===0;
+  updateTransport();
 }
 
 async function startOrPause() {
-  if (!openedTask() || ui.busy) return;
-  clearError();
-  if (ui.capture && transport.playing) {
-    transport.pause(); ui.capture.event('pause'); updateTransport(); return;
-  }
-  setTempo($('tempo').value);
-  ui.lockedBpm ??= Number($('tempo').value);
-  ui.busy = true; updateTransport();
+  if(ui.busy||ui.capture||!openedTask()?.pending)return;
+  clearError();ui.busy=true;updateTransport();
   try {
-    await transport.unlock(); // User gesture, before a network round trip.
-    if (!ui.capture) {
-      await outbox.database();
-      const session = await api('/api/sessions/start', {task_id: openedTask().id, session_id: 'S-' + randomHex()});
-      const capture = new Capture(session, outbox, api, (text, warning) => {
-        ui.saveStatus = text; $('save-status').textContent = tr(text);
-        $('save-status').classList.toggle('save-warning', warning);
-      });
-      ui.ports.clear();
-      await capture.begin();
-      ui.capture = capture;
-      selectedPorts().forEach(registerPort);
-      ui.capture.event('pad', {enabled: $('pad-toggle').checked});
-      ui.capture.event('click', {enabled: $('click-toggle').checked});
-      clearInterval(timer);
-      timer = setInterval(() => { if (ui.capture) $('elapsed').textContent = clock((ui.capture.endAt || performance.now()) - ui.capture.origin); }, 250);
-    }
-    $('record-panel').hidden = true;
-    transport.click = $('click-toggle').checked;
-    transport.setPad($('pad-toggle').checked);
-    ui.capture.event('play', {bpm: ui.lockedBpm});
-    const t = target();
-    const playback = t.playback || {beats_per_bar: t.notation?.beats_per_bar || 4,
-      bars: Array.from({length: t.bars}, (_, i) => ({chord: t.notation?.bars[i]?.chord || '', notes: []}))};
-    transport.start(playback, ui.lockedBpm);
-    openedTask().started = true;
-    ui.saveStatus = 'Recording · autosaving every 3 seconds';
-    $('save-status').textContent = tr(ui.saveStatus);
-  } catch (error) {
-    fail(error);
-    if (!ui.capture) { try { await refresh(true); } catch {} }
-  }
-  finally { if (!ui.capture) ui.lockedBpm = null; ui.busy = false; updateTransport(); }
+    await transport.unlock();await outbox.database();
+    ui.nextAttemptId ||= 'A-'+randomHex();
+    const bpm=Number($('tempo').value),manual=$('manual-mode').checked;
+    const result=await api('/api/attempts/start',{task_id:openedTask().id,attempt_id:ui.nextAttemptId,bpm,manual,
+      latency_ms:Number($('latency-ms').value)||0});
+    ui.nextAttemptId=null;ui.currentAttempt=result.attempt;ui.attemptContract=result.attempt.contract;
+    ui.capture=new Capture(result.session,outbox,api,(text,warning)=>{
+      ui.saveStatus=text;$('save-status').textContent=tr(text);$('save-status').classList.toggle('save-warning',warning);
+    });
+    ui.ports.clear();ui.midiFrames=[];ui.analysisLimited=false;ui.analysisBar=null;ui.initialMidi={};ui.phase='countin';
+    await ui.capture.begin();selectedPorts().forEach(registerPort);ui.lockedBpm=bpm;
+    ui.capture.event('countin');ui.capture.event('pad',{enabled:$('pad-toggle').checked});
+    ui.capture.event('click',{enabled:$('click-toggle').checked});ui.capture.event('drum',{enabled:$('drum-toggle').checked});
+    $('attempt-feedback').hidden=true;renderBarResults([]);
+    score.begin();score.frame({absolute:0,pass:0,bar:0,beat:0});
+    transport.click=$('click-toggle').checked;transport.padEnabled=$('pad-toggle').checked;transport.drums=$('drum-toggle').checked;
+    const planned=transport.startAttempt(ui.backing.playback,bpm);ui.plannedStart=planned.performanceTime;
+    clearInterval(timer);timer=setInterval(()=>{if(ui.capture&&['playing','tail'].includes(ui.phase))requestAnalysis();},250);
+    $('save-status').textContent=tr('One count-in bar, then one recorded pass.');
+  } catch(error){fail(error);if(ui.capture){ui.capture.event('aborted');try{await stopCapture();}catch{}}}
+  finally{ui.busy=false;if(!ui.capture)ui.lockedBpm=null;updateTransport();}
 }
 async function stopCapture() {
-  if (!ui.capture) return;
-  if (transport.playing) { transport.pause(); ui.capture.event('pause'); }
-  const saved = await ui.capture.stop();
-  const index = ui.data.sessions.findIndex(session => session.id === saved.id);
-  if (index < 0) ui.data.sessions.push(saved);
-  else ui.data.sessions[index] = saved;
-  ui.capture = null; ui.lockedBpm = null; clearInterval(timer);
-  midiBindings();
-  ui.saveStatus = 'Practice saved'; $('save-status').textContent = tr(ui.saveStatus);
+  if(ui.finishing)return ui.finishing;
+  if(!ui.capture)return;
+  if(transport.attempt)transport.abortAttempt();
+  const capture=ui.capture;ui.phase='saving';clearInterval(timer);
+  ui.finishing=(async()=>{
+    try {
+      const saved=await capture.stop();ui.capture=null;ui.lockedBpm=null;ui.phase='idle';
+      score.pause(score.position);
+      ui.latestAttempt=saved.attempt||null;ui.currentAttempt=null;ui.plannedStart=null;
+      await refresh(true);
+      if(saved.attempt){ui.selectedAttemptId=saved.attempt.id;showAttemptFeedback(saved.attempt);}
+      midiBindings();return saved;
+    } finally {ui.finishing=null;updateTransport();}
+  })();
+  updateTransport();return ui.finishing;
 }
 async function finish() {
-  const task = openedTask();
-  if (!task || ui.busy) return;
-  clearError(); ui.busy = true; updateTransport();
+  const task=openedTask();if(!task?.pending||ui.busy||ui.capture)return;
+  $('complete-summary').textContent=task.assessment.eligible?tr`${task.assessment.successes} successful take(s) at the target BPM. Confirm to complete.`:
+    tr('This is an unscored practice. Confirm the goal yourself to complete it.');
+  $('manual-confirm').checked=false;$('manual-confirm-label').hidden=task.assessment.eligible;
+  $('complete-error').hidden=true;$('complete-dialog').showModal();
+  ui.completeSnapshot={task_id:task.id,expected_event_id:task.lifecycle_event_id};
+}
+
+$('complete-cancel').addEventListener('click',()=>$('complete-dialog').close());
+$('complete-confirm').addEventListener('click',async()=>{
+  const task=openedTask();if(!task||ui.busy)return;
+  if(!task.assessment.eligible&&!$('manual-confirm').checked){$('complete-error').textContent=tr('Confirm that you achieved the practice goal.');$('complete-error').hidden=false;return;}
+  ui.busy=true;$('complete-confirm').disabled=true;
   try {
-    await stopCapture();
-    await api('/api/complete', {task_id: task.id});
-    ui.openedTaskId = null;
-    await refresh();
-    switchView('list');
-    clearFilters(); renderHistory();
-    showRecord(ui.data.history.find(t => t.id === task.id));
-  } catch (error) { fail(error); }
-  finally { ui.busy = false; updateTransport(); renderChoices(); }
+    await api('/api/complete',{...ui.completeSnapshot,manual_confirmed:$('manual-confirm').checked});
+    $('complete-dialog').close();stopRoomAudio();ui.openedTaskId=null;
+    await refresh();switchView('list');clearFilters();renderHistory();
+    showRecord(ui.data.history.find(t=>t.id===task.id));
+  }catch(error){$('complete-error').textContent=tr(error.message||String(error));$('complete-error').hidden=false;}
+  finally{ui.busy=false;$('complete-confirm').disabled=false;updateTransport();}
+});
+$('abort-attempt').addEventListener('click',()=>stopCapture().catch(fail));
+$('manual-mode').addEventListener('change',()=>{ui.manualTouched=true;updateTransport();});
+$('drum-toggle').addEventListener('change',async event=>{
+  try{await transport.unlock();transport.setDrums(event.target.checked);ui.capture?.event('drum',{enabled:event.target.checked});}
+  catch(error){event.target.checked=false;fail(error);}
+});
+$('drum-volume').addEventListener('input',event=>transport.drumVolume=Number(event.target.value));
+$('backing-feel').addEventListener('change',event=>transport.feel=event.target.value);
+$('reference-play').addEventListener('click',async()=>{
+  if(ui.capture||!target()?.notation)return;
+  try{
+    await transport.unlock();const bpm=Number($('tempo').value),source=target().notation;
+    ui.replayTrack={notes:expectedNotes(source).map(n=>({pitch:n.pitch,velocity:n.reference_velocity,
+      at_ms:n.at*60000/bpm,key_end:(n.at+n.duration*(n.staccato?.45:1))*60000/bpm,
+      sound_end:(n.at+n.duration*(n.staccato?.45:1))*60000/bpm})),
+      bpm,beats:source.beats_per_bar||4,bars:source.bars.length,duration:source.bars.length*(source.beats_per_bar||4)*60000/bpm,
+      title:tr('Written score · assigned note timing')};
+    startReplay(0);
+  }catch(error){fail(error);}
+});
+$('replay-pause').addEventListener('click',()=>{
+  if(!transport.replay)return;
+  if(transport.replay.paused)startReplay(transport.replay.from);else transport.pauseReplay();
+  $('replay-pause').textContent=tr(transport.replay?.paused?'Resume playback':'Pause playback');
+});
+$('replay-stop').addEventListener('click',()=>transport.stopReplay());
+$('replay-rate').addEventListener('change',()=>{if(transport.replay)startReplay(transport.replayPosition());});
+$('replay-bar').addEventListener('change',()=>{
+  if(ui.replayTrack)startReplay(Number($('replay-bar').value)*ui.replayTrack.beats*60000/ui.replayTrack.bpm);
+});
+async function reopenPractice(task) {
+  if(ui.busy||ui.capture||!task?.completed)return;
+  ui.busy=true;
+  try{await api('/api/reopen',{task_id:task.id,expected_event_id:task.lifecycle_event_id});$('history-dialog').close();await refresh(true);}
+  catch(error){fail(error);}finally{ui.busy=false;updateTransport();renderChoices();}
+}
+$('reopen-btn').addEventListener('click',()=>reopenPractice(detailTask));
+$('resume-practice').addEventListener('click',()=>reopenPractice(openedTask()));
+$('view-score-btn').addEventListener('click',()=>{$('history-dialog').close();openPractice(detailTask);});
+$('latency-ms').addEventListener('change',()=>{try{localStorage.setItem('jazz-midi-latency-ms',$('latency-ms').value);}catch{}});
+try{$('latency-ms').value=localStorage.getItem('jazz-midi-latency-ms')||'0';}catch{}
+
+function stopRoomAudio() {
+  transport.pause();
+  for(const id of ['click-toggle','pad-toggle','drum-toggle'])$(id).checked=false;
 }
 async function goToList() {
   if (ui.busy) return;
   clearError(); ui.busy = true; updateTransport();
   try {
     await stopCapture();
+    stopRoomAudio();
     ui.openedTaskId = null;
     await refresh(true); switchView('list');
   } catch (error) { fail(error); }
   finally { ui.busy = false; updateTransport(); renderChoices(); }
 }
 function openPractice(task) {
-  if (!task?.pending || ui.busy || (ui.capture && ui.capture.session.task_id !== task.id)) return;
-  ui.openedTaskId = task.id;
-  renderLesson(true); switchView('practice'); updateTransport();
+  if (!task || ui.busy || ui.capture) return;
+  transport.stopReplay();ui.replayTrack=null;ui.selectedAttemptId=null;
+  ui.openedTaskId = task.id;ui.manualTouched=false;
+  renderLesson(true); switchView('practice'); updateTransport();$('attempt-feedback').hidden=true;
   window.scrollTo({top: 0, behavior: 'instant'});
 }
 
@@ -535,15 +776,17 @@ function switchView(name) {
   document.querySelectorAll('[data-view]').forEach(button => { button.classList.toggle('active', button.dataset.view === section); button.setAttribute('aria-current', button.dataset.view === section ? 'page' : 'false'); });
 }
 function clearFilters() {
-  for (const id of ['filter-exercise', 'filter-key', 'filter-from', 'filter-to']) $(id).value = '';
+  for (const id of ['filter-exercise', 'filter-key', 'filter-status', 'filter-from', 'filter-to']) $(id).value = '';
 }
 function renderHistory() {
   const exercise = $('filter-exercise').value, key = $('filter-key').value, from = $('filter-from').value, to = $('filter-to').value;
-  const dayOf = task => (task.report || task.completion)?.practice_date || task.assigned_at.slice(0, 10);
+  const status=$('filter-status').value;
+  const dayOf = task => (task.report||task.completion)?task.observations?.practice_date||task.report?.practice_date||task.completion.practice_date:task.assigned_at.slice(0,10);
   const tasks = ui.data.history.filter(task => {
     const day = dayOf(task);
     const actualKey = task.report ? JSON.parse(task.report.actual_json).key || task.target.key : task.target.key;
-    return (!exercise || task.exercise_id === exercise) && (!key || actualKey === key) && (!from || day >= from) && (!to || day <= to);
+    return (!status||status==='active'&&task.pending||status==='completed'&&task.completed||status==='closed'&&task.cancelled)&&
+      (!exercise || task.exercise_id === exercise) && (!key || actualKey === key) && (!from || day >= from) && (!to || day <= to);
   }).sort((a,b) => dayOf(b).localeCompare(dayOf(a)) || b.assigned_at.localeCompare(a.assigned_at));
   // Reuse the editor node so refresh and language changes keep unsaved text intact.
   $('view-list').append($('record-panel'));
@@ -558,13 +801,14 @@ function renderHistory() {
     if (dayOf(task) !== day) { day = dayOf(task); $('history-list').append(el('h2', day, 'practice-day')); }
     const card = el('article', undefined, 'practice-item'); card.dataset.taskId = task.id;
     const button = el('button', undefined, 'history-item'), left = el('div');
-    const record = task.report || task.completion;
+    const record = task.completion&&(!task.report||task.completion.recorded_at>task.report.recorded_at)?task.completion:task.report;
     const minutes = record?.actual_minutes !== '' && record?.actual_minutes != null ? tr` · ${Number(Number(record.actual_minutes).toFixed(2))} min` : '';
     left.append(el('small', task.assigned_at.slice(11,16)), el('h3', task.target.title), el('p', tr`${task.target.key} · Target ${task.target.bpm} BPM${minutes}`));
     const status = task.retired ? tr('Retired on update') : task.discarded ? tr('Discarded') : task.cancelled ? tr('Skipped') : task.completed ? tr('Completed') : task.started || ui.capture?.session.task_id === task.id ? tr('In progress') : tr('Ready to practice');
     button.append(left, el('span', status, `tag ${task.completed ? 'success' : 'unknown'}`));
     button.addEventListener('click', () => task.pending ? openPractice(task) : showDetail(task));
-    card.append(button);
+    card.append(button, taskIdentity(task.id));
+    card.append(el('p',tr`${task.attempts?.length||0} attempts · ${task.assessment?.successes||0} MIDI successes`,'attempt-count'));
     appendTaskOverview(card, task.target, true);
     card.append(el('p', task.target.instructions, 'practice-content'), translationNotice(task));
     const result = ratings[task.report?.difficulty] ? ratingText(task.report.difficulty) : task.report ? tr(labels[task.outcome]) : task.completed ? tr('Feedback not added yet') : '';
@@ -592,7 +836,8 @@ function showDetail(task) {
   const analysisOpen = detailTask?.id === task.id && $('history-detail').querySelector('.recommendation-analysis')?.open;
   const contextOpen = detailTask?.id === task.id && $('history-detail').querySelector('.task-context-detail')?.open;
   detailTask = task;
-  const box = $('history-detail'); box.replaceChildren(el('h2', task.target.title), el('p', `${task.exercise_id} · ${(task.report || task.completion)?.practice_date || task.assigned_at.slice(0, 10)}`, 'subtle'));
+  const box = $('history-detail'); box.replaceChildren(el('h2', task.target.title), taskIdentity(task.id),
+    el('p', (task.report || task.completion)?.practice_date || task.assigned_at.slice(0, 10), 'subtle'));
   box.append(translationNotice(task));
   appendTaskOverview(box, task.target, false, contextOpen);
   const grid = el('div', undefined, 'detail-grid');
@@ -621,6 +866,14 @@ function showDetail(task) {
   if (task.discard_choice) box.append(el('p', tr(discardChoices[task.discard_choice]), 'discard-choice'));
   const note = task.report ? task.report.raw_note : task.reason;
   if (note) box.append(el('p', note, 'raw-note'));
+  if(task.completions?.length){
+    const timeline=el('details',undefined,'revision');timeline.append(el('summary',tr`Completion history: ${task.completions.length}`));
+    for(const event of task.completions){
+      const basis=JSON.parse(event.reason).attempt_completion?.basis;
+      timeline.append(el('p',`${event.recorded_at.slice(0,16).replace('T',' ')} · ${tr(basis==='midi-analysis'?'Successful take':basis==='user-confirmation'?'User-confirmed goal':'Completed')}`));
+    }
+    box.append(timeline);
+  }
   for (const session of taskSessions(task.id)) {
     const row = el('div', undefined, 'session-row');
     row.append(el('div', tr`Practice ${session.created_at.slice(0, 16).replace('T', ' ')} · ${session.status === 'recording' ? tr('Saving') : session.status === 'interrupted' ? tr('Interrupted') : tr('Saved')}`));
@@ -629,6 +882,8 @@ function showDetail(task) {
       row.append(el('div', tr`Session ${clock(s.elapsed_ms)} · MIDI span ${s.input_span_ms === null ? tr('Unknown') : clock(s.input_span_ms)} · Last setting ${s.last_note_bpm ?? s.last_setting_bpm ?? tr('Unknown')} BPM`));
     }
     for (const [suffix, text] of [['midi', tr('Download raw MIDI (.jpm)')], ['metadata', tr('Download session info (.json)')]]) { const a = el('a', text); a.href = `/api/recordings/${session.id}/${suffix}`; a.download = ''; row.append(a); }
+    const play=el('button',tr('Play this recording'),'text-button');play.type='button';
+    play.addEventListener('click',()=>{ $('history-dialog').close();openPractice(task);playSession(session.id,task).catch(fail); });row.append(play);
     box.append(row);
   }
   if (task.revisions.length > 1) {
@@ -637,8 +892,10 @@ function showDetail(task) {
     box.append(details);
   }
   $('correct-btn').hidden = !task.completed;
+  $('reopen-btn').hidden=!task.completed;
+  $('reopen-btn').disabled=Boolean(ui.capture);
   $('repeat-btn').hidden = task.pending;
-  $('repeat-btn').disabled = Boolean(pending()) || Boolean(ui.capture) || openSessions().length > 0 || ui.data.recommendation?.state === 'running';
+  $('repeat-btn').disabled = Boolean(ui.capture) || openSessions().length > 0 || ui.data.recommendation?.state === 'running';
   $('correct-btn').disabled = Boolean(ui.capture) || openSessions().length > 0;
   if (!$('history-dialog').open) $('history-dialog').showModal();
 }
@@ -653,11 +910,11 @@ $('tempo').addEventListener('change', event => setTempo(event.target.value));
 $('tempo-range').addEventListener('input', event => setTempo(event.target.value));
 $('tempo-down').addEventListener('click', () => setTempo(Number($('tempo').value) - 5));
 $('tempo-up').addEventListener('click', () => setTempo(Number($('tempo').value) + 5));
-$('click-toggle').addEventListener('change', event => { transport.click = event.target.checked; ui.capture?.event('click', {enabled: event.target.checked}); });
-$('pad-toggle').addEventListener('change', event => { transport.setPad(event.target.checked); ui.capture?.event('pad', {enabled: event.target.checked}); });
+$('click-toggle').addEventListener('change', async event => {try{await transport.unlock();transport.setMetronome(event.target.checked);ui.capture?.event('click',{enabled:event.target.checked});}catch(error){event.target.checked=false;fail(error);}});
+$('pad-toggle').addEventListener('change', async event => {try{await transport.unlock();transport.setPad(event.target.checked);ui.capture?.event('pad',{enabled:event.target.checked});}catch(error){event.target.checked=false;fail(error);}});
 for (const id of ['click-volume', 'pad-volume']) $(id).addEventListener('input', () => transport.setVolumes(Number($('click-volume').value), Number($('pad-volume').value)));
 async function newPractice() {
-  if (pending() || ui.busy || ui.capture || openSessions().length || ui.data.recommendation?.state === 'running') return;
+  if (ui.busy || ui.capture || openSessions().length || ui.data.recommendation?.state === 'running') return;
   clearError(); ui.busy = true; ui.creating = true;
   ui.newRequestId ||= 'R-' + randomHex();
   ui.submittedRequestId = ui.newRequestId;
@@ -676,7 +933,7 @@ $('new-practice').addEventListener('click', newPractice);
 $('retry-recommendation').addEventListener('click', newPractice);
 $('back-list').addEventListener('click', goToList);
 $('repeat-btn').addEventListener('click', async () => {
-  if (pending() || ui.busy || ui.capture || ui.data.recommendation?.state === 'running') return;
+  if (ui.busy || ui.capture || ui.data.recommendation?.state === 'running') return;
   ui.busy = true; $('repeat-btn').disabled = true;
   ui.repeatTaskId ||= 'T-' + randomHex(5);
   try {
@@ -684,7 +941,7 @@ $('repeat-btn').addEventListener('click', async () => {
     ui.repeatTaskId = null; $('history-dialog').close(); clearFilters();
     await refresh(true); switchView('list');
   } catch (error) { fail(error); }
-  finally { ui.busy = false; renderChoices(); $('repeat-btn').disabled = Boolean(pending()); }
+  finally { ui.busy = false; renderChoices(); $('repeat-btn').disabled = Boolean(ui.capture); }
 });
 $('midi-connect').addEventListener('click', async () => {
   clearError();
@@ -703,12 +960,12 @@ $('midi-connect').addEventListener('click', async () => {
   } catch { ui.midiNotice = 'MIDI access was denied. Check browser permissions. Other practice features are still available.'; $('midi-status').textContent = tr(ui.midiNotice); }
 });
 $('midi-input').addEventListener('change', event => {
+  heldKeys.clear();heldPedals.clear();
   if (midiSelection !== event.target.value) score.disconnect(undefined, transport.position());
   if (ui.capture && midiSelection !== event.target.value) ui.capture.event('disconnect', {reason: 'Recording input changed'});
   midiSelection = event.target.value; midiBindings();
 });
 $('discard-btn').addEventListener('click', () => {
-  if (transport.playing) { transport.pause(); ui.capture?.event('pause'); updateTransport(); }
   ui.discardTaskId = openedTask()?.id || null;
   ui.discardChoice = '';
   $('discard-reason').value = ui.recordTask?.id === ui.discardTaskId ? $('raw-note').value : '';
@@ -725,6 +982,7 @@ $('discard-dialog').addEventListener('cancel', event => { if (ui.discarding) eve
 $('discard-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (ui.discarding) return;
+  if(!$('discard-reason').value.trim()){$('discard-error').textContent=tr('Enter a reason before moving on from this task.');$('discard-error').hidden=false;return;}
   clearError(); $('discard-error').hidden = true;
   ui.discarding = true; ui.busy = true; updateTransport();
   const reason = $('discard-reason').value, choice = ui.discardChoice;
@@ -734,6 +992,7 @@ $('discard-form').addEventListener('submit', async event => {
     await stopCapture();
     ui.busy = true; updateTransport();
     await api('/api/discard', {task_id: ui.discardTaskId, reason, choice});
+    stopRoomAudio();
     $('discard-dialog').close(); $('record-panel').hidden = true; ui.recordTask = null; ui.openedTaskId = null;
     await refresh(); switchView('list');
   } catch (error) {
@@ -748,7 +1007,7 @@ $('discard-form').addEventListener('submit', async event => {
 });
 $('dialog-close').addEventListener('click', () => $('history-dialog').close());
 $('correct-btn').addEventListener('click', () => { $('history-dialog').close(); switchView('list'); clearFilters(); showRecord(detailTask); });
-for (const id of ['filter-exercise', 'filter-key', 'filter-from', 'filter-to']) $(id).addEventListener('change', renderHistory);
+for (const id of ['filter-exercise', 'filter-key', 'filter-status', 'filter-from', 'filter-to']) $(id).addEventListener('change', renderHistory);
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', async () => {
   if (button.dataset.view === 'list') return goToList();
   switchView(button.dataset.view);
@@ -757,7 +1016,7 @@ document.querySelectorAll('[data-view]').forEach(button => button.addEventListen
 document.querySelector('.brand').addEventListener('click', event => { event.preventDefault(); goToList(); });
 document.addEventListener('visibilitychange', () => {
   ui.capture?.event('visibility', {hidden: document.hidden});
-  if (document.hidden && transport.playing) { transport.pause(); ui.capture?.event('pause'); updateTransport(); }
+  if(document.hidden&&transport.playing){stopRoomAudio();if(ui.capture)stopCapture().catch(fail);updateTransport();}
   if (document.hidden && ui.capture && !ui.capture.ended) ui.capture.checkpoint().then(() => ui.capture.upload()).catch(() => {});
 });
 window.addEventListener('beforeunload', event => { if (ui.capture) { event.preventDefault(); event.returnValue = ''; } });

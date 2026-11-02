@@ -30,7 +30,7 @@ INPUT_BUDGET = 64_000  # App-supplied prompt + output-schema UTF-8 bytes, not me
 GENERATION_SECONDS = 600  # Whole goal/retrieval/generation/repair request, not per-call.
 MODEL = 'gpt-6.1-sol'
 REASONING_EFFORT = 'high'
-POLICY_VERSION = 'musical-stretch-materials-3'
+POLICY_VERSION = 'musical-stretch-attempts-4'
 ERRORS = {
     'not_installed': 'Codex CLI was not found. Install Codex and restart the practice server.',
     'auth': 'Codex login has expired or is missing. Run codex login in a terminal, then retry.',
@@ -201,9 +201,13 @@ def context_for(root, data, language=None, request=''):
     events = r.read_events(root)
     tasks = r.records(events)
     sessions = SessionStore(root).list() if (root / 'sessions.sqlite3').exists() else []
+    from attempts import AttemptStore
+    attempt_summary = AttemptStore(root).context_summary()
     sources = [{'id': 'profile', 'kind': 'profile_with_provenance', 'data': profile}]
     if request:
         sources.append({'id': 'request', 'kind': 'current_user_request', 'data': request})
+    if attempt_summary and attempt_summary['recorded_attempts']:
+        sources.append({'id': 'attempts-summary', 'kind': 'bounded_versioned_midi_analysis', 'data': attempt_summary})
     coach = (HERE / 'COACH.md').read_text()
     reference = {'role': 'Optional examples only. Not a candidate list, progression, prerequisite, or key/tempo restriction.',
                  'examples': [{k: e[k] for k in ('title', 'domains', 'rhythm')} for e in data['exercises'][:8]]}
@@ -212,7 +216,7 @@ def context_for(root, data, language=None, request=''):
                           'rubric': RUBRIC, 'context_policy': POLICY,
                           'generation_policy': (HERE / 'coaching-policy.txt').read_text(),
                           'notation_policy': (HERE / 'notation-policy.txt').read_text(),
-                          'material_catalog': catalog(), 'plan_schema': PLAN_SCHEMA})
+                          'material_catalog': catalog(), 'plan_schema': PLAN_SCHEMA, 'attempts': attempt_summary})
     context = {'schema_version': 1, 'fingerprint': fingerprint, 'runtime_version': data['version'],
                'language': 'en', 'display_language': language or profile.get('language', 'en'), 'request': request,
                'history_window': {}, 'difficulty_rubric': RUBRIC,
@@ -224,7 +228,8 @@ def context_for(root, data, language=None, request=''):
                                      'Assigned conditions are not proof of actual playing conditions.',
                                      'Completion without feedback is completed, not a pending task.',
                                      'Retirement on update is neither failure nor a practice result or skip.',
-                                     'No raw MIDI or audio analysis has been supplied. Unknown observations stay unknown.']}
+                                     'Raw MIDI and audio are not supplied. Versioned MIDI analysis, when present, is distinct from self-report and does not verify musical mastery.',
+                                     'Several practices may be active. Consider their goals and recent attempts to avoid unnecessary duplicates.']}
     overhead = len(r.jdump(SCHEMA).encode()) + len(prompt_for({}).encode())
     context['input_budget'] = {'policy': 'UTF-8 bytes conservatively bound app-supplied text tokens; not an exact tokenizer count.',
                                'max_prompt_and_schema_bytes': INPUT_BUDGET}
@@ -534,7 +539,7 @@ def accept(root, data, context, result, request_id, provenance):
                       'This request ID belongs to a different recommendation.')
             return {'task_id': existing['assignment']['task_id'], 'target': existing['target']}
         current = context_for(root, data, context.get('display_language', context.get('language')), context.get('request', ''))
-        if digest(base_context(context)) != digest(current) or any(r.is_pending(t) for t in tasks):
+        if digest(base_context(context)) != digest(current):
             raise RecommendationError('stale')
         generation = {**provenance, 'request_id': request_id, 'context_fingerprint': context['fingerprint'],
                       'context_file': '.recommendations/' + request_id + '.json', 'source_language': 'en',
@@ -616,7 +621,6 @@ class Recommendations:
                 with r.log_lock(self.root):
                     assert_active(self.root)
                     tasks = r.records(r.read_events(self.root))
-                    r.require(not any(r.is_pending(t) for t in tasks), 'Open your unfinished practice below to continue or skip it.')
                     context = context_for(self.root, self.data, language, request)
                     job = {'id': request_id, 'state': 'running', 'started_at': r.datetime.now(r.timezone.utc).isoformat(), 'context': context}
                     self._write(job)
@@ -699,7 +703,6 @@ def repeat(root, data, source_task_id, task_id):
         if existing:
             r.require(existing['target'] == source['target'] and existing['assignment']['reason'] == reason, 'This task ID already belongs to another assignment.')
             return {'task_id': task_id}
-        r.require(not any(r.is_pending(t) for t in tasks), 'Open your unfinished practice below to continue or skip it.')
         r.require(not r.incompatible_target_fields(data, source), 'These old practice conditions are no longer supported. Request a new recommendation.')
         event = r.new_event('assigned', task_id, data, source['assignment']['exercise_id'])
         event.update(target_json=r.jdump(source['target']), reason=reason)

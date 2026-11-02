@@ -16,8 +16,9 @@ import review as r
 
 FRAME = struct.Struct("<dHH")  # elapsed milliseconds, input index, byte count
 MAX_MS = 24 * 60 * 60 * 1000
+SUPPORTED_DATABASE_VERSIONS = (0, 1, 2)
 EVENTS = {"play", "pause", "tempo", "pad", "click", "device", "disconnect",
-          "visibility", "audio_interrupted", "recovered"}
+          "visibility", "audio_interrupted", "recovered", "countin", "attempt_end", "drum", "aborted"}
 
 
 def reflection_measurements(sessions, profile, now=None):
@@ -158,7 +159,7 @@ class SessionStore:
         connection.row_factory = sqlite3.Row
         try:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            r.require(version in (0, 1), "Unsupported session database version.")
+            r.require(version in SUPPORTED_DATABASE_VERSIONS, "Unsupported session database version.")
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY, task_id TEXT NOT NULL, release TEXT NOT NULL,
@@ -172,8 +173,9 @@ class SessionStore:
                     midi BLOB NOT NULL, events TEXT NOT NULL, elapsed_ms REAL NOT NULL,
                     PRIMARY KEY(session_id, sequence)
                 );
-                PRAGMA user_version = 1;
             """)
+            if version == 0:
+                connection.execute("PRAGMA user_version = 1")
             with connection:
                 yield connection
         finally:
@@ -192,8 +194,8 @@ class SessionStore:
             task = next((t for t in r.records(r.read_events(self.root))
                          if t["assignment"]["task_id"] == task_id), None)
             r.require(task is not None and r.is_pending(task), "An active task is required.")
-            r.require(not db.execute("SELECT 1 FROM sessions WHERE task_id=? AND status='recording'",
-                                     (task_id,)).fetchone(), "This task already has an open session. Recover the saved practice first.")
+            r.require(not db.execute("SELECT 1 FROM sessions WHERE status='recording'").fetchone(),
+                      "There is an open session. Recover the saved practice first.")
             db.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?,NULL)",
                        (session_id, task_id, task["assignment"]["release"], r.jdump(task["target"]),
                         datetime.now(timezone.utc).isoformat(), "recording"))
@@ -238,7 +240,8 @@ class SessionStore:
                       "This feedback has changed. Refresh before editing it.")
             event = r.new_event("corrected" if previous else "reported", task_id, data,
                                 task["assignment"]["exercise_id"], task["assignment"]["purpose"])
-            source = previous or task["completion"]
+            source = (task['completion'] if task['completion'] and
+                      (not previous or task['completion']['recorded_at'] > previous['recorded_at']) else previous)
             if source:
                 # A label or memo edit must never discard older performance evidence.
                 for field in ("practice_date", "actual_json", "checks_json", "clean_runs", "actual_minutes", "hypothesis", "reason"):
@@ -297,7 +300,7 @@ class SessionStore:
             r.number(event.get("at_ms"), "event.at_ms", 0, elapsed)
             if event["type"] in ("play", "tempo"):
                 r.number(event.get("bpm"), "event.bpm", 1, 400)
-            if event["type"] in ("pad", "click"):
+            if event["type"] in ("pad", "click", "drum"):
                 r.require(type(event.get("enabled")) is bool, "The enabled flag must be a boolean.")
         event_text = r.jdump(events)
         r.require(len(event_text) <= 500_000, "The event data is too large.")
