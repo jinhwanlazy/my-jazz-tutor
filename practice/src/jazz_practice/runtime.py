@@ -22,7 +22,8 @@ ABC = ['abc_score.py', 'abc-parse.cjs', 'abc-parser.cjs', 'abc-view.mjs', 'abcjs
        'abcjs-LICENSE.md', 'abcjs.min.js.LICENSE', 'recommendation.v2.schema.json', 'coaching-policy.txt', 'notation-policy.txt',
        'materials.py', 'material_extract.py', 'materials-catalog.json', 'coaching_materials.py', 'recommendation.plan.schema.json']
 EXTRACTION = ['musicxml_import.py', 'score_extract.py']
-FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + DIFFICULTY + ABC + EXTRACTION + ['localization.py', 'difficulty-rubric.v1.json']
+ATTEMPTS = ['attempts.py', 'midi-analysis.mjs', 'midi-analysis-cli.mjs', 'midi-analysis-worker.mjs', 'attempt-audio.mjs', 'backing.mjs']
+FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + DIFFICULTY + ABC + EXTRACTION + ATTEMPTS + ['localization.py', 'difficulty-rubric.v1.json']
 PIN = 'runtime.json'
 CACHE = '.runtime'
 
@@ -65,6 +66,7 @@ def snapshot(repo, ref):
             'Runtime difficulty files are incomplete.')
     require(not set(ABC).intersection(names) or set(ABC) <= set(names), 'Runtime ABC files are incomplete.')
     require(not set(EXTRACTION).intersection(names) or set(EXTRACTION) <= set(names), 'Runtime extraction files are incomplete.')
+    require(not set(ATTEMPTS).intersection(names) or set(ATTEMPTS) <= set(names), 'Runtime attempt files are incomplete.')
     contents = {name: git(repo, 'show', f'{revision}:workflow/{name}') for name in FILES if name in names}
     version = tomllib.loads(contents['pyproject.toml'].decode())['project']['version']
     manifest = {'revision': revision, 'version': version,

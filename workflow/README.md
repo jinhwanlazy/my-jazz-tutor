@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.7.0`; create a new tag for later releases instead of moving an old tag:
+selects `v0.7.1`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.7.0
+uv run python publish.py --ref v0.7.1
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
