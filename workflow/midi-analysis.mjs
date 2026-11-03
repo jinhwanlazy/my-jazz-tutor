@@ -47,7 +47,7 @@ export function makeContract(score, conditions, options={}) {
   const reason=!score||!expected.length?'No fixed score':score.allowed_pitches?.length||score.bars.some(b=>
     ['left','right'].some(h=>(b[h]||[]).some(e=>e.kind==='improv')))?'Improvisation needs direct confirmation':
     /\b(swing|rubato)\b/i.test(text)?'Swing or rubato needs a dedicated timing model':
-    options.manual?'MIDI unavailable; user confirmation required':null;
+    options.manual?'Direct goal confirmation requested':null;
   const bpm=options.bpm||conditions.bpm, beatMs=60000/bpm;
   const onsets=[...new Set(expected.map(n=>n.at))].sort((a,b)=>a-b);
   const minGap=Math.min(1,...onsets.slice(1).map((n,i)=>n-onsets[i]));

@@ -18,6 +18,10 @@ try {
   browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_EXECUTABLE||'/usr/bin/google-chrome',args:['--no-sandbox']});
   const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
+  await page.addInitScript(()=>{
+    const port={id:'synthetic-sync',name:'Synthetic sync piano',state:'connected',type:'input'};
+    Object.defineProperty(navigator,'requestMIDIAccess',{value:async()=>({inputs:new Map([[port.id,port]])})});
+  });
   await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection').textContent==='Connected locally');
   await page.evaluate(async()=>{
     const {AttemptTransport}=await import('/attempt-audio.mjs'),{Transport}=await import('/audio.mjs');
@@ -26,7 +30,7 @@ try {
     document.addEventListener('change',e=>window.changeEvents.push([e.target.id,e.target.value]),true);
     const play=AttemptTransport.prototype.playRecording;
     AttemptTransport.prototype.playRecording=function(notes,options){window.playRequests.push({from:options.from,rate:options.rate,bar:document.querySelector('#replay-bar').value});return play.call(this,notes,options);};
-    for(const [method,kind] of [['tick','click'],['note','pad'],['drum','drum'],['replayNote','score']]){
+    for(const [method,kind] of [['tick','click'],['countInTick','count-in'],['note','pad'],['drum','drum'],['replayNote','score']]){
       const original=AttemptTransport.prototype[method];
       AttemptTransport.prototype[method]=function(...args){
         const r=this.replay,a=this.attempt;
@@ -83,7 +87,8 @@ try {
   await page.evaluate(()=>window.run='resume');await page.locator('#replay-pause').click();
   await page.waitForFunction(()=>syncFrames.filter(f=>f.run==='resume').length>25);
   await page.locator('#replay-stop').click();assert.equal(await page.locator('#tempo').inputValue(),'240');
-  // Keep pad/drums armed for a real finite manual take. No idle accompaniment.
+  // Keep pad/drums armed for a finite MIDI take. No idle accompaniment.
+  await page.locator('#midi-connect').click();
   await page.locator('#click-toggle').uncheck({force:true});await page.evaluate(()=>window.run='take');
   await page.locator('#practice-btn').click();await page.waitForFunction(()=>document.querySelector('#transport-state').textContent==='Recording one pass');
   await page.waitForFunction(()=>document.querySelector('.attempt-row')&&!document.querySelector('#practice-btn').disabled);
@@ -103,6 +108,9 @@ try {
   }
   const take=result.sounds.filter(c=>c.run==='take'&&(c.kind==='pad'||c.kind==='drum'));
   assert.ok(take.length>4);assert.ok(take.every(c=>c.at>=c.origin&&c.at<c.end));
+  const sticks=result.sounds.filter(c=>c.run==='take'&&c.kind==='count-in');
+  assert.equal(sticks.length,4);assert.ok(sticks.every(c=>c.at<c.origin));
+  assert.equal(result.sounds.filter(c=>c.run==='take'&&c.kind==='click').length,0);
   const state=await page.evaluate(()=>fetch('/api/state').then(r=>r.json()));assert.equal(state.sessions.length,1);assert.equal(state.history[0].attempts.length,1);
   assert.equal(await page.locator('#error').isVisible(),false);assert.deepEqual(errors,[]);
   await writeFile(join(output,'browser-timing.json'),JSON.stringify(result));

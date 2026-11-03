@@ -23,6 +23,7 @@ function engine() {
     if(kind==='score')t.replayVoices.add(osc);
   };
   t.tick=(at,accent)=>sound('click',at,accent);
+  t.countInTick=(at,accent)=>sound('count-in',at,accent);
   t.note=(at,pitch,duration)=>sound('pad',at,pitch,duration);
   t.drum=(at,kind)=>sound('drum',at,kind);
   t.replayNote=(at,pitch,duration)=>sound('score',at,pitch,duration);

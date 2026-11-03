@@ -474,3 +474,13 @@ body[data-view="practice"] .topbar{height:48px}.room-heading{padding:12px 0}
 #history-dialog .dialog-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#history-dialog .dialog-actions .button{width:100%;min-width:0;min-height:42px;white-space:normal;line-height:1.45;justify-content:center;text-align:center}
 
 @media(min-width:760px){#history-dialog .dialog-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* Compact, labeled icons; setting disclosures have no play-shaped marker. */
+.icon-button{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:32px;height:32px;min-height:32px;padding:6px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--green)}
+.icon-button svg,.workspace-settings>summary>svg{width:18px;height:18px;flex-shrink:0}.task-identity .copy-task-id{padding:5px;width:29px;height:29px;min-height:29px}
+.dialog-header-actions{display:flex;align-items:center;gap:10px}.danger-icon{color:var(--error)}.danger-icon:hover{background:#fff0e9}
+.workspace-settings>summary{display:flex;align-items:center;justify-content:center;gap:6px;list-style:none}.workspace-settings>summary::-webkit-details-marker{display:none}.workspace-settings>summary::marker{content:''}
+.follow-control{align-items:center}.follow-control>span{display:block}.follow-control small{display:block;font-size:10px;font-weight:400;line-height:1.4;color:var(--muted);margin-top:2px}
+#delete-dialog{max-width:470px}#delete-task-title{font-weight:600}#delete-error{color:var(--error)}.practice-card-details>.text-button{font-size:12px;margin-bottom:10px}
+
+@media(max-width:580px){.workspace-settings>summary{width:40px;min-height:36px;padding:7px}.workspace-settings>summary>span{display:none}.follow-control small{max-width:150px;font-size:9px}}

@@ -45,6 +45,23 @@ def cycle(task):
     return (task.get('reopening') or task['assignment'])['event_id']
 
 
+def recording_coverage(task, sessions=(), attempts=()):
+    """Describe what was captured, never infer no practice from absent take rows."""
+    tid = task['assignment']['task_id']
+    takes = [a for a in attempts if a['task_id'] == tid]
+    take_sessions = {a['session_id'] for a in takes}
+    older = [s for s in sessions if s['task_id'] == tid and s['id'] not in take_sessions]
+    release = task['assignment']['release']
+    match = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)', release)
+    tracked = bool(match and tuple(map(int, match.groups())) >= (0, 7, 0))
+    legacy = bool(older or not tracked or task['report'] and not takes)
+    mode = 'mixed' if takes and legacy else 'finite_attempts' if takes or not legacy else 'legacy'
+    return {'mode': mode, 'recorded_attempts': len(takes) if mode != 'legacy' else None,
+            'legacy_session_count': len(older),
+            'interpretation': 'Legacy records did not track individual takes; their absence does not mean the user did not practice. Keep original completion, feedback, notes and measurements.'
+                if legacy else 'Count of saved finite attempts only, not all practice performed by the user.'}
+
+
 class AttemptStore:
     def __init__(self, root):
         self.root = Path(root)
@@ -189,7 +206,7 @@ class AttemptStore:
         with r.log_lock(self.root):
             events = r.read_events(self.root)
             task = next((t for t in r.records(events) if t['assignment']['task_id'] == task_id), None)
-            r.require(task is not None and not task['cancelled'], 'Active practice not found.')
+            r.require(task is not None and not task['cancelled'] and not task['deleted'], 'Active practice not found.')
             if not r.is_pending(task):
                 previous = r.reflection_observations(task['completion']) or {}
                 if previous.get('attempt_completion', {}).get('expected_event_id') == expected_event_id:
@@ -216,11 +233,13 @@ class AttemptStore:
             r.records(events + [event]); r.append_event(self.root, event)
         return {'task_id': task_id, 'event_id': event['event_id']}
 
-    def context_summary(self, limit=5):
-        values = self.list()
+    def context_summary(self, limit=5, task_ids=None, values=None):
+        values = self.list() if values is None else values
+        if task_ids is not None:
+            values = [a for a in values if a['task_id'] in task_ids]
         latest = values[-limit:]
-        return {'policy': 'attempt-context-1', 'recorded_attempts': len(values),
+        return {'policy': 'attempt-context-2', 'recorded_attempts': len(values),
                 'automatic_passes': sum(a['qualified_pass'] for a in values),
                 'omitted_detailed_attempts': max(0, len(values)-limit),
                 'recent': [{k: a[k] for k in ('id','task_id','cycle_id','created_at','state','bpm','mode','result','qualified_pass','counts','timing','expression')} for a in latest],
-                'provenance': 'Versioned MIDI analysis, not audio verification or a mastery score. Manual mode is unassessed.'}
+                'provenance': 'Only saved finite attempts are counted. Legacy sessions and self-reports are not represented by these counts; their absence is not no practice. Versioned MIDI analysis is not audio verification or mastery. Manual mode is unassessed.'}

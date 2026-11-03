@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import math
 from pathlib import Path
 import secrets
 import sqlite3
@@ -15,7 +16,7 @@ import webbrowser
 import review as r
 from notation import score_for
 from sessions import SessionStore, reflection_measurements
-from attempts import AttemptStore
+from attempts import AttemptStore, recording_coverage
 from recommendation import Recommendations, ERRORS, repeat
 from localization import Translations, ERRORS as TRANSLATION_ERRORS
 from difficulty import task_characteristics
@@ -81,6 +82,49 @@ def feedback(task, language="en"):
             "details": details, "evidence": "self-report"}
 
 
+class PlaybackSettings:
+    """Workspace-wide preferences, separate from task BPM and performance evidence."""
+    DEFAULTS = {'metronome_enabled':False, 'pad_enabled':False, 'drums_enabled':False,
+                'click_volume':.35, 'pad_volume':.18, 'drum_volume':.18, 'drum_feel':'straight'}
+
+    def __init__(self, root):
+        self.root = Path(root)
+        self.path = self.root/'playback-settings.json'
+
+    @classmethod
+    def validate(cls, values, partial=False):
+        r.require(isinstance(values,dict) and set(values) <= cls.DEFAULTS.keys()
+                  and (partial or set(values) == cls.DEFAULTS.keys()), 'Invalid playback settings.')
+        for key,value in values.items():
+            if key.endswith('_enabled'):
+                r.require(type(value) is bool, 'Playback switches must be boolean.')
+            elif key == 'drum_feel':
+                r.require(value in ('straight','swing'), 'Invalid drum feel.')
+            else:
+                r.require(type(value) in (int,float) and math.isfinite(value) and 0 <= value <= (1 if key=='click_volume' else .6),
+                          'Playback volume is out of range.')
+
+    def read(self):
+        if not self.path.exists():
+            return {'schema_version':1,'revision':0,'values':dict(self.DEFAULTS)}
+        saved = json.loads(self.path.read_text())
+        r.require(isinstance(saved,dict) and set(saved)=={'schema_version','revision','values'} and saved['schema_version']==1
+                  and type(saved['revision']) is int and saved['revision']>=0, 'Invalid saved playback settings. Original file was preserved.')
+        self.validate(saved['values'])
+        return saved
+
+    def update(self, changes):
+        self.validate(changes,partial=True)
+        with r.log_lock(self.root):
+            current = self.read()
+            values = current['values'] | changes
+            if values == current['values']:
+                return current
+            saved = {'schema_version':1,'revision':current['revision']+1,'values':values}
+            r.atomic_text(self.path,r.jdump(saved)+'\n')
+            return saved
+
+
 class Application:
     def __init__(self, root, data, source=r.HERE, recommender=None, translator=None):
         self.root, self.source, self.data = Path(root).resolve(), Path(source).resolve(), data
@@ -92,6 +136,7 @@ class Application:
         self.revision = None if self.preview else json.loads((self.source / "manifest.json").read_text())["revision"]
         self.store = SessionStore(self.root)
         self.attempts = AttemptStore(self.root)
+        self.playback_settings = PlaybackSettings(self.root)
         self.token = secrets.token_urlsafe(32)
         self.mutations = threading.RLock()
         self.recommendations = Recommendations(self.root, data, recommender)
@@ -105,10 +150,11 @@ class Application:
 
     def state(self, language="en"):
         events = r.read_events(self.root)
-        tasks = r.records(events)
+        tasks = r.visible_records(events)
         profile_path = self.root / "profile.json"
         profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
-        sessions = self.store.list()
+        task_ids = {t['assignment']['task_id'] for t in tasks}
+        sessions = [s for s in self.store.list() if s['task_id'] in task_ids]
         attempts = self.attempts.list()
         history = []
         for task in reversed(tasks):
@@ -123,9 +169,11 @@ class Application:
                             "report": report, "outcome": r.outcome(task), "feedback": feedback(task, language),
                             "completion": task["completion"], "completed": not r.is_pending(task) and bool(r.practice_record(task)) and not task['cancelled'],
                             "lifecycle_event_id": task['lifecycle_event_id'], "reopening": task.get('reopening'),
+                            "revision_event_id": task['revision_event_id'],
                             "completions": task.get('completions', []),
                             "attempts": [a for a in attempts if a['task_id'] == task['assignment']['task_id']],
                             "assessment": self.attempts.summary(task, attempts),
+                            "recording_coverage": recording_coverage(task, sessions, attempts),
                             "started": bool(started), "pending": r.is_pending(task),
                             "observations": r.reflection_observations(r.practice_record(task)) if r.practice_record(task) else reflection_measurements(task_sessions, profile),
                             "revisions": [e for e in events if e["task_id"] == task["assignment"]["task_id"]
@@ -142,12 +190,15 @@ class Application:
                 "workspace_id": hashlib.sha256(str(self.root).encode()).hexdigest()[:16],
                 "status": status, "recommendation": job,
                 "minimum_bpm": 20, "maximum_bpm": 240, "arrangements": r.display_builtin(r.ARRANGEMENTS, language),
-                "history": history, "sessions": sessions}
+                "history": history, "sessions": sessions, "playback_settings": self.playback_settings.read()}
 
     def post(self, path, payload, language="en"):
         r.require(isinstance(payload, dict), "The request must be a JSON object.")
         with self.mutations:
             self.assert_active()
+            if path == '/api/playback-settings':
+                r.require(set(payload)=={'changes'}, 'Invalid playback settings request.')
+                return self.playback_settings.update(payload['changes'])
             if path == "/api/recommend":
                 r.require(set(payload) <= {"request_id", "request"}, "The recommendation request contains unknown fields.")
                 return self.recommendations.start(payload["request_id"], language, payload.get("request", ""))
@@ -167,6 +218,9 @@ class Application:
             if path == '/api/reopen':
                 r.require(set(payload) == {'task_id','expected_event_id'}, 'Invalid reopen request.')
                 return r.reopen(self.root, self.data, payload['task_id'], payload['expected_event_id'])
+            if path == '/api/delete':
+                r.require(set(payload) == {'task_id','expected_event_id'}, 'Invalid deletion request.')
+                return r.delete_practice(self.root, self.data, payload['task_id'], payload['expected_event_id'])
             if path == '/api/attempts/start':
                 r.require(set(payload) <= {'task_id','attempt_id','bpm','manual','latency_ms'}, 'Invalid attempt request.')
                 return self.attempts.start(payload['task_id'], payload['attempt_id'], payload['bpm'],
@@ -281,6 +335,8 @@ def make_server(root, data, port=8765, source=r.HERE, recommender=None, host="12
                 path = urlsplit(self.path).path
                 if path == "/api/state":
                     self.respond(200, app.state(self.language()))
+                elif path == '/api/playback-settings':
+                    self.respond(200, app.playback_settings.read())
                 elif path.startswith('/api/attempts/'):
                     self.respond(200, app.attempts.details(path.removeprefix('/api/attempts/')))
                 elif path.startswith("/api/recommendations/"):

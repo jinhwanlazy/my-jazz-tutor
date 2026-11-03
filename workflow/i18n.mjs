@@ -57,7 +57,7 @@ export function tr(message, ...values) {
 export function translatePage(root = document) {
   document.documentElement.lang = language;
   for (const node of root.querySelectorAll('[data-i18n]')) node.textContent = tr(node.dataset.i18n);
-  for (const attribute of ['aria-label', 'placeholder']) {
+  for (const attribute of ['aria-label', 'placeholder', 'title']) {
     for (const node of root.querySelectorAll(`[data-i18n-${attribute}]`)) {
       node.setAttribute(attribute, tr(node.getAttribute(`data-i18n-${attribute}`)));
     }

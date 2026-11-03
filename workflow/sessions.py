@@ -230,7 +230,7 @@ class SessionStore:
         with r.log_lock(self.root):
             events = r.read_events(self.root)
             task = next((t for t in r.records(events) if t["assignment"]["task_id"] == task_id), None)
-            r.require(task is not None and not task["cancelled"], "Active task ID not found.")
+            r.require(task is not None and not task["cancelled"] and not task["deleted"], "Active task ID not found.")
             sessions = self.list(task_id)
             r.require(not any(s["status"] == "recording" for s in sessions), "Finish and save the current practice session first.")
             previous = task["report"]
@@ -263,7 +263,7 @@ class SessionStore:
         with r.log_lock(self.root):
             events = r.read_events(self.root)
             task = next((t for t in r.records(events) if t["assignment"]["task_id"] == task_id), None)
-            r.require(task is not None and not task["cancelled"], "Active task ID not found.")
+            r.require(task is not None and not task["cancelled"] and not task["deleted"], "Active task ID not found.")
             if r.practice_record(task):
                 return {"task_id": task_id, "event_id": r.practice_record(task)["event_id"]}
             sessions = self.list(task_id)

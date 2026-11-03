@@ -7,7 +7,7 @@ export class AttemptTransport extends Transport {
   constructor(callbacks={}) {
     super(callbacks);Object.assign(this,callbacks);
     this.click=false;this.drums=false;this.feel='straight';this.drumVolume=.18;
-    this.phase='idle';this.attempt=null;this.replay=null;this.replayVoices=new Set();this.drumVoices=new Set();this.clockGeneration=0;
+    this.phase='idle';this.attempt=null;this.replay=null;this.replayVoices=new Set();this.drumVoices=new Set();this.countInVoices=new Set();this.clockGeneration=0;
   }
   async unlock() {
     await super.unlock();
@@ -115,7 +115,8 @@ export class AttemptTransport extends Transport {
       const local=a?this.beatIndex-a.startIndex:this.beatIndex;
       const total=a?a.total:replay?Math.min(bars*beats,replay.duration*replay.bpm/60000):0;
       const backingAllowed=(a||replay)&&local>=0&&local<total;
-      if((this.click&&(!replay||backingAllowed))||counting)this.tick(this.nextTime,beat===0);
+      if(counting)this.countInTick(this.nextTime,beat===0);
+      else if(this.click&&(!replay||backingAllowed))this.tick(this.nextTime,beat===0);
       const cycle=((local%(bars*beats))+bars*beats)%(bars*beats);
       if(backingAllowed&&this.padEnabled) {
         for(const event of this.padEvents())if(event.start>=cycle&&event.start<cycle+1) {
@@ -161,7 +162,26 @@ export class AttemptTransport extends Transport {
   }
   abortAttempt() {
     if(!this.attempt)return;
+    for(const voice of this.countInVoices){try{voice.stop(this.context.currentTime);}catch{}}
+    this.countInVoices.clear();
     this.attempt=null;this.phase='idle';this.stopPad();this.stopDrums();this.onAbort?.();
+  }
+  countInTick(time,accent) {
+    // A short, noisy wooden impact, distinct from the metronome's pitched beep.
+    if(!this.stickBuffer){
+      const rate=this.context.sampleRate;this.stickBuffer=this.context.createBuffer(1,Math.ceil(rate*.055),rate);
+      const data=this.stickBuffer.getChannelData(0);
+      for(let i=0;i<data.length;i++){
+        const t=i/rate;
+        data[i]=.45*Math.sin(2*Math.PI*1850*t)*Math.exp(-180*t)+
+          .3*Math.sin(2*Math.PI*3100*t)*Math.exp(-260*t)+.25*(Math.random()*2-1)*Math.exp(-650*t);
+      }
+    }
+    const source=this.context.createBufferSource(),gain=this.context.createGain();source.buffer=this.stickBuffer;
+    this.clickBus.gain.value=this.clickVolume;
+    gain.gain.setValueAtTime(accent?1:.75,time);gain.gain.exponentialRampToValueAtTime(.0001,time+.05);
+    gain.connect(this.clickBus);this.voice(source,gain,time);this.countInVoices.add(source);
+    const ended=source.onended;source.onended=()=>{ended();this.countInVoices.delete(source);};source.stop(time+.055);
   }
   drum(time,kind,level,end=Infinity) {
     const gain=this.context.createGain();this.drumBus.gain.value=this.drumVolume;
@@ -220,7 +240,7 @@ export class AttemptTransport extends Transport {
     this.clockGeneration++;
     clearInterval(this.interval);cancelAnimationFrame(this.animation);this.playing=false;this.queue=[];
     for(const voice of this.voices){try{voice.stop(this.context.currentTime);}catch{}}
-    this.voices.clear();this.padVoices=[];this.replayVoices.clear();this.drumVoices.clear();
+    this.voices.clear();this.padVoices=[];this.replayVoices.clear();this.drumVoices.clear();this.countInVoices.clear();
   }
   pause() {
     if(this.attempt)this.abortAttempt();this.stopReplay({resumeClock:false});this.stopClock();

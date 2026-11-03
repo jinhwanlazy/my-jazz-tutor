@@ -74,3 +74,12 @@ Keep unknowns explicit. Assess demands and personal burden after designing the
 exercise. Rubric anchors are comparison tools, not limits on musical ambition.
 Use out_of_range with a null level if they do not cover the task. Never invent a
 mastery score, probability, performance verification or fixed deadline.
+
+
+Recording coverage is explicit evidence metadata. Earlier continuous sessions and
+self-reported practice did not track individual takes. A null count, no finite-take
+rows, or absence from the finite-attempt rollup never means no practice. Retain
+original completion, labels, notes and session measurements in your interpretation.
+Deleted items have been excluded from the supplied evidence; do not invent their
+contents or treat deletion as a performance result. Shared sound switches and
+volumes are interface preferences, not observations of skill.

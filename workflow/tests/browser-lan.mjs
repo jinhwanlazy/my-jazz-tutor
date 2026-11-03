@@ -40,27 +40,23 @@ try {
 
   await page.locator('#midi-connect').click();
   assert.match(await page.locator('#midi-status').textContent(),/HTTPS or localhost/);
-  await page.locator('#tempo').fill('240');await page.locator('#tempo').dispatchEvent('change');
-  await page.locator('#practice-btn').click();await page.waitForFunction(()=>!document.querySelector('#finish-btn').disabled);
-  await page.locator('#finish-btn').click();await page.locator('#manual-confirm').check();await page.locator('#complete-confirm').click();
+  assert.equal(await page.locator('#practice-btn').isDisabled(),true);
+  await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#manual-mode').check({force:true});
+  assert.equal(await page.locator('#practice-btn').isDisabled(),true,'direct confirmation bypassed MIDI requirement');
+  await page.locator('#reference-play').click();await page.locator('#replay-actions').waitFor({state:'visible'});await page.locator('#replay-stop').click();
+  let data=await state();assert.equal(data.sessions.length,0);
+  await page.locator('#discard-btn').click();await page.locator('#discard-reason').fill('Synthetic LAN practice skipped');await page.locator('#discard-submit').click();
   await page.locator('#view-list').waitFor({state:'visible'});
-  let data=await state();
-  assert.equal(data.history.length,1);assert.equal(data.history[0].completed,true);
-  assert.equal(data.sessions.length,1);assert.equal(data.sessions[0].status,'finished');
-  assert.match(data.sessions[0].id,/^S-[0-9a-f]{32}$/);
-  await page.locator('[data-rating="good"]').click();
-  await page.waitForFunction(()=>document.querySelector('[data-rating="good"]').getAttribute('aria-pressed')==='true');
-  await page.locator('#close-record').click();
   await page.locator('.history-item').first().click();
   await page.locator('#history-dialog').waitFor({state:'visible'});
   await page.locator('#repeat-btn').click();
   await page.locator('#history-dialog').waitFor({state:'hidden'});
   data=await state();
   assert.equal(data.history.length,2);assert.equal(data.history.filter(t=>t.pending).length,1);
-  assert.equal(data.status.reported_attempts,1);assert.equal(await page.locator('#view-practice').isVisible(),false);
+  assert.equal(data.status.reported_attempts,0);assert.equal(await page.locator('#view-practice').isVisible(),false);
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({passed:true,origin:`http://${address}:${port}`,secure_context:false,
-    checks:['generation without randomUUID','metronome and recording save over HTTP','completion and feedback','repeat task IDs','explicit MIDI limitation']}));
+    checks:['generation without randomUUID','score playback without MIDI','MIDI-less attempts blocked','repeat task IDs','explicit MIDI limitation']}));
 } finally {
   if(browser)await browser.close();
   if(server.pid && server.exitCode === null && server.signalCode === null) {

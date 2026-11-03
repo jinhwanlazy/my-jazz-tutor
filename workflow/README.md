@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.7.3`; create a new tag for later releases instead of moving an old tag:
+selects `v0.8.0`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.7.3
+uv run python publish.py --ref v0.8.0
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -137,7 +137,7 @@ IPv4 interfaces; use a specific local IPv4 address to bind only that interface.
 There is no login: reachable devices can read and change practice records and
 request recommendations using the server's Codex account. Host, same-origin and
 CSRF checks remain enabled; they do not authenticate LAN users.
-Practice generation, metronome playback and saving work over plain HTTP. Web MIDI
+Practice generation, score listening, metronome playback and recovery uploads work over plain HTTP. Starting a new attempt requires a connected, selected MIDI input. Web MIDI
 requires HTTPS or localhost in a supporting browser; this server does not provide
 TLS. To use MIDI remotely without HTTPS, forward the port through SSH and visit
 localhost on the client. Changing the address creates a separate browser storage
@@ -162,7 +162,7 @@ origin, so recover any unsent input at its original address first.
   Scores wrap every four bars at every screen size and fit
   the available width. Note spacing is proportional to time, so the cursor moves
   at constant speed within each line at a fixed BPM and then
-  moves to the next line. **Follow playback** brings that line into view when
+  moves to the next line. **Auto-scroll score** brings that line into view when
   needed; turn it off to scroll manually. MIDI holds crossing a line continue
   on the following staff without an extra attack mark. Resizing preserves the
   current beat and MIDI buffer; layout never changes the saved music. Whole-note
@@ -180,8 +180,8 @@ origin, so recover any unsent input at its original address first.
 - **Listen and compare:** play the written notes or your recording with pause/stop,
   playback speed and bar seeking. Playback never creates attempts or success credit.
 - **Complete practice:** confirmation closes the task after a qualifying attempt.
-  Unscored goals (swing, improvisation, no score or no MIDI) use explicit self-report
-  after a complete target-tempo take. Feedback remains optional and editable.
+  Unscored goals (swing, improvisation or no score) use explicit self-report
+  after a complete target-tempo take with a connected MIDI input. Historical MIDI-less records are preserved. Feedback remains optional and editable.
 - **Discard task:** beside attempt/complete, a confirmation dialog requires a written
   reason. Existing input is preserved. A skip is coaching context, not a performance
   result or mastery credit. Historical empty reasons remain unknown.
@@ -669,7 +669,7 @@ results; `event_id` identifies each event. Writes use a file lock.
 
 | Main column | Meaning |
 | --- | --- |
-| event_type | assigned / completed / reopened / reported / corrected / discarded / cancelled / retired |
+| event_type | assigned / completed / reopened / reported / corrected / discarded / cancelled / retired / deleted |
 | target_json | Assigned key, BPM, hands, rhythm, bass, voicing, melody, material, and criteria |
 | actual_json | Conditions the user reports actually practicing |
 | checks_json | Notes, pulse, and uninterrupted playing: true / false / null |
@@ -696,7 +696,7 @@ unscored; deterministic backing supports a conservative subset of chord symbols.
 The launcher refuses to activate a runtime that cannot read the saved database
 version. `attempts --task-id TASK`, `complete TASK --expected-event-id EVENT` and
 `reopen TASK --expected-event-id EVENT` share the web operations and storage.
-The metronome can run independently. Pad and drums are armed preferences and sound only during the playing portion of a take or active playback.
+The metronome can run independently. Pad and drums are armed preferences and sound only during the playing portion of a take or active playback. Sound preferences persist across practices and clients.
 
 ### Practice workspace (0.7.2)
 
@@ -736,3 +736,35 @@ idle metronome if enabled. Saved MIDI, conditions and assessments are unchanged.
 latency, finite backing and held-note restoration. `tests/playback-sync-browser.mjs`
 checks real Web Audio source scheduling and rendered cursor timing in a disposable
 synthetic practice workspace, including pause/seek/speed and idle silence.
+
+
+### Record management and shared sound settings (0.8.0)
+
+New attempts require a connected, selected MIDI input, including takes with direct
+goal confirmation. Listening and the independent metronome remain available without
+MIDI. The count-in uses a short wooden stick impact distinct from the metronome;
+they never double on the same count-in beat. Notes have a slightly larger leading
+gap while engraving, cursor and input continue to use the same time grid. Copy ID
+uses a labeled icon; sound settings use sliders rather than a disclosure triangle.
+Auto-scroll score explains that it keeps the currently playing staff line visible.
+The journal title opens practice; the duplicate continue button is removed.
+
+Legacy session recordings and self-reports explicitly have unknown individual
+attempt counts. Their completion, feedback, notes and measurements still inform
+coaching. Missing finite-take rows must never be interpreted as no practice. Mixed
+records retain their earlier sessions and count only saved finite attempts.
+
+The trash icon in record details opens a confirmation. Deletion appends a `deleted`
+event and excludes the practice from the journal, totals and recommendation sources,
+including its analysis summaries. Original CSV events, snapshots, notes and MIDI
+remain local. An open recording or stale record revision prevents deletion. Repeated
+requests are idempotent. `delete TASK --expected-event-id REVISION` uses the same
+operation; old runtimes that cannot read tombstones cannot be activated over them.
+
+Metronome/pad/drum switches, volumes and drum feel are shared workspace preferences,
+stored atomically in local ignored `practice/playback-settings.json`. Partial updates
+merge across clients and visible pages synchronize every three seconds. Leaving the
+room, audio interruption or unavailable accompaniment stops sound without resetting
+preferences. A failed read retains current settings and never overwrites the saved
+file with defaults. BPM remains a task/take condition, separate from these preferences.
+These preferences are not performance evidence or recommendation input.

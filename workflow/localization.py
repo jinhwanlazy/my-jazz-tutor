@@ -269,7 +269,7 @@ class Translations:
         with self.mutex:
             with r.log_lock(self.root):
                 rec.assert_active(self.root)
-                task = next((task for task in r.records(r.read_events(self.root))
+                task = next((task for task in r.visible_records(r.read_events(self.root))
                              if task['assignment']['task_id'] == task_id), None)
                 r.require(task is not None and task['target'].get('kind') == 'generated',
                           'Choose a generated practice to translate.')
@@ -323,7 +323,7 @@ class Translations:
                 translated_target(target, job['language'], job['source_language'], result, job['protocol'])
             with r.log_lock(self.root):
                 rec.assert_active(self.root)
-                tasks = r.records(r.read_events(self.root))
+                tasks = r.visible_records(r.read_events(self.root))
                 if not any(task['assignment']['task_id'] == job['task_id'] and task['target'] == target for task in tasks):
                     raise rec.RecommendationError('stale')
                 job.update(state='completed', result=result, provenance=provenance)

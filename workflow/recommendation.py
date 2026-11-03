@@ -199,10 +199,13 @@ def context_for(root, data, language=None, request=''):
     if not isinstance(profile, dict) or not isinstance(request, str) or len(request) > 2000:
         raise RecommendationError('context')
     events = r.read_events(root)
-    tasks = r.records(events)
-    sessions = SessionStore(root).list() if (root / 'sessions.sqlite3').exists() else []
+    tasks = r.visible_records(events)
+    task_ids = {t['assignment']['task_id'] for t in tasks}
+    sessions = [s for s in SessionStore(root).list() if s['task_id'] in task_ids] if (root / 'sessions.sqlite3').exists() else []
     from attempts import AttemptStore
-    attempt_summary = AttemptStore(root).context_summary()
+    store = AttemptStore(root)
+    attempts = [a for a in store.list() if a['task_id'] in task_ids]
+    attempt_summary = store.context_summary(task_ids=task_ids, values=attempts)
     sources = [{'id': 'profile', 'kind': 'profile_with_provenance', 'data': profile}]
     if request:
         sources.append({'id': 'request', 'kind': 'current_user_request', 'data': request})
@@ -227,6 +230,7 @@ def context_for(root, data, language=None, request=''):
                                      'metronome_bpm, last_note_bpm, last_setting_bpm are metronome SETTINGS, not analyzed playing BPM.',
                                      'Assigned conditions are not proof of actual playing conditions.',
                                      'Completion without feedback is completed, not a pending task.',
+                                     'Legacy recording coverage has an unknown individual attempt count. No finite attempt rows does not mean no practice; retain original completion and user feedback.',
                                      'Retirement on update is neither failure nor a practice result or skip.',
                                      'Raw MIDI and audio are not supplied. Versioned MIDI analysis, when present, is distinct from self-report and does not verify musical mastery.',
                                      'Several practices may be active. Consider their goals and recent attempts to avoid unnecessary duplicates.']}
@@ -234,7 +238,7 @@ def context_for(root, data, language=None, request=''):
     context['input_budget'] = {'policy': 'UTF-8 bytes conservatively bound app-supplied text tokens; not an exact tokenizer count.',
                                'max_prompt_and_schema_bytes': INPUT_BUDGET}
     try:
-        fit(context, tasks, sessions, events, INPUT_BUDGET - overhead - PREPARATION_RESERVE - 500)
+        fit(context, tasks, sessions, [e for e in events if e['task_id'] in task_ids], INPUT_BUDGET - overhead - PREPARATION_RESERVE - 500, attempts)
     except ValueError:
         raise RecommendationError('context') from None
     for _ in range(3):
@@ -697,7 +701,7 @@ def repeat(root, data, source_task_id, task_id):
         events = r.read_events(root)
         tasks = r.records(events)
         source = next((t for t in tasks if t['assignment']['task_id'] == source_task_id), None)
-        r.require(source is not None and not r.is_pending(source), 'Choose a completed or closed practice to repeat.')
+        r.require(source is not None and not source['deleted'] and not r.is_pending(source), 'Choose a completed or closed practice to repeat.')
         existing = next((t for t in tasks if t['assignment']['task_id'] == task_id), None)
         reason = 'Explicit repeat of ' + source_task_id
         if existing:

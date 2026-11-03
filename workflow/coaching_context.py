@@ -11,7 +11,7 @@ import re
 
 from difficulty import prediction_observation, score_features
 
-POLICY = 'bounded-evidence-v3'
+POLICY = 'bounded-evidence-v4'
 RECENT = 8
 RELATED = 4
 
@@ -73,11 +73,13 @@ def conditions(target):
     return compact(view)
 
 
-def task_sources(task, sessions):
+def task_sources(task, sessions, attempts=()):
+    from attempts import recording_coverage
     a = task['assignment']; tid = a['task_id']
     sources = [{'id': 'task:' + tid, 'kind': 'assigned_conditions',
                 'data': {'task_id': tid, 'exercise_id': a['exercise_id'], 'assigned_at': a['recorded_at'],
-                         'conditions': conditions(task['target']), 'state': state(task)}}]
+                         'conditions': conditions(task['target']), 'state': state(task),
+                         'recording_coverage': recording_coverage(task, sessions, attempts)}}]
     for field in ('completion', 'report', 'cancellation', 'reopening'):
         event = task.get(field)
         if event:
@@ -175,7 +177,7 @@ def select(tasks, request):
     return recent, related
 
 
-def fit(context, tasks, sessions, events, budget):
+def fit(context, tasks, sessions, events, budget, attempts=()):
     """Keep current request/rules, a bounded factual rollup and whole source groups.
 
     UTF-8 bytes are a conservative token upper-bound for the app-supplied text,
@@ -195,10 +197,10 @@ def fit(context, tasks, sessions, events, budget):
     # newly corrected older evidence can be considered.
     ordered = [task for pair in zip_longest(recent, related) for task in pair if task is not None]
     for task in ordered:
-        group = task_sources(task, sessions)
+        group = task_sources(task, sessions, attempts)
         if encoded_size(context) + encoded_size(group) + 500 > budget:
             # Keep the source list intact while reducing individual descriptions.
-            group = [compact(source, 300) for source in task_sources(task, sessions)]
+            group = [compact(source, 300) for source in task_sources(task, sessions, attempts)]
         if encoded_size(context) + encoded_size(group) + 500 > budget:
             continue
         context['sources'].extend(group)

@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const project=resolve(import.meta.dirname,'..'),root=await mkdtemp(join(tmpdir(),'jazz-browser-ux-review-'));
-const output=join(project,'build/ui-ux-refresh-0.7.2');await mkdir(output,{recursive:true});
+const output=join(project,'build/practice-polish-0.8.0');await mkdir(output,{recursive:true});
 const server=spawn('uv',['run','python','tests/serve_ux_browser.py',root],{cwd:project});let browser;
 try {
   const fixture=await new Promise((resolve,reject)=>{
@@ -17,8 +17,11 @@ try {
   browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_EXECUTABLE||'/usr/bin/google-chrome',args:['--no-sandbox']});
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{
+    const Audio=window.AudioContext;window.AudioContext=class extends Audio{constructor(...args){super(...args);window.syntheticAudio=this;}};
     const port={id:'synthetic-piano',name:'Synthetic piano',state:'connected',type:'input'};
-    Object.defineProperty(navigator,'requestMIDIAccess',{value:async()=>({inputs:new Map([[port.id,port]])})});
+    const access={inputs:new Map([[port.id,port]])};
+    Object.defineProperty(navigator,'requestMIDIAccess',{value:async()=>access});
+    window.midiConnected=connected=>{port.state=connected?'connected':'disconnected';access.onstatechange?.({port});};
     window.sendMidi=data=>port.onmidimessage?.({data:Uint8Array.from(data),timeStamp:performance.now()});
   });
   const state=()=>page.evaluate(()=>fetch('/api/state').then(r=>r.json()));
@@ -39,8 +42,22 @@ try {
     const x=s=>c.querySelector(s).getBoundingClientRect().left;return {delta:x('.attempt-count')-x('h3'),height:c.getBoundingClientRect().height};
   });
   assert.ok(Math.abs(inset.delta)<=1,JSON.stringify(inset));assert.ok(inset.height<300,JSON.stringify(inset));
+  assert.equal(await page.getByRole('button',{name:/^(Continue practice|Open practice room)$/}).count(),0);
+  assert.equal(await card('blank').locator('.copy-task-id svg').count(),1);
+  assert.equal(await card('blank').locator('.copy-task-id').innerText(),'');
+  const legacy=(await state()).history.find(t=>t.recording_coverage.mode==='legacy');
+  assert.match(await page.locator(`.practice-item[data-task-id="${legacy.id}"] .attempt-count`).innerText(),/Legacy practice record/);
   await page.screenshot({path:join(output,'journal-desktop-final.png')});
-  await enter('main');await page.locator('#midi-connect').click();
+  await enter('main');assert.equal(await page.locator('#practice-btn').isDisabled(),true);
+  await settings();await page.locator('#manual-mode').check();assert.equal(await page.locator('#practice-btn').isDisabled(),true);
+  await page.locator('#manual-mode').uncheck();await page.locator('#playback-settings summary').click();
+  assert.equal(await page.locator('#finish-btn').isDisabled(),false,'missing MIDI must not erase an earlier qualifying take');
+  await page.locator('#midi-connect').click();assert.equal(await page.locator('#practice-btn').isDisabled(),false);
+  await page.evaluate(()=>midiConnected(false));assert.equal(await page.locator('#practice-btn').isDisabled(),true);
+  await page.evaluate(()=>midiConnected(true));assert.equal(await page.locator('#practice-btn').isDisabled(),false);
+  assert.equal(await page.locator('#playback-settings>summary svg').count(),1);
+  assert.equal(await page.locator('#playback-settings>summary').evaluate(e=>getComputedStyle(e).listStyleType),'none');
+  assert.match(await page.locator('.follow-control').innerText(),/Auto-scroll score.*Keep the playing line in view/s);
   await page.waitForFunction(()=>document.querySelector('#attempt-feedback').dataset.attemptId);
   assert.match(await page.locator('#attempt-feedback').innerText(),/No notes were matched/);
   assert.equal(await page.locator('.result-metrics strong').nth(2).innerText(),'Not assessed');
@@ -131,7 +148,41 @@ try {
     assert.equal(await page.locator('#history-dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1),true);
   }
   await page.screenshot({path:join(output,'completed-detail-mobile-final.png')});
-  await page.locator('#dialog-close').click();await page.locator('[data-view="settings"]').click();await page.locator('#language-select').selectOption('ko');await page.locator('#settings-back').click();
+  // Delete has an explicit confirmation, keeps MIDI, and removes the journal item.
+  const completed=(await state()).history.find(t=>t.id===fixture.tasks.completed),session=completed.attempts[0].session_id;
+  const archive=await page.evaluate(id=>fetch('/api/recordings/'+id+'/metadata').then(r=>r.json()),session);
+  await page.locator('#delete-practice').click();await page.locator('#delete-dialog').waitFor({state:'visible'});
+  await page.screenshot({path:join(output,'delete-confirm-mobile.png')});await page.locator('#delete-cancel').click();
+  assert.ok((await state()).history.some(t=>t.id===completed.id));
+  await page.locator('#delete-practice').click();await page.locator('#delete-confirm').click();
+  await page.locator('#delete-dialog').waitFor({state:'hidden'});await page.locator('#history-dialog').waitFor({state:'hidden'});
+  assert.equal(await card('completed').count(),0);
+  assert.deepEqual(await page.evaluate(id=>fetch('/api/recordings/'+id+'/metadata').then(r=>r.json()),session),archive);
+  // Shared preferences survive leaving, another task, reload and another browser.
+  await enter('blank');await page.locator('#click-toggle').check({force:true});await settings();
+  await page.locator('#pad-toggle').check({force:true});await page.locator('#drum-toggle').check({force:true});
+  const volume=async(target,id,value)=>target.locator('#'+id).evaluate((e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));},value);
+  await volume(page,'click-volume',.13);await volume(page,'pad-volume',.07);await volume(page,'drum-volume',.09);
+  await page.locator('#backing-feel').selectOption('swing');
+  await page.waitForFunction(async()=>{const s=await fetch('/api/playback-settings').then(r=>r.json());return s.values.drum_feel==='swing'&&s.values.pad_volume===.07&&s.values.metronome_enabled&&s.values.pad_enabled&&s.values.drums_enabled;});
+  await list();await enter('ready');assert.equal(await page.locator('#click-toggle').isChecked(),true);
+  await settings();assert.equal(await page.locator('#pad-toggle').isChecked(),true);assert.equal(await page.locator('#drum-toggle').isChecked(),true);
+  await list();await page.reload();await page.waitForFunction(()=>document.querySelector('.practice-item'));await enter('blank');
+  assert.equal(await page.locator('#click-toggle').isChecked(),true);assert.equal(await page.locator('#practice-btn').isDisabled(),true);
+  assert.match(await page.locator('#completion-hint').innerText(),/Connect MIDI/);
+  await settings();assert.equal(await page.locator('#backing-feel').inputValue(),'swing');assert.equal(await page.locator('#pad-volume').inputValue(),'0.07');
+  const other=await browser.newPage();await other.goto(fixture.url);await other.waitForFunction(()=>document.querySelector('.practice-item'));
+  await other.locator(`.practice-item[data-task-id="${fixture.tasks.blank}"] .history-item`).click();
+  await other.locator('#playback-settings').evaluate(e=>e.open=true);assert.equal(await other.locator('#pad-toggle').isChecked(),true);
+  await other.locator('#drum-toggle').uncheck({force:true});await volume(other,'click-volume',.21);
+  await page.waitForFunction(()=>!document.querySelector('#drum-toggle').checked&&document.querySelector('#click-volume').value==='0.21');
+  await page.route('**/api/playback-settings*',async route=>route.request().method()==='GET'?route.fulfill({status:503,contentType:'application/json',body:'{}'}):route.continue());
+  await page.waitForTimeout(3200);assert.equal(await page.locator('#pad-toggle').isChecked(),true);assert.equal(await page.locator('#click-volume').inputValue(),'0.21');
+  await page.unroute('**/api/playback-settings*');await other.close();
+  await page.evaluate(()=>syntheticAudio.suspend());await page.locator('#error').waitFor({state:'visible'});
+  assert.equal(await page.locator('#click-toggle').isChecked(),true);assert.equal(await page.locator('#pad-toggle').isChecked(),true);
+  await list();
+  await page.locator('[data-view="settings"]').click();await page.locator('#language-select').selectOption('ko');await page.locator('#settings-back').click();
   await page.waitForFunction(()=>document.querySelector('#connection').textContent==='로컬에 연결됨');
   assert.doesNotMatch(await page.locator('.attempt-count').first().innerText(),/attempts|successes/);
   await page.screenshot({path:join(output,'journal-mobile-ko-final.png')});await enter('main');await page.locator('#go-score').click();
@@ -139,7 +190,7 @@ try {
   assert.equal(await page.locator('#manual-mode').isChecked(),true);
   await page.screenshot({path:join(output,'score-mobile-ko-final.png')});
   assert.deepEqual(errors,[]);
-  await writeFile(join(output,'ux-result.json'),JSON.stringify({passed:true,viewports:5,checks:['task-scoped paint and late-response guards','visible score/stop/status','selected take identity and playback','unknown assessment presentation','reopen gate explanation','compact cards/status filters','fixed dialog actions','English/Korean'],errors},null,2));
+  await writeFile(join(output,'ux-result.json'),JSON.stringify({passed:true,viewports:5,checks:['task-scoped paint and late-response guards','visible score/stop/status','selected take identity and playback','unknown assessment presentation','reopen gate explanation','compact cards/status filters','fixed dialog actions','MIDI connection gate','icons and auto-scroll explanation','legacy coverage','delete confirmation and preserved MIDI','shared sound settings across tasks/reload/clients/read failure','English/Korean'],errors},null,2));
   console.log('UX regressions passed: scoped paint, five viewports, fixed controls, selected playback, journal and completed details.');
 } catch(error) {
   const page=browser?.contexts()[0]?.pages()[0];if(page){await page.screenshot({path:join(output,'ux-failure.png'),fullPage:true});await writeFile(join(output,'ux-failure.txt'),await page.locator('body').innerText());}throw error;

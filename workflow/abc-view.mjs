@@ -1,6 +1,7 @@
 // Pinned abcjs engraving adapter. Internal library objects do not escape here.
 // Timing comes from our audio clock; this adapter maps quarter beats to the score.
-const GRID_PADDING = 4, NOTE_CENTER = 4;
+// Keep a little breathing room before timed notes without changing their clock.
+const GRID_PADDING = 10, NOTE_CENTER = 4;
 
 function prepareTimeGrid(tune, width) {
   const lines = tune.lines.filter(line => line.staffGroup).map(line =>

@@ -11,6 +11,7 @@ node_modules/
 /practice/releases/
 /practice/practice.csv
 /practice/profile.json
+/practice/playback-settings.json
 /practice/.recommendations/
 /practice/.translations/
 /practice/workflow-feedback.md

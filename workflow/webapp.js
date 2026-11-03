@@ -16,7 +16,8 @@ function measureWorkspace() {
 const workspaceObserver = new ResizeObserver(measureWorkspace);
 workspaceObserver.observe(sidebar);workspaceObserver.observe(toolbar);
 const ui = {data: null, capture: null, busy: false, selected: null, recordTask: null, openedTaskId: null, view: 'list', reflectionSaving: false, ports: new Map(), phase:'idle', midiFrames:[], replayTrack:null};
-ui.visit=0;ui.detailRequest=0;ui.replayRequest=0;
+ui.visit=0;ui.detailRequest=0;ui.replayRequest=0;ui.roomAudioActive=false;
+ui.playbackRevision=-1;ui.playbackPending={};ui.playbackInFlight={};
 const heldKeys=new Map(), heldPedals=new Map();
 let analysisWorker,analysisSerial=0;
 let outbox, midiAccess, midiSelection = 'all', timer, detailTask;
@@ -26,9 +27,16 @@ const discardChoices = {already_practiced: 'Already familiar', too_easy: 'Too ea
 const ratingEmoji = {impossible: '😈', challenging: '💪', good: '🙂', too_easy: '🙄'};
 const ratingText = rating => `${ratingEmoji[rating]} ${tr(ratings[rating])}`;
 function el(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
+function icon(name) {
+  const ns='http://www.w3.org/2000/svg',node=document.createElementNS(ns,'svg');
+  for(const [key,value] of Object.entries({viewBox:'0 0 24 24',fill:'none',stroke:'currentColor','stroke-width':'1.7','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true',focusable:'false'}))node.setAttribute(key,value);
+  const paths={copy:['M9 8h10v13H9z','M15 4H5v13'],trash:['M4 7h16','M9 7V4h6v3','M6 7l1 14h10l1-14','M10 11v6','M14 11v6']};
+  for(const d of paths[name]){const path=document.createElementNS(ns,'path');path.setAttribute('d',d);node.append(path);}
+  return node;
+}
 function taskIdentity(id) {
   const box = el('div', undefined, 'task-identity'), value = el('code', id, 'task-id');
-  const button = el('button', tr('Copy ID'), 'text-button copy-task-id'); button.type = 'button';
+  const button = el('button', undefined, 'icon-button copy-task-id'); button.type = 'button';button.append(icon('copy'));button.title=tr('Copy ID');
   button.setAttribute('aria-label', tr`Copy practice ID ${id}`);
   const status = el('span', '', 'copy-status'); status.setAttribute('role', 'status');
   button.addEventListener('click', async () => {
@@ -74,6 +82,51 @@ async function api(path, body) {
   return result;
 }
 
+let playbackSaveTimer;
+function applyPlaybackSettings(saved) {
+  if(!saved)return;
+  if(saved.revision>=ui.playbackRevision){ui.playbackRevision=saved.revision;ui.playbackSaved=saved;}
+  const previous=ui.playbackValues;
+  const values={...ui.playbackSaved.values,...ui.playbackInFlight,...ui.playbackPending};ui.playbackValues=values;
+  for(const [id,key] of [['click-toggle','metronome_enabled'],['pad-toggle','pad_enabled'],['drum-toggle','drums_enabled']])$(id).checked=values[key];
+  for(const [id,key] of [['click-volume','click_volume'],['pad-volume','pad_volume'],['drum-volume','drum_volume'],['backing-feel','drum_feel']])$(id).value=values[key];
+  transport.click=values.metronome_enabled;transport.setPad(values.pad_enabled);transport.setDrums(values.drums_enabled);
+  transport.setVolumes(values.click_volume,values.pad_volume);transport.drumVolume=values.drum_volume;transport.feel=values.drum_feel;
+  if(values.metronome_enabled&&ui.roomAudioActive&&!document.hidden)transport.setMetronome(true);
+  if(previous&&ui.capture)for(const [key,type] of [['metronome_enabled','click'],['pad_enabled','pad'],['drums_enabled','drum']])
+    if(previous[key]!==values[key])ui.capture.event(type,{enabled:values[key],source:'shared-settings'});
+}
+function queuePlaybackSettings(changes,delay=0) {
+  Object.assign(ui.playbackPending,changes);applyPlaybackSettings(ui.playbackSaved);
+  $('sound-settings-status').textContent=tr('Saving shared sound settings…');
+  clearTimeout(playbackSaveTimer);playbackSaveTimer=setTimeout(savePlaybackSettings,delay);
+}
+async function savePlaybackSettings() {
+  if(ui.playbackSaving||!ui.data||!Object.keys(ui.playbackPending).length)return;
+  const changes=ui.playbackPending;ui.playbackPending={};ui.playbackInFlight=changes;ui.playbackSaving=true;
+  let success=false;
+  try {
+    const saved=await api('/api/playback-settings',{changes});ui.playbackInFlight={};applyPlaybackSettings(saved);
+    $('sound-settings-status').textContent=tr('Shared across all practices and browsers.');success=true;
+  } catch {
+    ui.playbackPending={...changes,...ui.playbackPending};ui.playbackInFlight={};
+    $('sound-settings-status').textContent=tr('Sound settings could not be saved. Your changes will retry when connected.');
+  } finally {ui.playbackSaving=false;}
+  if(success&&Object.keys(ui.playbackPending).length)savePlaybackSettings();
+}
+async function activateRoomAudio() {
+  ui.roomAudioActive=true;
+  if(!ui.playbackValues?.metronome_enabled)return;
+  try{await transport.unlock();if(ui.roomAudioActive)applyPlaybackSettings(ui.playbackSaved);}catch(error){fail(error);}
+}
+setInterval(async()=>{
+  if(!ui.data||document.hidden||ui.playbackPolling)return;
+  ui.playbackPolling=true;
+  try{applyPlaybackSettings(await api('/api/playback-settings'));if(Object.keys(ui.playbackPending).length)savePlaybackSettings();}
+  catch{ /* Keep the last settings; a read failure must not reset them. */ }
+  finally{ui.playbackPolling=false;}
+},3000);
+
 const score = new ScoreView({root: $('score-viewport'), status: $('score-position'),
   follow: $('score-follow'), help: $('score-material-help'), finite:true});
 const transport = new AttemptTransport({
@@ -98,7 +151,7 @@ const transport = new AttemptTransport({
   onAttemptFinished: () => {stopCapture().catch(fail);},
   onAbort: () => {ui.capture?.event('aborted');ui.capture?.event('pause');ui.phase='aborted';score.pause(score.position);},
   onInterrupt: message => {
-    for(const id of ['click-toggle','pad-toggle','drum-toggle'])$(id).checked=false;
+    ui.roomAudioActive=false;
     ui.capture?.event('audio_interrupted',{message});
     if(ui.capture)stopCapture().catch(fail);
     fail(new Error(message));updateTransport();
@@ -159,10 +212,12 @@ function attemptCaption(attempt) { return tr`Attempt ${attemptNumber(attempt)} �
 function renderAttempts(task) {
   const list=$('attempt-list');list.replaceChildren();
   const attempts=[...(task.attempts||[])].reverse(),shown=ui.showAllAttempts?attempts:attempts.slice(0,5);
-  $('attempt-history-count').textContent=String(attempts.length);
+  $('attempt-history-count').textContent=task.recording_coverage?.mode==='legacy'?'—':String(attempts.length);
   $('all-attempts').hidden=attempts.length<=5;
   $('all-attempts').textContent=ui.showAllAttempts?tr('Show recent attempts'):tr`Show all ${attempts.length} attempts`;
-  if(!attempts.length)list.append(el('p',tr('Your recorded attempts will appear here.'),'field-note'));
+  if(!attempts.length)list.append(el('p',tr(task.recording_coverage?.mode==='legacy'?
+    'This record uses the previous recording system. Individual attempt counts are unknown.':'Your recorded attempts will appear here.'),'field-note'));
+  if(task.recording_coverage?.mode==='mixed')list.append(el('p',tr('Only saved individual attempts are counted here. Earlier records remain in practice details.'),'field-note'));
   for(const attempt of shown) {
     const selected=ui.selectedAttemptId===attempt.id,row=el('article',undefined,'attempt-row');
     row.dataset.attemptId=attempt.id;row.classList.toggle('is-selected',selected);
@@ -254,7 +309,7 @@ function showAttemptFeedback(attempt) {
 async function playSession(sessionId,task=openedTask(),attemptId=null) {
   if(ui.capture)throw Error(tr('Finish the current attempt before replaying.'));
   const request=++ui.replayRequest,taskId=task?.id;
-  await transport.unlock();
+  ui.roomAudioActive=true;await transport.unlock();
   attemptId ||= task.attempts?.find(a=>a.session_id===sessionId)?.id;
   const attempt=attemptId?await loadAttempt(attemptId,{forPlayback:true}):null;
   if(openedTask()?.id!==taskId||request!==ui.replayRequest||attemptId&&!attempt)return;
@@ -301,6 +356,7 @@ async function refresh(keep = false, skipUnchanged = false) {
   if (data.language !== locale()) return; // A newer language selection superseded this response.
   if (skipUnchanged && JSON.stringify(data) === JSON.stringify(ui.data)) return;
   ui.data = data;
+  applyPlaybackSettings(data.playback_settings);
   outbox ||= new Outbox(ui.data.workspace_id);
   const current = pending();
   if (ui.openedTaskId && !openedTask()) { ui.openedTaskId = null; if (ui.view === 'practice') switchView('list'); }
@@ -318,7 +374,7 @@ async function refresh(keep = false, skipUnchanged = false) {
   renderRecordText();
   if ($('history-dialog').open && detailTask) {
     const task = ui.data.history.find(t => t.id === detailTask.id);
-    if (task) showDetail(task);
+    if (task) showDetail(task);else {$('history-dialog').close();detailTask=null;}
   }
   $('recovery').hidden = openSessions().length === 0;
   updateTransport();
@@ -547,7 +603,6 @@ function renderLesson(resetTempo = false) {
   $('discard-btn').hidden = !current.pending;
   const backing=backingFor(t);ui.backing=backing;
   const available=backing.source!=='unavailable';$('pad-toggle').disabled=!available;
-  if(!available){$('pad-toggle').checked=false;transport.setPad(false);}
   $('backing-status').textContent=tr(backing.source==='assigned'?'Assigned accompaniment':available?'Backing from written chord symbols':'No supported chord progression for a pad.')+
     (backing.unavailable.length?' · '+backing.unavailable.join(', '):'');
   if(!ui.capture)transport.configure(backing.playback,Number($('tempo').value)||t.bpm);
@@ -555,7 +610,7 @@ function renderLesson(resetTempo = false) {
   const replayBar=$('replay-bar').value;
   $('replay-bar').replaceChildren(...Array.from({length:t.bars},(_,i)=>option(String(i),String(i+1))));
   if(Number(replayBar)<t.bars)$('replay-bar').value=replayBar||'0';
-  if(!ui.capture&&!ui.manualTouched)$('manual-mode').checked=selectedPorts().length===0;
+  if(!ui.capture&&!ui.manualTouched)$('manual-mode').checked=false;
   renderAttempts(current);
   if(ui.selectedAttempt&&!ui.capture&&(!transport.replay||ui.replayTrack?.kind==='recording'))showAttemptFeedback(ui.selectedAttempt);
   if (resetTempo && !ui.capture) setTempo(t.bpm);
@@ -582,7 +637,7 @@ function updateTransport() {
   $('tempo-hint').textContent=replaying?tr('Change playback tempo with Playback speed.'):tr(recording?'BPM is fixed for this attempt.':'Choose BPM before an attempt.');
   $('practice-actions').hidden=replaying;$('replay-actions').hidden=!replaying;
   $('practice-btn').hidden=!eligible||Boolean(recording);
-  $('practice-btn').disabled=locked||!eligible||replaying;
+  $('practice-btn').disabled=locked||!eligible||replaying||selectedPorts().length===0;
   $('practice-btn').textContent=tr(ui.phase==='starting'?'Starting attempt…':'Start attempt');
   $('practice-btn').setAttribute('aria-busy',String(ui.phase==='starting'));
   $('abort-attempt').hidden=!recording;
@@ -615,13 +670,14 @@ function updateTransport() {
   else if(eligible){
     if(task.assessment.eligible)hint=tr`Ready to complete · ${task.assessment.successes} successful take(s) this round.`;
     else if(task.assessment.manual_available)hint=tr('Ready to complete · confirm the goal yourself.');
+    else if(!selectedPorts().length)hint=tr('Connect MIDI to start an attempt. Listening and the metronome remain available.');
     else if($('manual-mode').checked||!task.target.notation)hint=tr`Finish one full take at ${task.target.bpm} BPM or above, then confirm the goal.`;
     else if(task.reopening)hint=tr('A new successful take is required after resuming.');
     else hint=tr`Complete after one successful take at ${task.target.bpm} BPM or above.`;
   }
   $('completion-hint').textContent=hint;
   $('attempt-mode-note').textContent=tr(recording&&ui.attemptContract?.manual_reason?ui.attemptContract.manual_reason:
-    $('manual-mode').checked?'This attempt needs your direct goal confirmation; it will not receive an automatic pass.':'MIDI input is recorded only during the take.');
+    $('manual-mode').checked?'MIDI is recorded; confirm the goal yourself after a full take.':'MIDI input is recorded only during the take.');
   $('save-status').hidden=!ui.saveStatus||ui.saveStatus==='Autosaved';
   if(ui.saveStatus)$('save-status').textContent=tr(ui.saveStatus);
 }
@@ -673,15 +729,17 @@ function midiBindings() {
   $('midi-light').classList.toggle('connected', selectedPorts().length > 0);
   $('midi-status').textContent = midiSelection === 'none' ? tr('MIDI recording is off.') : selectedPorts().length ? tr`${selectedPorts().length} input(s) ready · MIDI is recorded only during an attempt.` : tr('No inputs connected. The metronome is still available.');
   $('midi-connect').textContent = tr('Refresh');
-  if(!ui.capture&&!ui.manualTouched)$('manual-mode').checked=selectedPorts().length===0;
+  if(!ui.capture&&!ui.manualTouched)$('manual-mode').checked=false;
   updateTransport();
 }
 
 async function startOrPause() {
   if(ui.busy||ui.capture||transport.replay||!openedTask()?.pending)return;
+  if(!selectedPorts().length){fail(new Error(tr('Connect MIDI before starting an attempt.')));return;}
   clearError();ui.busy=true;ui.phase='starting';updateTransport();
   try {
-    await transport.unlock();await outbox.database();
+    ui.roomAudioActive=true;await transport.unlock();await outbox.database();
+    if(!selectedPorts().length)throw Error(tr('Connect MIDI before starting an attempt.'));
     ui.nextAttemptId ||= 'A-'+randomHex();
     const bpm=Number($('tempo').value),manual=$('manual-mode').checked;
     const result=await api('/api/attempts/start',{task_id:openedTask().id,attempt_id:ui.nextAttemptId,bpm,manual,
@@ -746,17 +804,14 @@ $('complete-confirm').addEventListener('click',async()=>{
 });
 $('abort-attempt').addEventListener('click',()=>stopCapture().catch(fail));
 $('manual-mode').addEventListener('change',()=>{ui.manualTouched=true;updateTransport();});
-$('drum-toggle').addEventListener('change',async event=>{
-  try{await transport.unlock();transport.setDrums(event.target.checked);ui.capture?.event('drum',{enabled:event.target.checked});}
-  catch(error){event.target.checked=false;fail(error);}
-});
-$('drum-volume').addEventListener('input',event=>transport.drumVolume=Number(event.target.value));
-$('backing-feel').addEventListener('change',event=>transport.feel=event.target.value);
+$('drum-toggle').addEventListener('change',event=>queuePlaybackSettings({drums_enabled:event.target.checked}));
+$('drum-volume').addEventListener('input',event=>queuePlaybackSettings({drum_volume:Number(event.target.value)},150));
+$('backing-feel').addEventListener('change',event=>queuePlaybackSettings({drum_feel:event.target.value}));
 $('reference-play').addEventListener('click',async()=>{
   if(ui.capture||!target()?.notation)return;
   const request=++ui.replayRequest,taskId=openedTask()?.id,bpm=transport.requestedBpm,source=target().notation;
   try{
-    await transport.unlock();
+    ui.roomAudioActive=true;await transport.unlock();
     if(request!==ui.replayRequest||taskId!==openedTask()?.id||ui.capture)return;
     ui.detailRequest++;ui.selectedAttempt=null;ui.selectedAttemptId=null;
     $('attempt-feedback').hidden=true;$('selected-play').hidden=true;renderAttempts(openedTask());
@@ -792,8 +847,7 @@ $('latency-ms').addEventListener('change',()=>{try{localStorage.setItem('jazz-mi
 try{$('latency-ms').value=localStorage.getItem('jazz-midi-latency-ms')||'0';}catch{}
 
 function stopRoomAudio() {
-  transport.pause();
-  for(const id of ['click-toggle','pad-toggle','drum-toggle'])$(id).checked=false;
+  ui.roomAudioActive=false;transport.pause();
 }
 async function goToList() {
   if (ui.busy) return;
@@ -820,6 +874,7 @@ function openPractice(task) {
   $('selected-play').hidden=true;$('replay-title').textContent=tr('Choose a recording below to hear your performance.');
   $('playback-settings').open=false;$('attempt-history').open=true;
   renderLesson(true);switchView('practice');updateTransport();
+  activateRoomAudio();
   window.scrollTo({top:0,behavior:'instant'});
   const recent=[...(task.attempts||[])].reverse().find(a=>a.cycle_id===task.assessment.cycle_id&&a.state!=='recording');
   if(recent)loadAttempt(recent.id).catch(fail);
@@ -845,8 +900,8 @@ async function recover() {
 
 function renderRecordText() {
   if (!ui.recordTask) return;
-  const task = ui.data.history.find(t => t.id === ui.recordTask.id) || ui.recordTask;
-  if(!task.completed){$('record-panel').hidden=true;return;}
+  const task = ui.data.history.find(t => t.id === ui.recordTask.id);
+  if(!task||!task.completed){$('record-panel').hidden=true;if(!task)ui.recordTask=null;return;}
   ui.recordTask = task;
   const rating = task.report?.difficulty;
   $('record-title').textContent = tr('How did your practice go?');
@@ -935,8 +990,8 @@ function renderHistory() {
     button.addEventListener('click',()=>task.pending?openPractice(task):showDetail(task));card.append(button);
     card.append(el('p',task.target.exercise?.objective||task.target.instructions,'practice-content'));
     const summary=el('div',undefined,'practice-summary'),count=task.attempts?.length||0;
-    const counted=count?tr`Recorded attempts: ${count}`:tr('No attempts yet');
-    summary.append(el('p',counted+(task.assessment?.successes?tr` · ${task.assessment.successes} successful this round`:''),'attempt-count'));
+    const counted=count?tr`Recorded attempts: ${count}`:tr(task.recording_coverage?.mode==='legacy'?'Legacy practice record':'No recorded attempts yet');
+    summary.append(el('p',counted+(task.recording_coverage?.mode==='mixed'?tr(' · earlier record format also present'):'')+(task.assessment?.successes?tr` · ${task.assessment.successes} successful this round`:''),'attempt-count'));
     const result=ratings[task.report?.difficulty]?ratingText(task.report.difficulty):task.report?tr(labels[task.outcome]):task.completed?tr('Feedback not added yet'):'';
     if(result)summary.append(el('p',result,'practice-result'));
     if(task.discard_choice)summary.append(el('p',tr(discardChoices[task.discard_choice]),'practice-result'));
@@ -945,12 +1000,12 @@ function renderHistory() {
     card.append(translationNotice(task));
     const footer=el('div',undefined,'practice-card-footer'),actions=el('div',undefined,'row-actions');
     footer.append(taskIdentity(task.id));
-    if(task.pending){const open=el('button',tr(task.started?'Continue practice':'Open practice room'),'text-button');open.disabled=ui.busy;open.addEventListener('click',()=>openPractice(task));actions.append(open);}
     if(task.completed){const edit=el('button',tr(task.report?'Edit feedback':'Add feedback'),'text-button');edit.disabled=Boolean(ui.capture)||openSessions().length>0;edit.addEventListener('click',()=>showRecord(task));actions.append(edit);}
     footer.append(actions);card.append(footer);
     const details=el('details',undefined,'practice-card-details');details.open=Boolean(expanded.get(task.id)?.open);
     details.append(el('summary',tr('Task details')));appendTaskOverview(details,task.target,false,Boolean(expanded.get(task.id)?.context));
-    details.append(el('p',task.target.instructions,'practice-content'));card.append(details);
+    details.append(el('p',task.target.instructions,'practice-content'));
+    const recordDetails=el('button',tr('Practice record details'),'text-button');recordDetails.addEventListener('click',()=>showDetail(task));details.append(recordDetails);card.append(details);
     if(ui.recordTask?.id===task.id)card.append($('record-panel'));
     $('history-list').append(card);
   }
@@ -963,6 +1018,7 @@ function showDetail(task) {
   const box = $('history-detail');const detailScroll=box.scrollTop;box.replaceChildren(el('h2', task.target.title), taskIdentity(task.id),
     el('p', (task.report || task.completion)?.practice_date || task.assigned_at.slice(0, 10), 'subtle'));
   box.append(translationNotice(task));
+  if(['legacy','mixed'].includes(task.recording_coverage?.mode))box.append(el('p',tr('Individual attempts were not tracked by the previous recording system. Missing attempts do not mean no practice.'),'field-note'));
   const context=el('details',undefined,'task-context detail-context');context.open=Boolean(overviewOpen);context.append(el('summary',tr('Task characteristics and personal burden')));appendTaskOverview(context,task.target,false,contextOpen);box.append(context);
   const grid = el('div', undefined, 'detail-grid');
   const intended = el('div'); intended.append(el('h3', tr('Assigned conditions')), el('div', tr`${task.target.key} · ${task.target.bpm} BPM · ${task.target.bars} bars`), el('div', ui.data.arrangements[task.target.arrangement] || task.target.arrangement));
@@ -1021,8 +1077,30 @@ function showDetail(task) {
   $('repeat-btn').hidden = task.pending;
   $('repeat-btn').disabled = Boolean(ui.capture) || openSessions().length > 0 || ui.data.recommendation?.state === 'running';
   $('correct-btn').disabled = Boolean(ui.capture) || openSessions().length > 0;
+  $('delete-practice').disabled=ui.busy||Boolean(ui.capture)||openSessions().length>0;
   if (!$('history-dialog').open){$('history-dialog').showModal();box.scrollTop=0;}else box.scrollTop=detailScroll;
 }
+
+$('delete-practice').append(icon('trash'));
+$('delete-practice').addEventListener('click',()=>{
+  if(!detailTask||ui.busy||ui.capture||openSessions().length)return;
+  ui.deleteTarget={id:detailTask.id,title:detailTask.target.title,revision:detailTask.revision_event_id};
+  $('delete-task-title').textContent=ui.deleteTarget.title;$('delete-error').hidden=true;$('delete-dialog').showModal();
+});
+$('delete-cancel').addEventListener('click',()=>$('delete-dialog').close());
+$('delete-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(ui.busy||!ui.deleteTarget||ui.capture)return;
+  ui.busy=true;$('delete-confirm').disabled=true;$('delete-cancel').disabled=true;
+  try {
+    await api('/api/delete',{task_id:ui.deleteTarget.id,expected_event_id:ui.deleteTarget.revision});
+    if(ui.openedTaskId===ui.deleteTarget.id){stopRoomAudio();ui.openedTaskId=null;ui.detailRequest++;ui.replayRequest++;}
+    if(ui.recordTask?.id===ui.deleteTarget.id){ui.recordTask=null;$('record-panel').hidden=true;}
+    await refresh(true);$('delete-dialog').close();$('history-dialog').close();detailTask=null;ui.deleteTarget=null;
+    switchView('list');
+  } catch(error){$('delete-error').textContent=tr(error.message);$('delete-error').hidden=false;}
+  finally{ui.busy=false;$('delete-confirm').disabled=false;$('delete-cancel').disabled=false;updateTransport();renderChoices();}
+});
+$('delete-dialog').addEventListener('cancel',event=>{if(ui.busy)event.preventDefault();});
 
 $('practice-btn').addEventListener('click', startOrPause);
 $('go-score').addEventListener('click',event=>{event.preventDefault();focusPanel($('score-viewport'));});
@@ -1047,9 +1125,9 @@ $('tempo').addEventListener('change', event => setTempo(event.target.value));
 $('tempo-range').addEventListener('input', event => setTempo(event.target.value));
 $('tempo-down').addEventListener('click', () => setTempo(Number($('tempo').value) - 5));
 $('tempo-up').addEventListener('click', () => setTempo(Number($('tempo').value) + 5));
-$('click-toggle').addEventListener('change', async event => {try{await transport.unlock();transport.setMetronome(event.target.checked);ui.capture?.event('click',{enabled:event.target.checked});}catch(error){event.target.checked=false;fail(error);}});
-$('pad-toggle').addEventListener('change', async event => {try{await transport.unlock();transport.setPad(event.target.checked);ui.capture?.event('pad',{enabled:event.target.checked});}catch(error){event.target.checked=false;fail(error);}});
-for (const id of ['click-volume', 'pad-volume']) $(id).addEventListener('input', () => transport.setVolumes(Number($('click-volume').value), Number($('pad-volume').value)));
+$('click-toggle').addEventListener('change',async event=>{queuePlaybackSettings({metronome_enabled:event.target.checked});if(event.target.checked)await activateRoomAudio();});
+$('pad-toggle').addEventListener('change',event=>queuePlaybackSettings({pad_enabled:event.target.checked}));
+for(const [id,key] of [['click-volume','click_volume'],['pad-volume','pad_volume']])$(id).addEventListener('input',event=>queuePlaybackSettings({[key]:Number(event.target.value)},150));
 async function newPractice() {
   if (ui.busy || ui.capture || openSessions().length || ui.data.recommendation?.state === 'running') return;
   clearError(); ui.busy = true; ui.creating = true;

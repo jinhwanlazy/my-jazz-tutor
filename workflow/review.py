@@ -236,7 +236,7 @@ def read_events(root):
 
 
 def records(events):
-    """Reconstruct attempts while retaining all corrections in the source CSV."""
+    """Reconstruct practice tasks while retaining every original event in the CSV."""
     tasks, event_ids = {}, set()
     for event in events:
         require(event["event_id"] and event["event_id"] not in event_ids, "Duplicate or empty event_id.")
@@ -261,12 +261,19 @@ def records(events):
             tasks[task_id] = {"assignment": event, "target": target, "report": None, "completion": None,
                               "cancelled": False, "retired": False, "discarded": False, "cancellation": None,
                               "lifecycle": "active", "reopening": None, "completions": [], "prior_completions": [],
-                              "lifecycle_event_id": event["event_id"]}
+                              "lifecycle_event_id": event["event_id"], "revision_event_id": event["event_id"],
+                              "deleted": False, "deletion": None}
             continue
         require(task_id in tasks, "This result has no matching assignment.")
         task = tasks[task_id]
         require(event["release"] == task["assignment"]["release"] and event["exercise_id"] == task["assignment"]["exercise_id"], "The task version or exercise ID has changed.")
-        if kind == "reopened":
+        require(not task['deleted'], 'A deleted practice cannot be changed.')
+        if kind == 'deleted':
+            require(event['supersedes'] == task['revision_event_id'], 'This practice changed. Refresh before deleting it.')
+            require(not any(event[k] for k in ('target_json','actual_json','checks_json','clean_runs','difficulty','raw_note','actual_minutes')),
+                    'Deletion cannot replace practice evidence.')
+            task.update(deleted=True, deletion=event, lifecycle='deleted', lifecycle_event_id=event['event_id'])
+        elif kind == "reopened":
             require(not task["cancelled"] and not is_pending(task) and practice_record(task), "Only a completed task can be reopened.")
             require(event["supersedes"] == task["lifecycle_event_id"], "The task state changed before reopening.")
             task['prior_completions'].append(practice_record(task))
@@ -324,10 +331,17 @@ def records(events):
                     task["lifecycle_event_id"] = event["event_id"]
         else:
             raise ValueError(f"Unsupported event_type: {kind}")
+        task['revision_event_id'] = event['event_id']
     return list(tasks.values())
 
 
+def visible_records(events):
+    return [task for task in records(events) if not task['deleted']]
+
+
 def is_pending(task):
+    if task.get('deleted'):
+        return False
     if task.get("lifecycle") is not None:
         return task["lifecycle"] == "active"
     return not task["report"] and not task["completion"] and not task["cancelled"]
@@ -583,6 +597,8 @@ def daily_summary(data, tasks, profile, today=None):
     number(budget, "daily_minutes", 1, 1440)
     reports = []
     for task in tasks:
+        if task.get('deleted'):
+            continue
         for report in practice_records(task):
             observations = reflection_observations(report)
             days = observations.get("days", {}) if observations else {}
@@ -659,7 +675,7 @@ def record_result(root, data, task_id, payload, correction=False):
     with log_lock(root):
         events = read_events(root)
         task = next((t for t in records(events) if t["assignment"]["task_id"] == task_id), None)
-        require(task is not None and not task["cancelled"], "Active task ID not found.")
+        require(task is not None and not task["cancelled"] and not task['deleted'], "Active task ID not found.")
         require(bool(task["report"]) == correction, "Use correct for an existing result and record for the first result.")
         actual = {k: task["target"][k] for k in SPEC} if payload.get("followed_target") else {}
         require(isinstance(payload.get("actual", {}), dict), "The actual conditions must be an object.")
@@ -731,7 +747,7 @@ def reopen(root, data, task_id, expected_event_id):
     with log_lock(root):
         events = read_events(root)
         task = next((t for t in records(events) if t['assignment']['task_id'] == task_id), None)
-        require(task is not None and not task['cancelled'], "Completed task not found.")
+        require(task is not None and not task['cancelled'] and not task['deleted'], "Completed task not found.")
         if is_pending(task) and task['reopening'] and task['reopening']['supersedes'] == expected_event_id:
             return {'task_id': task_id, 'event_id': task['reopening']['event_id']}
         require(not is_pending(task) and task['lifecycle_event_id'] == expected_event_id, "This task changed. Refresh before reopening it.")
@@ -742,8 +758,28 @@ def reopen(root, data, task_id, expected_event_id):
     return {'task_id': task_id, 'event_id': event['event_id']}
 
 
+def delete_practice(root, data, task_id, expected_event_id):
+    """Append a tombstone; keep immutable conditions, feedback and all MIDI local."""
+    from sessions import SessionStore
+    with log_lock(root):
+        events = read_events(root)
+        task = next((t for t in records(events) if t['assignment']['task_id'] == task_id), None)
+        require(task is not None, 'Practice not found.')
+        if task['deleted']:
+            require(task['deletion']['supersedes'] == expected_event_id, 'This practice changed. Refresh before deleting it.')
+            return {'task_id': task_id, 'event_id': task['deletion']['event_id']}
+        require(task['revision_event_id'] == expected_event_id, 'This practice changed. Refresh before deleting it.')
+        require(not any(s['status'] == 'recording' for s in SessionStore(root).list(task_id)),
+                'Finish and save the current practice session first.')
+        event = new_event('deleted', task_id, data, task['assignment']['exercise_id'], task['assignment']['purpose'])
+        event.update(release=task['assignment']['release'], supersedes=expected_event_id,
+                     reason='User removed this practice from the journal and coaching context. Original evidence retained locally.')
+        records(events + [event]); append_event(root, event)
+    return {'task_id': task_id, 'event_id': event['event_id']}
+
+
 def status(root, data):
-    tasks = records(read_events(root))
+    tasks = visible_records(read_events(root))
     profile_path = Path(root) / "profile.json"
     profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
     reported = [t for t in tasks if practice_record(t)]
@@ -790,7 +826,7 @@ def atomic_text(path, text):
 def render_report(root, data, output=None):
     """Read-only history export. It neither generates tasks nor presents a fixed progress plan."""
     root = Path(root)
-    tasks = records(read_events(root))
+    tasks = visible_records(read_events(root))
     info = status(root, data)
     escape = lambda value: html.escape(str(value))
     rows = []
@@ -882,6 +918,8 @@ def main(argv=None):
     discarding.add_argument("--choice", choices=list(DISCARD_CHOICES), default="")
     reopening=sub.add_parser('reopen',help='Resume the same completed task, retaining its history')
     reopening.add_argument('task_id');reopening.add_argument('--expected-event-id',required=True)
+    deletion=sub.add_parser('delete',help='Remove a practice from views/context while preserving local evidence')
+    deletion.add_argument('task_id');deletion.add_argument('--expected-event-id',required=True)
     ending=sub.add_parser('complete',help='Confirm completion after a qualifying current-cycle attempt')
     ending.add_argument('task_id');ending.add_argument('--expected-event-id',required=True)
     ending.add_argument('--manual-confirmed',action='store_true');ending.add_argument('--attempt-id')
@@ -968,6 +1006,8 @@ def main(argv=None):
             result = discard(args.practice_root, data, args.task_id, args.reason, args.choice)
         elif args.command == 'reopen':
             result = reopen(args.practice_root,data,args.task_id,args.expected_event_id)
+        elif args.command == 'delete':
+            result = delete_practice(args.practice_root,data,args.task_id,args.expected_event_id)
         elif args.command in ('complete','attempts'):
             from attempts import AttemptStore
             store=AttemptStore(args.practice_root)
