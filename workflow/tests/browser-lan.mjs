@@ -41,7 +41,7 @@ try {
   await page.locator('#midi-connect').click();
   assert.match(await page.locator('#midi-status').textContent(),/HTTPS or localhost/);
   assert.equal(await page.locator('#practice-btn').isDisabled(),true);
-  await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#manual-mode').check({force:true});
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#assessment-mode').selectOption('self_report');await page.locator('#settings-back').click();
   assert.equal(await page.locator('#practice-btn').isDisabled(),true,'direct confirmation bypassed MIDI requirement');
   await page.locator('#reference-play').click();await page.locator('#replay-actions').waitFor({state:'visible'});await page.locator('#replay-stop').click();
   let data=await state();assert.equal(data.sessions.length,0);

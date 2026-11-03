@@ -96,8 +96,8 @@ function accidental(parent, pitch, x, y, key, live = false, state = null) {
 }
 
 export class ScoreView {
-  constructor({root, status, follow, help, finite=false}) {
-    Object.assign(this, {root, status, follow, help, finite});
+  constructor({root, status, help, finite=false}) {
+    Object.assign(this, {root, status, help, finite});
     this.pass = 0; this.playing = false;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(root);
@@ -110,7 +110,11 @@ export class ScoreView {
     // Fit the written lines, without changing the stored score or beat clock.
     // SVG attributes work under the server's CSP; inline styles are blocked.
     const lineWidth = this.abcLayout ? this.width : scoreX(BARS_PER_LINE * 4) + 24;
-    const scale = Math.min(this.abcLayout ? 1.2 : 1, this.root.clientWidth / lineWidth);
+    const style = getComputedStyle(document.documentElement);
+    const header = parseFloat(style.getPropertyValue('--app-header-height')) || 0;
+    const toolbar = this.finite ? parseFloat(style.getPropertyValue('--practice-toolbar-height')) || 0 : 0;
+    const availableHeight = Math.max(1, (window.visualViewport?.height || window.innerHeight) - header - toolbar - 32);
+    const scale = Math.min(this.abcLayout ? 1.2 : 1, this.root.clientWidth / lineWidth, availableHeight / this.height);
     this.svg.setAttribute('width', this.width * scale);
     this.svg.setAttribute('height', this.height * scale);
   }
@@ -163,19 +167,6 @@ export class ScoreView {
     this.cursor.setAttribute('transform', `translate(${x} ${top})`);
     this.cursor.dataset.system = system.index;
     this.cursor.querySelector('line').setAttribute('y2', bottom - top);
-    // Follow only when entering a line. Manual scrolling stays possible within it.
-    const following = `${position.pass}:${system.index}`;
-    if (!this.follow.checked) this.followedSystem = null;
-    if (this.playing && this.follow.checked && this.root.clientWidth > 0 && this.followedSystem !== following) {
-      this.followedSystem = following;
-      const rect = this.svg.getBoundingClientRect(), scale = rect.width / this.width;
-      const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-header-height')) || 0;
-      const toolbar = this.finite ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--practice-toolbar-height')) || 0 : 0;
-      const visibleTop = header + toolbar + 16;
-      if (rect.top + top * scale < visibleTop || rect.top + bottom * scale > window.innerHeight - 20) {
-        window.scrollBy({top: rect.top + top * scale - visibleTop, behavior: 'instant'});
-      }
-    }
     if (passChanged || (this.input.held.size && (!this.lastDraw || performance.now() - this.lastDraw > 50))) this.drawNotes();
   }
   caption() {
@@ -212,7 +203,6 @@ export class ScoreView {
     const scroll = this.root.scrollLeft;
     this.layoutWidth = this.root.clientWidth;
     this.lineBars = BARS_PER_LINE;
-    this.followedSystem = null;
     this.root.replaceChildren(); this.help?.replaceChildren(); this.caption();
     this.svg = this.cursor = this.liveLayer = this.abcLayout = null;
     if (!this.score) {

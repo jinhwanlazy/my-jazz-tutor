@@ -43,7 +43,7 @@ try {
   const visible=selector=>page.locator(selector).waitFor({state:'visible'});
   const hidden=selector=>page.locator(selector).waitFor({state:'hidden'});
   const changeLanguage = async language => {
-    await page.locator('[data-view="settings"]').click();
+    await page.locator('.nav-button[data-view="settings"]').click();
     await page.locator('#language-select').selectOption(language);
     await page.waitForFunction(language => document.documentElement.lang === language &&
       document.querySelector('#connection').textContent === (language === 'ko' ? '로컬에 연결됨' : 'Connected locally'), language);
@@ -74,10 +74,10 @@ try {
   await page.goto(url);
   await page.waitForFunction(()=>document.querySelector('#connection').textContent==='Connected locally');
   await visible('#view-list'); await hidden('#view-practice');
-  assert.equal((await page.locator('[data-view="list"]').textContent()).trim(),'≡ Practice');
+  assert.equal((await page.locator('.nav-button[data-view="list"]').textContent()).trim(),'≡ Practice');
   await visible('.sidebar #midi-connect');await visible('.sidebar #midi-status');
   assert.equal((await state()).history.length,0);
-  assert.equal(await page.locator('[data-view="history"], [data-view="progress"], #next-btn').count(),0);
+  assert.equal(await page.locator('.nav-button[data-view="history"], [data-view="progress"], #next-btn').count(),0);
   assert.doesNotMatch(await page.locator('body').innerText(),/[가-힣]/);
   await page.locator('.recommendation-focus summary').click();
   assert.ok(await page.evaluate(()=>{
@@ -167,9 +167,8 @@ try {
     const host = document.createElement('div'); host.style.width = '300px';
     const root = document.createElement('div'); root.className = 'score-viewport'; host.append(root);
     document.body.append(host);
-    const follow = document.createElement('input'); follow.type = 'checkbox'; follow.checked = true;
     const status = document.createElement('span');
-    const view = new ScoreView({root, status, follow});
+    const view = new ScoreView({root, status});
     const score = id => fixtures[id];
     const at = (absolute, bars) => ({absolute, bar: Math.floor(absolute / 4) % bars, pass: Math.floor(absolute / (bars * 4)), beat: absolute % 4});
     view.setScore({...score('E06'),bars:score('E06').bars.slice(0,2)});
@@ -203,12 +202,10 @@ try {
       Math.abs(Number(tails[0].getAttribute('x1')) - tailStart) < .001 &&
       Math.abs(Number(tails[1].getAttribute('x2')) - cursorX()) < .001 &&
       Number(tails[1].getAttribute('y1')) > Number(tails[0].getAttribute('y1'));
+    const beforeScroll = window.scrollY;
     view.frame(at(20, 8));
-    const followingScroll = window.scrollY;
-    follow.checked = false; window.scrollTo(0, 0);
     view.frame(at(22, 8));
-    const manualScroll = window.scrollY === 0 && followingScroll > 0;
-    follow.checked = true;
+    const stationaryPage = window.scrollY === beforeScroll;
     view.frame(at(31.8, 8));
     view.midi([0x90, 62, 100], 'test', at(31.8, 8));
     view.frame(at(32.2, 8)); view.drawNotes();
@@ -219,13 +216,13 @@ try {
     view.begin();
     const reset = root.querySelectorAll('.score-live-note').length === 0;
     view.frame(at(14, 8));
-    const verticalFollow = window.scrollY > 0 && root.scrollWidth === root.clientWidth;
+    const fullScoreFits = view.svg.getBoundingClientRect().height <= innerHeight - 32 && root.scrollWidth === root.clientWidth;
     host.style.width = '1200px'; view.setScore(score('E04')); view.begin(); view.frame(at(14, 4));
     const fittingScore = root.scrollLeft === 0 && root.scrollWidth === root.clientWidth;
     view.setScore(null); view.frame(at(15, 4));
     const fallback = !root.querySelector('svg') && root.textContent.includes('not available');
     view.resizeObserver.disconnect(); host.remove();
-    return {hollowWhole, lowRight, alignedY, consistentNoteSize, continuous, oneCanvas, wrappedTail, manualScroll, loop, continuedHold, interrupted, reset, verticalFollow, fittingScore, fallback};
+    return {hollowWhole, lowRight, alignedY, consistentNoteSize, continuous, oneCanvas, wrappedTail, stationaryPage, loop, continuedHold, interrupted, reset, fullScoreFits, fittingScore, fallback};
   }, notationFixtures);
   assert.ok(Object.values(displayChecks).every(Boolean), JSON.stringify(displayChecks));
   
@@ -235,7 +232,7 @@ try {
   await page.evaluate(()=>window.denyMidi=false);
   await page.locator('#midi-connect').click();
   await page.locator('#tempo').fill('240');await page.locator('#tempo').dispatchEvent('change');
-  await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#manual-mode').check();
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#assessment-mode').selectOption('self_report');await page.locator('#settings-back').click();
   await page.locator('#practice-btn').click();
   await page.waitForFunction(()=>!document.querySelector('#finish-btn').disabled);
   await page.locator('#finish-btn').click();await page.locator('#manual-confirm').check();

@@ -49,15 +49,15 @@ try {
   assert.match(await page.locator(`.practice-item[data-task-id="${legacy.id}"] .attempt-count`).innerText(),/Legacy practice record/);
   await page.screenshot({path:join(output,'journal-desktop-final.png')});
   await enter('main');assert.equal(await page.locator('#practice-btn').isDisabled(),true);
-  await settings();await page.locator('#manual-mode').check();assert.equal(await page.locator('#practice-btn').isDisabled(),true);
-  await page.locator('#manual-mode').uncheck();await page.locator('#playback-settings>summary').click();
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#assessment-mode').selectOption('self_report');await page.locator('#settings-back').click();assert.equal(await page.locator('#practice-btn').isDisabled(),true);
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#assessment-mode').selectOption('automatic');await page.locator('#settings-back').click();
   assert.equal(await page.locator('#finish-btn').isDisabled(),false,'missing MIDI must not erase an earlier qualifying take');
   await page.locator('#midi-connect').click();assert.equal(await page.locator('#practice-btn').isDisabled(),false);
   await page.evaluate(()=>midiConnected(false));assert.equal(await page.locator('#practice-btn').isDisabled(),true);
   await page.evaluate(()=>midiConnected(true));assert.equal(await page.locator('#practice-btn').isDisabled(),false);
   assert.equal(await page.locator('#playback-settings>summary svg').count(),1);
   assert.equal(await page.locator('#playback-settings>summary').evaluate(e=>getComputedStyle(e).listStyleType),'none');
-  assert.match(await page.locator('.follow-control').innerText(),/Auto-scroll score.*Keep the playing line in view/s);
+  assert.equal(await page.locator('#score-follow,#tempo-range,#keyboard-shortcuts,#manual-mode').count(),0);
   await page.waitForFunction(()=>document.querySelector('#attempt-feedback').dataset.attemptId);
   assert.match(await page.locator('#attempt-feedback').innerText(),/No notes were matched/);
   assert.equal(await page.locator('.result-metrics strong').nth(2).innerText(),'Not assessed');
@@ -73,6 +73,7 @@ try {
     assert.equal(midiOverlap,false,'MIDI connection and input controls overlap');
     assert.ok(m.score.top<m.height-100,'first staff hidden '+JSON.stringify(m));
     assert.ok(m.toolbar.top>=0&&m.toolbar.bottom<m.height-120,'toolbar too large '+JSON.stringify(m));
+    assert.ok(m.score.bottom<=m.height-10,'last staff hidden '+JSON.stringify(m));
     await page.screenshot({path:join(output,`score-${width}-final.png`)});
   }
   await page.setViewportSize({width:1280,height:720});await page.locator('#all-attempts').click();
@@ -122,11 +123,11 @@ try {
   await page.screenshot({path:join(output,'recording-mobile-final.png')});
   const recording=(await state()).sessions.find(s=>s.status==='recording');
   await page.evaluate(()=>sendMidi([0x90,62,80]));
-  await page.locator('[data-view="settings"]').click();await page.locator('#language-select').selectOption('ko');await page.locator('#settings-back').click();
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#language-select').selectOption('ko');await page.locator('#settings-back').click();
   assert.equal(await page.locator('#tempo').inputValue(),'120');assert.equal(await page.locator('#tempo').isDisabled(),true);
   assert.ok(await page.locator('.score-live-note').count()>0,'language refresh discarded the input trace');
   assert.equal((await state()).sessions.find(s=>s.status==='recording').id,recording.id);
-  await page.locator('[data-view="settings"]').click();await page.locator('#language-select').selectOption('en');await page.locator('#settings-back').click();
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#language-select').selectOption('en');await page.locator('#settings-back').click();
   await page.evaluate(()=>sendMidi([0x80,62,0]));
   await page.locator('#abort-attempt').click();await page.waitForFunction(()=>!document.querySelector('#practice-btn').disabled);
   assert.equal(await page.locator('.bar-result.incorrect').count(),0,'an interrupted take received failure paint');
@@ -182,15 +183,15 @@ try {
   await page.evaluate(()=>syntheticAudio.suspend());await page.locator('#error').waitFor({state:'visible'});
   assert.equal(await page.locator('#click-toggle').isChecked(),true);assert.equal(await page.locator('#pad-toggle').isChecked(),true);
   await list();
-  await page.locator('[data-view="settings"]').click();await page.locator('#language-select').selectOption('ko');await page.locator('#settings-back').click();
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#language-select').selectOption('ko');await page.locator('#settings-back').click();
   await page.waitForFunction(()=>document.querySelector('#connection').textContent==='로컬에 연결됨');
   assert.doesNotMatch(await page.locator('.attempt-count').first().innerText(),/attempts|successes/);
   await page.screenshot({path:join(output,'journal-mobile-ko-final.png')});await enter('main');await page.locator('#go-score').click();
-  await settings();await page.locator('#manual-mode').check();await page.locator('#playback-settings>summary').click();
-  assert.equal(await page.locator('#manual-mode').isChecked(),true);
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#assessment-mode').selectOption('self_report');await page.locator('#settings-back').click();
+  assert.equal(await page.locator('#assessment-mode').inputValue(),'self_report');
   await page.screenshot({path:join(output,'score-mobile-ko-final.png')});
   assert.deepEqual(errors,[]);
-  await writeFile(join(output,'ux-result.json'),JSON.stringify({passed:true,viewports:5,checks:['task-scoped paint and late-response guards','visible score/stop/status','selected take identity and playback','unknown assessment presentation','reopen gate explanation','compact cards/status filters','fixed dialog actions','MIDI connection gate','icons and auto-scroll explanation','legacy coverage','delete confirmation and preserved MIDI','shared sound settings across tasks/reload/clients/read failure','English/Korean'],errors},null,2));
+  await writeFile(join(output,'ux-result.json'),JSON.stringify({passed:true,viewports:5,checks:['task-scoped paint and late-response guards','visible score/stop/status','selected take identity and playback','unknown assessment presentation','reopen gate explanation','compact cards/status filters','fixed dialog actions','MIDI connection gate','icons and full score fit','legacy coverage','delete confirmation and preserved MIDI','shared sound settings across tasks/reload/clients/read failure','English/Korean'],errors},null,2));
   console.log('UX regressions passed: scoped paint, five viewports, fixed controls, selected playback, journal and completed details.');
 } catch(error) {
   const page=browser?.contexts()[0]?.pages()[0];if(page){await page.screenshot({path:join(output,'ux-failure.png'),fullPage:true});await writeFile(join(output,'ux-failure.txt'),await page.locator('body').innerText());}throw error;

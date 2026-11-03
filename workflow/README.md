@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.9.0`; create a new tag for later releases instead of moving an old tag:
+selects `v0.10.0`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.9.0
+uv run python publish.py --ref v0.10.0
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -150,7 +150,7 @@ origin, so recover any unsent input at its original address first.
   language changes. **Go to score** moves keyboard focus to the player, clear of
   the mobile MIDI header. Start, complete and tempo controls sit above the score;
   narrow screens stack them without squeezing the buttons. Target BPM and current
-  metronome BPM are separate. Choose tempo before starting: the input, slider and
+  metronome BPM are separate. Choose tempo before starting: the input and
   buttons stay locked throughout the count-in and take. **Accompaniment** has independent
   metronome, pad and basic drum controls, each with volume. MIDI connection, status and input selection
   stay in the sidebar, or the sticky top area on mobile. Click and pad share the same
@@ -160,10 +160,10 @@ origin, so recover any unsent input at its original address first.
   key signature, and rhythm. Blue MIDI marks keep fractional timing against the
   playback clock; their tails show physical key holds, excluding pedal sustain.
   Scores wrap every four bars at every screen size and fit
-  the available width. Note spacing is proportional to time, so the cursor moves
+  both the available width and height below the header and toolbar. Note spacing is proportional to time, so the cursor moves
   at constant speed within each line at a fixed BPM and then
-  moves to the next line. **Auto-scroll score** brings that line into view when
-  needed; turn it off to scroll manually. MIDI holds crossing a line continue
+  moves to the next line without scrolling the page. The entire score stays visible
+  after **Go to score** or starting a take/written-score playback. MIDI holds crossing a line continue
   on the following staff without an extra attack mark. Resizing preserves the
   current beat and MIDI buffer; layout never changes the saved music. Whole-note
   centers are transparent, and the score omits bar numbers and hand labels.
@@ -201,7 +201,8 @@ dynamics and accents. The goal determines form length, including 8-bar phrases a
 schema-1/2 JSON scores remain unchanged. Open improvisation can use
 specific written instructions with an explicit reason for omitting fixed notation.
 
-MIDI is optional. In a browser supporting Web MIDI on HTTPS or localhost, choose
+Listening and browsing work without MIDI; starting an attempt requires a connected
+input. In a browser supporting Web MIDI on HTTPS or localhost, choose
 **MIDI input → Connect** and grant permission. All connected inputs are selected
 by default; you can choose a particular device. The browser's raw bytes are saved
 without requesting SysEx permission. Other practice features work without MIDI
@@ -702,8 +703,8 @@ The metronome can run independently. Pad and drums are armed preferences and sou
 
 Task instructions and assigned conditions lead into the score. A sticky toolbar keeps
 start/stop, completion, skip, tempo and current state visible while following the
-score. Volumes, backing feel and manual input mode live in an expandable settings
-panel; metronome operation remains independent. MIDI status stays visible, with
+score. Volumes and backing feel live in an expandable settings
+panel; assessment mode and pad assignments are in Settings. Metronome operation remains independent. MIDI status stays visible, with
 input selection in the sidebar's disclosure.
 
 Selecting an attempt highlights its row and brings its numbered result and playback
@@ -746,7 +747,7 @@ MIDI. The count-in uses a short wooden stick impact distinct from the metronome;
 they never double on the same count-in beat. Notes have a slightly larger leading
 gap while engraving, cursor and input continue to use the same time grid. Copy ID
 uses a labeled icon; sound settings use sliders rather than a disclosure triangle.
-Auto-scroll score explains that it keeps the currently playing staff line visible.
+The whole score fits the visible area without automatic scrolling (0.10.0).
 The journal title opens practice; the duplicate continue button is removed.
 
 Legacy session recordings and self-reports explicitly have unknown individual
@@ -777,11 +778,11 @@ Explicitly selecting feedback still brings it into view. In an open practice roo
 **R** starts another attempt, **S** stops/saves the current take or stops playback,
 and **Space** plays/pauses the selected recording (or written score if none is selected).
 Text/number editing, modifiers, key repeats, IME composition and modal dialogs retain
-their normal behavior. Space on native buttons/checkboxes is not hijacked. Shortcuts
-can be disabled in **Sound and input → Keyboard and MIDI controls**. Completion and
+their normal behavior. Space on native buttons/checkboxes is not hijacked. Button
+tooltips describe the shortcuts; there is no enable/disable checkbox (0.10.0). Completion and
 reopening remain explicit actions; shortcuts do not award success or bypass MIDI.
 
-Assign each transport pad once in that panel. Learning does not start a take, checks
+Assign each transport pad once in **Settings → MIDI transport pads**. Learning does not start a take, checks
 conflicts and ignores MiniLab Shift/HUI selectors. MiniLab 3 uses **Shift+Pad 7** for
 Record, **Shift+Pad 5** for Stop and **Shift+Pad 6** for Play; see the
 [Arturia cheat sheet](https://www.arturia.com/images/products/minilab-3/cheatsheet-minilab3.pdf).
@@ -809,3 +810,33 @@ keyboard scope and port identity. `tests/controls-browser.mjs` checks scroll aft
 a complete take, keyboard/pad transport, raw MIDI separation and reconnection with
 synthetic ports and permissions. The physical MiniLab has not been exercised by
 these automated checks; initial pad learning is done on the user's controller.
+
+### Whole-score layout and simpler controls (0.10.0)
+
+The score retains four bars per line and scales uniformly to fit both the available
+width and visible height below the MIDI header and transport controls. Window size,
+orientation, toolbar height and visual viewport changes update that fit. Long scores
+on small screens use smaller notation. Starting a take or written-score playback
+brings the whole score into view once; playback and saving never scroll between
+lines or to results. The auto-scroll checkbox and redundant tempo slider are removed.
+Tempo remains editable through its numeric input and +/- buttons before a take.
+
+R/S/Space are always available in the practice room with the existing editor/modal
+guards. Button hover tooltips contain keyboard and MiniLab hints; the instruction
+panel and keyboard enable checkbox are removed. **Settings → MIDI transport pads**
+holds the existing mappings and learning actions. The old remembered input, permission
+and pad assignments remain valid. Settings opens at the top, and returning restores
+the previous practice position.
+
+**Settings → Attempt assessment** replaces the ambiguous direct-confirmation checkbox.
+Automatic MIDI assessment is the default. Choosing **Confirm the goal yourself**
+records a complete take without an automatic pass; completion then requires an
+explicit self-report. Swing/rubato, improvisation and tasks without fixed scores
+still require self-confirmation automatically. The choice is remembered in this
+browser/workspace and applies only to new attempts; it cannot change an active or
+saved attempt. The server's assessment and completion rules are unchanged.
+
+`tests/score-fit-browser.mjs` checks 4/8/12/16-bar scores at eight viewport sizes,
+including landscape, all noteheads inside the full visible score, stationary playback,
+immutable conditions and Korean settings/tooltips. Existing MIDI, timing, recovery,
+completion, shared audio settings and LAN browser checks use disposable synthetic data.

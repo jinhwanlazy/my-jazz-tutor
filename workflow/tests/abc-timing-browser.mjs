@@ -29,13 +29,13 @@ try {
     const {ScoreView}=await import('/score.mjs');
     const host=document.createElement('div'),root=document.createElement('div');
     host.append(root);document.body.append(host);
-    const view=new ScoreView({root,status:document.createElement('span'),follow:document.createElement('input')});
+    const view=new ScoreView({root,status:document.createElement('span')});
     const values=[];
     for(const width of [900,320]) for(const [name,score] of Object.entries(scores)) {
       const original=JSON.stringify(score);host.style.width=width+'px';view.setScore(score);view.resize();view.begin();
       const total=score.bars.length*score.beats_per_bar;
       const at=absolute=>({absolute,pass:Math.floor(absolute/total),bar:Math.floor(absolute/score.beats_per_bar)%score.bars.length,beat:absolute%score.beats_per_bar});
-      const samples=[];
+      const samples=[],scroll=scrollY;
       for(let beat=0;beat<total;beat+=.125) {
         view.frame(at(beat));
         const m=view.cursor.transform.baseVal.consolidate().matrix;
@@ -69,7 +69,9 @@ try {
       const bounds=view.systems.map(system=>({start:system.start,end:system.end,
         distance:view.x(system.end,system)-view.x(system.start,system)}));
       values.push({name,width,rates:[Math.min(...rates),Math.max(...rates)],bounds,noteCount,voiceCounts,
-        maxAlignmentError,midiAligned,overflow:root.scrollWidth-root.clientWidth,unchanged:JSON.stringify(score)===original});
+        maxAlignmentError,midiAligned,overflow:root.scrollWidth-root.clientWidth,
+        fitsHeight:view.svg.getBoundingClientRect().height<=innerHeight-32,stationaryPage:scrollY===scroll,
+        unchanged:JSON.stringify(score)===original});
     }
     view.resizeObserver.disconnect();host.remove();return values;
   },scores);
@@ -80,6 +82,7 @@ try {
     assert.ok(result.voiceCounts.every(([expected,actual])=>expected===actual),JSON.stringify(result));
     assert.ok(result.noteCount>0&&result.maxAlignmentError<4,JSON.stringify(result));
     assert.ok(result.midiAligned&&result.overflow<=1&&result.unchanged,JSON.stringify(result));
+    assert.ok(result.fitsHeight&&result.stationaryPage,JSON.stringify(result));
     for(const line of result.bounds)assert.ok(Math.abs(line.distance/(line.end-line.start)-result.rates[0])<.01,JSON.stringify(result));
   }
   assert.deepEqual(errors,[]);

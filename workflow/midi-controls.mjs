@@ -19,7 +19,7 @@ export function validBinding(value) {
     value.port&&['id','name','manufacturer'].every(key=>typeof value.port[key]==='string'&&value.port[key].length<=512));
 }
 export function defaultMidiPreferences() {
-  return {version:1,remember:true,connectedBefore:false,keyboard:true,selection:{mode:'all'},
+  return {version:1,remember:true,connectedBefore:false,keyboard:true,assessment:'automatic',selection:{mode:'all'},
     bindings:Object.fromEntries(CONTROL_ACTIONS.map(action=>[action,null]))};
 }
 export function midiPreferences(value) {
@@ -29,7 +29,9 @@ export function midiPreferences(value) {
   if(!selection||!['all','none','device'].includes(selection.mode)||selection.mode==='device'&&
     !['id','name','manufacturer'].every(key=>typeof selection[key]==='string'&&selection[key].length<=512))return fallback;
   if(!value.bindings||!CONTROL_ACTIONS.every(action=>validBinding(value.bindings[action])))return fallback;
-  return structuredClone(value);
+  // Keep reading v0.9 mappings, but the removed keyboard switch no longer
+  // disables shortcuts. An absent/new assessment preference defaults to MIDI.
+  return {...structuredClone(value),keyboard:true,assessment:value.assessment==='self_report'?'self_report':'automatic'};
 }
 export function keyboardAction(event) {
   if(event.defaultPrevented||event.repeat||event.isComposing||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return null;

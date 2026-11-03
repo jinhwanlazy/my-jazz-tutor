@@ -129,7 +129,7 @@ print(json.dumps([parse_score(n) for n in values]))
   }
   await page.locator('#midi-connect').click();
   await page.locator('#tempo').fill('240');await page.locator('#tempo').dispatchEvent('change');
-  await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#manual-mode').check();
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#assessment-mode').selectOption('self_report');await page.locator('#settings-back').click();
   await page.locator('#practice-btn').click();
   await page.waitForFunction(()=>document.querySelector('#transport-state').textContent==='Recording one pass');
   assert.equal(await page.locator('#tempo').isDisabled(),true);

@@ -29,7 +29,8 @@ class BrowserRunner(SyntheticRunner):
             result['exercise']['notation']['abc']=result['exercise']['notation']['abc'].replace('K:D','Q:1/4=240\nK:D')
             result['exercise']['accompaniment']=None
         if context['request'].startswith('simulate:abc'):
-            result = abc_result(12 if '12' in context['request'] else 8, 3 if '3/4' in context['request'] else 4)
+            bars = {'simulate:abc4':4, 'simulate:abc8':8, 'simulate:abc12':12, 'simulate:abc16':16}.get(context['request'].split()[0],8)
+            result = abc_result(bars, 3 if '3/4' in context['request'] else 4)
         if context['request'].startswith('simulate:source'):
             packet = context['preparation']['materials'][0]
             original = context['request'] == 'simulate:source-original'

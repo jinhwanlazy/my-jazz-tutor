@@ -105,7 +105,7 @@ try {
   await page.waitForFunction(()=>document.querySelectorAll('.attempt-row').length===3&&document.querySelector('#practice-btn').disabled===false);
   assert.equal((await state()).history.find(t=>t.id===first).attempts.at(-1).state,'aborted');
   // Save retry after a sealed take is idempotent and does not add a second attempt.
-  await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#manual-mode').check({force:true});await page.locator('#click-toggle').uncheck({force:true});
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#assessment-mode').selectOption('self_report');await page.locator('#settings-back').click();await page.locator('#click-toggle').uncheck({force:true});
   let failOnce=true;await page.route('**/api/sessions/finish*',async route=>{
     if(failOnce){failOnce=false;await route.fulfill({status:503,contentType:'application/json',body:'{"error":"Synthetic temporary failure"}'});}else await route.continue();
   });
@@ -138,7 +138,7 @@ try {
   const recovered=(await state()).history.find(t=>t.id===recoveredTask);
   assert.equal(recovered.pending,true);assert.equal(recovered.attempts[0].state,'interrupted');
   assert.equal(recovered.assessment.eligible,false);assert.equal(await page.locator('#view-list').isVisible(),true);
-  await page.locator('[data-view="settings"]').click();await page.locator('#language-select').selectOption('ko');
+  await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#language-select').selectOption('ko');
   await page.locator('#settings-back').click();await page.locator(`.practice-item[data-task-id="${first}"] .history-item`).click();
   await page.locator('#view-score-btn').click();await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:join(output,'attempt-history-mobile-ko.png'),fullPage:true});

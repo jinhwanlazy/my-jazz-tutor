@@ -70,9 +70,12 @@ test('stable port references survive a changed ID but not an ambiguous replaceme
 
 test('preferences preserve explicit no-recording/opt-out choices and validate learned messages',()=>{
   const saved=defaultMidiPreferences();saved.connectedBefore=true;saved.remember=false;saved.keyboard=false;saved.selection={mode:'none'};
-  assert.deepEqual(midiPreferences(saved),saved);
+  assert.deepEqual(midiPreferences(saved),{...saved,keyboard:true});
   const device={...saved,selection:{mode:'device',...portReference(piano)}};
-  assert.deepEqual(midiPreferences(device),device);
+  assert.deepEqual(midiPreferences(device),{...device,keyboard:true});
+  const previous={...device};delete previous.assessment;
+  assert.deepEqual(midiPreferences(previous),{...device,keyboard:true,assessment:'automatic'});
+  device.assessment='self_report';assert.equal(midiPreferences(device).assessment,'self_report');
   device.bindings.record={kind:'note',channel:16,number:95,port:portReference(surface)};
   assert.deepEqual(midiPreferences(device),defaultMidiPreferences());
   assert.deepEqual(midiPreferences(null),defaultMidiPreferences());

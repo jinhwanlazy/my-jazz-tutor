@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const project=resolve(import.meta.dirname,'..'),root=await mkdtemp(join(tmpdir(),'jazz-browser-controls-'));
-const output=join(project,'build/transport-controls-0.9.0');await mkdir(output,{recursive:true});
+const output=join(project,'build/score-layout-0.10.0');await mkdir(output,{recursive:true});
 await writeFile(join(root,'profile.json'),'{"daily_minutes":30,"language":"en"}');
 const server=spawn('uv',['run','python','tests/serve_browser.py',root],{cwd:project});let browser;
 try {
@@ -41,7 +41,8 @@ try {
   const state=()=>page.evaluate(()=>fetch('/api/state').then(r=>r.json()));
   const waitList=()=>page.waitForFunction(()=>document.querySelector('.practice-item'));
   const enter=async()=>{await page.locator('.history-item').first().click();await page.locator('#view-practice').waitFor({state:'visible'});};
-  const settings=async()=>{await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#controller-shortcuts').evaluate(e=>e.open=true);};
+  const settings=async()=>{await page.locator('.nav-button[data-view="settings"]').click();};
+  const room=async()=>{await page.locator('#settings-back').click();};
   const selectInput=async value=>{await page.locator('#midi-options').evaluate(e=>e.open=true);await page.locator('#midi-input').selectOption({value});};
   const pad=number=>page.evaluate(number=>tapPad(number),number);
   await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection').textContent==='Connected locally');
@@ -67,9 +68,10 @@ try {
   // A reload restores prior permission, device selection and pad assignments.
   await page.reload();await waitList();await enter();await page.waitForFunction(()=>!document.querySelector('#practice-btn').disabled);
   assert.equal(await page.evaluate(()=>midiRequests),1);assert.equal(await page.locator('#midi-input').inputValue(),'keys-a');
-  await settings();assert.match(await page.locator('[data-midi-binding="record"]').innerText(),/Note 95/);
-  await page.locator('#playback-settings>summary').click();
-  await page.locator('#score-follow').uncheck({force:true});await page.locator('#go-score').click();
+  await settings();assert.match(await page.locator('[data-midi-binding="record"]').innerText(),/Note 95/);await room();
+  for(const id of ['score-follow','tempo-range','keyboard-shortcuts','controller-shortcuts','manual-mode'])assert.equal(await page.locator('#'+id).count(),0);
+  assert.match(await page.locator('#practice-btn').getAttribute('title'),/R.*Shift \+ Pad 7/);
+  await page.locator('#go-score').click();
   await page.keyboard.press('r');await page.waitForFunction(()=>document.querySelector('#transport-state').textContent==='Recording one pass');
   await page.evaluate(()=>{sendMidi('keys-a',[0x90,95,75]);sendMidi('keys-a',[0x80,95,0]);});
   const scroll=await page.evaluate(()=>scrollY);
@@ -98,8 +100,7 @@ try {
   await page.keyboard.press('s');await page.locator('#replay-actions').waitFor({state:'hidden'});
   assert.equal((await state()).sessions.length,2);
   await page.locator('#tempo').focus();await page.keyboard.press('r');assert.equal((await state()).sessions.length,2);
-  await settings();await page.locator('#keyboard-shortcuts').uncheck({force:true});await page.locator('#playback-settings>summary').click();
-  await page.locator('#score-viewport').focus();await page.keyboard.press('r');assert.equal((await state()).sessions.length,2);
+  await settings();await page.keyboard.press('r');await pad(95);assert.equal((await state()).sessions.length,2);await room();
   await page.locator('#back-list').click();await page.keyboard.press('r');await pad(95);assert.equal((await state()).sessions.length,2);
   // Explicit opt-out and revoked permission never pretend to be connected.
   await page.locator('#midi-options').evaluate(e=>e.open=true);await page.locator('#midi-reconnect').uncheck({force:true});
@@ -117,10 +118,12 @@ try {
   assert.equal(await page.locator('#midi-input').inputValue(),'keys-a','missing input selection was lost');
   await page.evaluate(()=>replugKeys());await page.waitForFunction(()=>!document.querySelector('#practice-btn').disabled);
   assert.equal(await page.locator('#midi-input').inputValue(),'keys-a-replug');
+  await settings();await page.locator('#assessment-mode').selectOption('self_report');await room();
   await selectInput('none');await page.reload();await waitList();await enter();await page.waitForFunction(()=>midiRequests===1);
   assert.equal(await page.locator('#midi-input').inputValue(),'none');assert.equal(await page.locator('#practice-btn').isDisabled(),true);
+  assert.equal(await page.locator('#assessment-mode').inputValue(),'self_report','assessment preference was lost on reload');
   assert.equal(await page.locator('#error').isVisible(),false);assert.deepEqual(errors,[]);
-  await page.setViewportSize({width:390,height:844});await page.locator('#go-score').click();await settings();
+  await page.setViewportSize({width:390,height:844});await settings();
   await page.locator('[data-midi-binding="stop"]').scrollIntoViewIfNeeded();
   await page.screenshot({path:join(output,'controller-settings-mobile.png')});
   await writeFile(join(output,'checks.json'),JSON.stringify({passed:true,checks:['no automatic result scrolling','keyboard record/retry/play/stop','MiniLab learn and conflict guards','no pad contamination','auto reconnect and selection','permission/absence/opt-out handling'],errors},null,2));

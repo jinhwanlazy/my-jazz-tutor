@@ -34,7 +34,7 @@ try {
   await page.locator('#close-record').click();await page.locator('.history-item').first().click();await page.locator('#history-dialog').waitFor({state:'visible'});
   assert.match(await page.locator('#history-detail .practice-references').innerText(),/Original source example/);
   await page.screenshot({path:'build/references-browser/detail-en.png',fullPage:true});
-  await page.locator('#dialog-close').click();await page.locator('[data-view="settings"]').click();
+  await page.locator('#dialog-close').click();await page.locator('.nav-button[data-view="settings"]').click();
   await page.locator('#language-select').selectOption('ko');await page.locator('#settings-back').click();
   await page.waitForFunction(()=>document.querySelector('.history-item h3')?.textContent.startsWith('번역:'));
   await page.locator('.history-item').first().click();await page.locator('#history-dialog').waitFor({state:'visible'});
