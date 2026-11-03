@@ -50,7 +50,7 @@ try {
   await page.screenshot({path:join(output,'journal-desktop-final.png')});
   await enter('main');assert.equal(await page.locator('#practice-btn').isDisabled(),true);
   await settings();await page.locator('#manual-mode').check();assert.equal(await page.locator('#practice-btn').isDisabled(),true);
-  await page.locator('#manual-mode').uncheck();await page.locator('#playback-settings summary').click();
+  await page.locator('#manual-mode').uncheck();await page.locator('#playback-settings>summary').click();
   assert.equal(await page.locator('#finish-btn').isDisabled(),false,'missing MIDI must not erase an earlier qualifying take');
   await page.locator('#midi-connect').click();assert.equal(await page.locator('#practice-btn').isDisabled(),false);
   await page.evaluate(()=>midiConnected(false));assert.equal(await page.locator('#practice-btn').isDisabled(),true);
@@ -186,7 +186,7 @@ try {
   await page.waitForFunction(()=>document.querySelector('#connection').textContent==='로컬에 연결됨');
   assert.doesNotMatch(await page.locator('.attempt-count').first().innerText(),/attempts|successes/);
   await page.screenshot({path:join(output,'journal-mobile-ko-final.png')});await enter('main');await page.locator('#go-score').click();
-  await settings();await page.locator('#manual-mode').check();await page.locator('#playback-settings summary').click();
+  await settings();await page.locator('#manual-mode').check();await page.locator('#playback-settings>summary').click();
   assert.equal(await page.locator('#manual-mode').isChecked(),true);
   await page.screenshot({path:join(output,'score-mobile-ko-final.png')});
   assert.deepEqual(errors,[]);

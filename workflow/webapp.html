@@ -20,7 +20,7 @@
     <section class="midi-area" aria-label="MIDI connection" data-i18n-aria-label="MIDI connection">
       <div class="section-top"><div><span id="midi-light" class="midi-light"></span><strong data-i18n="MIDI input">MIDI input</strong></div><button id="midi-connect" class="midi-button" data-i18n="Connect">Connect</button></div>
       <p id="midi-status" data-i18n="MIDI not connected.">MIDI not connected.</p>
-      <details id="midi-options"><summary data-i18n="Input selection">Input selection</summary><select id="midi-input" aria-label="MIDI input to record" hidden data-i18n-aria-label="MIDI input to record"></select></details>
+      <details id="midi-options"><summary data-i18n="Input selection">Input selection</summary><select id="midi-input" aria-label="MIDI input to record" hidden data-i18n-aria-label="MIDI input to record"></select><label class="check-line midi-remember"><input id="midi-reconnect" type="checkbox" checked><span data-i18n="Reconnect after reload">Reconnect after reload</span></label></details>
     </section>
     <div class="sidebar-bottom"><div class="piano-mini" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p><span data-i18n="Small steps.">Small steps.</span><br><span data-i18n="Music of your own.">Music of your own.</span></p><span id="version"><span data-i18n="Connecting">Connecting</span></span></div>
   </aside>
@@ -82,15 +82,15 @@
         <div id="practice-toolbar" class="workspace-toolbar practice-controls" role="group" aria-label="Practice playback" data-i18n-aria-label="Practice playback">
           <div class="workspace-action-row">
             <div class="transport-buttons" id="practice-actions">
-              <button id="practice-btn" class="button primary" disabled data-i18n="Start attempt">Start attempt</button>
-              <button id="abort-attempt" class="button danger" hidden data-i18n="Stop attempt">Stop attempt</button>
+              <button id="practice-btn" aria-keyshortcuts="R" class="button primary" disabled data-i18n="Start attempt">Start attempt</button>
+              <button id="abort-attempt" aria-keyshortcuts="S" class="button danger" hidden data-i18n="Stop attempt">Stop attempt</button>
               <button id="resume-practice" class="button primary" hidden data-i18n="Resume this practice">Resume this practice</button>
               <button id="finish-btn" class="button secondary" disabled aria-describedby="completion-hint" data-i18n="Complete practice">Complete practice</button>
               <button id="discard-btn" class="button quiet-danger" data-i18n="Discard task">Discard task</button>
             </div>
             <div id="replay-actions" class="transport-buttons replay-actions" hidden>
-              <button id="replay-pause" class="button primary" disabled data-i18n="Pause playback">Pause playback</button>
-              <button id="replay-stop" class="button secondary" disabled data-i18n="Stop playback">Stop playback</button>
+              <button id="replay-pause" aria-keyshortcuts="Space" class="button primary" disabled data-i18n="Pause playback">Pause playback</button>
+              <button id="replay-stop" aria-keyshortcuts="S" class="button secondary" disabled data-i18n="Stop playback">Stop playback</button>
             </div>
             <div class="workspace-state"><span id="transport-state" class="transport-status" role="status"></span><span id="elapsed">00:00</span><span id="score-position"></span></div>
           </div>
@@ -108,6 +108,15 @@
                 <div class="sound-row"><label class="switch-label"><input id="drum-toggle" type="checkbox"><span class="switch"></span><span data-i18n="Drum backing">Drum backing</span></label><input id="drum-volume" type="range" min="0" max="0.6" step="0.01" value="0.18" aria-label="Drum volume" data-i18n-aria-label="Drum volume"></div>
                 <label class="feel-control"><span data-i18n="Backing feel">Backing feel</span><select id="backing-feel"><option value="straight" data-i18n="Straight">Straight</option><option value="swing" data-i18n="Swing">Swing</option></select></label>
                 <label for="tempo-range" data-i18n="Metronome tempo slider">Metronome tempo slider</label><input id="tempo-range" type="range" min="20" max="240" value="60"><p id="tempo-hint" class="field-note"></p>
+                <details id="controller-shortcuts" class="controller-shortcuts"><summary data-i18n="Keyboard and MIDI controls">Keyboard and MIDI controls</summary>
+                  <p class="field-note"><kbd>R</kbd> <span data-i18n="Start attempt / retry">Start attempt / retry</span> · <kbd>S</kbd> <span data-i18n="Stop">Stop</span> · <kbd>Space</kbd> <span data-i18n="Play / pause">Play / pause</span></p>
+                  <label class="check-line"><input id="keyboard-shortcuts" type="checkbox" checked><span data-i18n="Enable keyboard shortcuts">Enable keyboard shortcuts</span></label>
+                  <p class="field-note" data-i18n="Play the selected take, or the written score when no take is selected.">Play the selected take, or the written score when no take is selected.</p>
+                  <p class="field-note" data-i18n="MiniLab 3: Shift + Pad 7 records, Shift + Pad 5 stops, Shift + Pad 6 plays. Assign each pad below once.">MiniLab 3: Shift + Pad 7 records, Shift + Pad 5 stops, Shift + Pad 6 plays. Assign each pad below once.</p>
+<div class="controller-binding"><strong data-i18n="Start attempt / retry">Start attempt / retry</strong><small data-midi-binding="record"></small><div><button type="button" class="text-button" data-learn-action="record" data-i18n="Assign pad">Assign pad</button><button type="button" class="text-button" data-clear-action="record" data-i18n="Clear">Clear</button></div></div><div class="controller-binding"><strong data-i18n="Stop">Stop</strong><small data-midi-binding="stop"></small><div><button type="button" class="text-button" data-learn-action="stop" data-i18n="Assign pad">Assign pad</button><button type="button" class="text-button" data-clear-action="stop" data-i18n="Clear">Clear</button></div></div><div class="controller-binding"><strong data-i18n="Play / pause">Play / pause</strong><small data-midi-binding="play"></small><div><button type="button" class="text-button" data-learn-action="play" data-i18n="Assign pad">Assign pad</button><button type="button" class="text-button" data-clear-action="play" data-i18n="Clear">Clear</button></div></div>
+                  <p id="controller-status" class="field-note" role="status" data-i18n="MIDI setup is remembered in this browser for every practice.">MIDI setup is remembered in this browser for every practice.</p>
+                  <p class="field-note" data-i18n="If a MiniLab transport pad sends nothing, choose Mackie for Transport Mode in Arturia MIDI Control Center.">If a MiniLab transport pad sends nothing, choose Mackie for Transport Mode in Arturia MIDI Control Center.</p>
+                </details>
                 <div class="attempt-preferences"><label class="check-line"><input id="manual-mode" type="checkbox"><span data-i18n="Use direct goal confirmation">Use direct goal confirmation</span></label><p id="attempt-mode-note" class="field-note"></p></div>
               </div>
             </details>
@@ -144,6 +153,7 @@
     <footer class="site-footer"><span>MY JAZZ TUTOR / PRACTICE ROOM</span><span><span data-i18n="Keep playing. Enjoy the process.">Keep playing. Enjoy the process.</span></span></footer>
   </main>
   <dialog id="history-dialog"><div class="dialog-top"><span class="eyebrow"><span data-i18n="SESSION NOTES">SESSION NOTES</span></span><div class="dialog-header-actions"><button id="delete-practice" type="button" class="icon-button danger-icon" aria-label="Delete practice" data-i18n-aria-label="Delete practice" title="Delete practice" data-i18n-title="Delete practice"></button><button id="dialog-close" class="round-button" aria-label="Close session details" data-i18n-aria-label="Close session details">×</button></div></div><div id="history-detail"></div><div class="dialog-actions"><button id="reopen-btn" class="button primary" data-i18n="Resume this practice">Resume this practice</button><button id="view-score-btn" class="button secondary" data-i18n="View score and attempts">View score and attempts</button><button id="correct-btn" class="button secondary" data-i18n="Edit difficulty and note">Edit difficulty and note</button><button id="repeat-btn" class="button secondary" data-i18n="New practice with these conditions">New practice with these conditions</button></div></dialog>
+  <dialog id="midi-learn-dialog" aria-labelledby="midi-learn-title"><h2 id="midi-learn-title" data-i18n="Assign a transport pad">Assign a transport pad</h2><p id="midi-learn-action"></p><p data-i18n="Press the corresponding pad once. This input will not start a take or be recorded as music.">Press the corresponding pad once. This input will not start a take or be recorded as music.</p><p id="midi-learn-status" class="field-note" role="status"></p><button type="button" id="midi-learn-cancel" class="button secondary" data-i18n="Cancel">Cancel</button></dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title"><form id="delete-form">
     <h2 id="delete-title" data-i18n="Delete this practice?">Delete this practice?</h2><p id="delete-task-title"></p>
     <p data-i18n="Remove it from the journal and future recommendations. Original records and MIDI remain in local storage.">Remove it from the journal and future recommendations. Original records and MIDI remain in local storage.</p>

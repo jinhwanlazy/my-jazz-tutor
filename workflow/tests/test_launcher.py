@@ -130,6 +130,10 @@ class LauncherTests(unittest.TestCase):
                 response = connection.getresponse()
                 self.assertEqual(response.status, 200)
                 state = json.loads(response.read())
+                connection.request('GET', '/midi-controls.mjs')
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.read(), (self.source/'midi-controls.mjs').read_bytes())
             finally:
                 connection.close()
             self.assertEqual(state['status']['version'], r.curriculum()['version'])

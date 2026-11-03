@@ -834,6 +834,25 @@
     "Invalid drum feel.": "드럼 리듬 설정이 올바르지 않아요.",
     "Playback volume is out of range.": "음량 설정이 허용 범위를 벗어났어요.",
     " · earlier record format also present": " · 이전 방식의 기록도 있음",
-    "Only saved individual attempts are counted here. Earlier records remain in practice details.": "여기서는 저장된 개별 시도만 세어요. 이전 방식의 기록은 연습 상세에 보존되어 있어요."
+    "Only saved individual attempts are counted here. Earlier records remain in practice details.": "여기서는 저장된 개별 시도만 세어요. 이전 방식의 기록은 연습 상세에 보존되어 있어요.",
+    "Cancel": "취소",
+    "Reconnect after reload": "새로고침 후 자동 연결",
+    "Allow MIDI access again to reconnect.": "다시 연결하려면 MIDI 접근 권한을 허용해 주세요.",
+    "Start attempt / retry": "시도 / 재시도",
+    "Stop": "정지",
+    "Play / pause": "재생 / 일시정지",
+    "Keyboard and MIDI controls": "키보드·MIDI 조작",
+    "Enable keyboard shortcuts": "키보드 단축키 사용",
+    "Play the selected take, or the written score when no take is selected.": "선택한 시도가 있으면 녹음을, 없으면 악보를 재생해요.",
+    "MiniLab 3: Shift + Pad 7 records, Shift + Pad 5 stops, Shift + Pad 6 plays. Assign each pad below once.": "MiniLab 3: Shift+패드 7은 시도, Shift+패드 5는 정지, Shift+패드 6은 재생이에요. 아래에서 한 번씩 배정해 주세요.",
+    "Assign pad": "패드 배정",
+    "Clear": "해제",
+    "Not assigned": "배정되지 않음",
+    "MIDI setup is remembered in this browser for every practice.": "MIDI 설정은 이 브라우저의 모든 연습에서 유지돼요.",
+    "MIDI preferences are available in this tab only.": "MIDI 설정을 저장할 수 없어 이 탭에서만 유지돼요.",
+    "If a MiniLab transport pad sends nothing, choose Mackie for Transport Mode in Arturia MIDI Control Center.": "MiniLab 조작 패드의 입력이 없다면 Arturia MIDI Control Center에서 Transport Mode를 Mackie로 설정해 주세요.",
+    "Assign a transport pad": "조작 패드 배정",
+    "Press the corresponding pad once. This input will not start a take or be recorded as music.": "해당 패드를 한 번 눌러 주세요. 배정할 때는 시도를 시작하거나 연주 MIDI로 기록하지 않아요.",
+    "This pad is already assigned to {0}.": "이 패드는 이미 {0}에 배정되어 있어요."
   }
 }

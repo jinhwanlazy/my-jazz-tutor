@@ -28,6 +28,7 @@ ASSETS = {"webapp.html": "text/html", "webapp.css": "text/css", "webapp.js": "te
           "abc-view.mjs": "text/javascript", "abcjs.min.js": "text/javascript",
           "midi-analysis.mjs": "text/javascript", "attempt-audio.mjs": "text/javascript",
           "midi-analysis-worker.mjs": "text/javascript", "backing.mjs": "text/javascript",
+          "midi-controls.mjs": "text/javascript",
           "Bravura.woff2": "font/woff2", "Bravura-LICENSE.txt": "text/plain"}
 
 

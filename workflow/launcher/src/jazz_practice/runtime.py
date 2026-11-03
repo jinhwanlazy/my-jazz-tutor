@@ -23,7 +23,7 @@ ABC = ['abc_score.py', 'abc-parse.cjs', 'abc-parser.cjs', 'abc-view.mjs', 'abcjs
        'materials.py', 'material_extract.py', 'materials-catalog.json', 'coaching_materials.py', 'recommendation.plan.schema.json']
 EXTRACTION = ['musicxml_import.py', 'score_extract.py']
 ATTEMPTS = ['attempts.py', 'midi-analysis.mjs', 'midi-analysis-cli.mjs', 'midi-analysis-worker.mjs', 'attempt-audio.mjs', 'backing.mjs']
-FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + DIFFICULTY + ABC + EXTRACTION + ATTEMPTS + ['localization.py', 'difficulty-rubric.v1.json']
+FILES = REQUIRED + WEB + LOCALIZATION + NOTATION + RECOMMENDATION + DIFFICULTY + ABC + EXTRACTION + ATTEMPTS + ['localization.py', 'difficulty-rubric.v1.json', 'midi-controls.mjs']
 PIN = 'runtime.json'
 CACHE = '.runtime'
 

@@ -4,6 +4,7 @@ import {backingFor} from './backing.mjs';
 import {decodeNotes,expectedNotes} from './midi-analysis.mjs';
 import {Capture, Outbox, uploadPending, randomHex, decodeMidiFrames} from './capture.mjs';
 import {ScoreView} from './score.mjs';
+import {MidiControls,CONTROL_ACTIONS,controlOnlyPort,portReference,resolvePort,midiPreferences,keyboardAction} from './midi-controls.mjs';
 
 const $ = id => document.getElementById(id);
 const sidebar = document.querySelector('.sidebar');
@@ -306,7 +307,7 @@ function showAttemptFeedback(attempt) {
   $('selected-play').hidden=false;$('selected-play').disabled=Boolean(ui.capture)||attempt.state==='recording';
   renderBarResults(displayBars(attempt));
 }
-async function playSession(sessionId,task=openedTask(),attemptId=null) {
+async function playSession(sessionId,task=openedTask(),attemptId=null,{focus=true}={}) {
   if(ui.capture)throw Error(tr('Finish the current attempt before replaying.'));
   const request=++ui.replayRequest,taskId=task?.id;
   ui.roomAudioActive=true;await transport.unlock();
@@ -325,7 +326,7 @@ async function playSession(sessionId,task=openedTask(),attemptId=null) {
   ui.replayTrack={notes,bpm:attempt?.bpm||play?.bpm||task.target.bpm,beats:task.target.notation?.beats_per_bar||4,bars:task.target.bars,duration,
     kind:'recording',attemptId:attempt?.id,recordedAt:metadata.created_at};
   startReplay(0);if(attempt?.analysis)score.setFeedback(displayBars(attempt));
-  focusPanel($('attempt-review'));
+  if(focus)focusPanel($('attempt-review'));
 }
 function replayCaption() {
   const track=ui.replayTrack;if(!track)return tr('Choose a recording below to hear your performance.');
@@ -356,6 +357,7 @@ async function refresh(keep = false, skipUnchanged = false) {
   if (data.language !== locale()) return; // A newer language selection superseded this response.
   if (skipUnchanged && JSON.stringify(data) === JSON.stringify(ui.data)) return;
   ui.data = data;
+  initializeMidiPreferences();
   applyPlaybackSettings(data.playback_settings);
   outbox ||= new Outbox(ui.data.workspace_id);
   const current = pending();
@@ -680,6 +682,7 @@ function updateTransport() {
     $('manual-mode').checked?'MIDI is recorded; confirm the goal yourself after a full take.':'MIDI input is recorded only during the take.');
   $('save-status').hidden=!ui.saveStatus||ui.saveStatus==='Autosaved';
   if(ui.saveStatus)$('save-status').textContent=tr(ui.saveStatus);
+  renderControllerBindings();
 }
 
 function registerPort(port) {
@@ -688,10 +691,100 @@ function registerPort(port) {
   ui.ports.set(port.id, index);
   ui.capture.event('device', {index, name: port.name || 'Unnamed input', manufacturer: port.manufacturer || '', id: port.id});
 }
-function selectedPorts() { return midiAccess ? [...midiAccess.inputs.values()].filter(p => p.state === 'connected' && (midiSelection === 'all' || midiSelection === p.id)) : []; }
+function controlActionLabel(action) {return tr({record:'Start attempt / retry',stop:'Stop',play:'Play / pause'}[action]);}
+function saveMidiPreferences() {
+  try{localStorage.setItem(ui.midiPrefsKey,JSON.stringify(ui.midiPrefs));}
+  catch{$('controller-status').textContent=tr('MIDI preferences are available in this tab only.');}
+}
+function initializeMidiPreferences() {
+  const key='my-jazz-tutor.midi:'+ui.data.workspace_id;if(ui.midiPrefsKey===key)return;
+  ui.midiPrefsKey=key;let saved;
+  try{saved=JSON.parse(localStorage.getItem(key)||'null');}catch{}
+  ui.midiPrefs=midiPreferences(saved);ui.midiControls=new MidiControls(ui.midiPrefs.bindings);
+  $('midi-reconnect').checked=ui.midiPrefs.remember;$('keyboard-shortcuts').checked=ui.midiPrefs.keyboard;
+  renderControllerBindings();restoreMidiAccess();
+}
+function restoreSelectedInput() {
+  if(!ui.midiPrefs||!midiAccess)return;
+  const choice=ui.midiPrefs.selection;
+  if(choice.mode==='device')midiSelection=resolvePort(choice,[...midiAccess.inputs.values()].filter(p=>!controlOnlyPort(p)))?.id||choice.id;
+  else midiSelection=choice.mode;
+}
+async function restoreMidiAccess() {
+  if(!ui.midiPrefs.remember||!navigator.requestMIDIAccess||window.isSecureContext===false)return;
+  let permitted=ui.midiPrefs.connectedBefore;
+  try {
+    const permission=await navigator.permissions.query({name:'midi',sysex:false});
+    if(permission.state!=='granted'){
+      if(ui.midiPrefs.connectedBefore){ui.midiNotice='Allow MIDI access again to reconnect.';$('midi-status').textContent=tr(ui.midiNotice);}
+      return;
+    }
+    permitted=true;
+  } catch { /* Browsers without MIDI permission querying can retry prior consent. */ }
+  if(permitted&&ui.midiPrefs.remember&&!midiAccess)await connectMidi(true);
+}
+async function connectMidi(automatic=false) {
+  if(!ui.data||ui.midiConnecting)return;
+  if(!automatic)clearError();
+  if(window.isSecureContext===false){ui.midiNotice='MIDI input requires HTTPS or localhost. You can still practice with the metronome.';$('midi-status').textContent=tr(ui.midiNotice);return;}
+  if(!navigator.requestMIDIAccess){ui.midiNotice='This browser does not support Web MIDI. Practice without MIDI or connect using a supported browser.';$('midi-status').textContent=tr(ui.midiNotice);return;}
+  ui.midiConnecting=true;$('midi-connect').disabled=true;
+  try {
+    const access=await navigator.requestMIDIAccess({sysex:false});
+    if(midiAccess&&midiAccess!==access){for(const port of midiAccess.inputs.values())port.onmidimessage=null;midiAccess.onstatechange=null;}
+    midiAccess=access;ui.midiPrefs.connectedBefore=true;saveMidiPreferences();
+    midiAccess.onstatechange=event=>{
+      if(event.port.type==='input'&&event.port.state==='disconnected'){
+        ui.midiControls.disconnect(event.port);score.disconnect(event.port.id,transport.position());
+        if(midiSelection==='all'||midiSelection===event.port.id)ui.capture?.event('disconnect',{id:event.port.id});
+      }
+      midiBindings();
+    };
+    midiBindings();
+  } catch {ui.midiNotice='MIDI access was denied. Check browser permissions. Other practice features are still available.';$('midi-status').textContent=tr(ui.midiNotice);}
+  finally{ui.midiConnecting=false;$('midi-connect').disabled=false;updateTransport();}
+}
+function renderControllerBindings() {
+  if(!ui.midiControls)return;
+  for(const [id,key] of [['practice-btn','R'],['abort-attempt','S'],['replay-pause','Space'],['replay-stop','S']])
+    if(ui.midiPrefs.keyboard)$(id).setAttribute('aria-keyshortcuts',key);else $(id).removeAttribute('aria-keyshortcuts');
+  const locked=Boolean(ui.capture)||ui.busy||Boolean(transport.replay);
+  for(const action of CONTROL_ACTIONS){
+    const binding=ui.midiControls.bindings[action];
+    const text=binding?`${binding.port.name||tr('MIDI input')} · ${binding.kind==='note'?'Note':'CC'} ${binding.number}${binding.kind==='cc'?' = '+binding.value:''} · Ch ${binding.channel+1}`:tr('Not assigned');
+    document.querySelector(`[data-midi-binding="${action}"]`).textContent=text;
+    document.querySelector(`[data-learn-action="${action}"]`).disabled=locked||!midiAccess||![...midiAccess.inputs.values()].some(p=>p.state==='connected');
+    document.querySelector(`[data-clear-action="${action}"]`).disabled=locked||!binding;
+  }
+}
+async function runTransportControl(action) {
+  if(ui.view!=='practice'||!openedTask()||document.hidden||document.querySelector('dialog[open]')||ui.midiControls?.learning)return;
+  if(action==='stop'){
+    ui.replayRequest++;
+    if(ui.capture&&!ui.finishing&&!ui.busy)await stopCapture();
+    else if(transport.replay){transport.stopReplay();updateTransport();}
+    return;
+  }
+  if(ui.busy||ui.finishing||ui.controlLoading||ui.capture)return;
+  if(action==='record'){
+    if(!openedTask().pending||!selectedPorts().length)return;
+    ui.replayRequest++;transport.stopReplay();await startOrPause();return;
+  }
+  if(action==='play'){
+    if(transport.replay){if(transport.replay.paused)startReplay(transport.replay.from);else transport.pauseReplay();updateTransport();return;}
+    ui.controlLoading=true;
+    try {
+      const attempt=ui.selectedAttempt;
+      if(attempt?.session_id)await playSession(attempt.session_id,openedTask(),attempt.id,{focus:false});
+      else await playWrittenScore();
+    } finally {ui.controlLoading=false;}
+  }
+}
+function selectedPorts() { return midiAccess ? [...midiAccess.inputs.values()].filter(p => p.state === 'connected'&&!controlOnlyPort(p)&&(midiSelection === 'all' || midiSelection === p.id)) : []; }
 function midiBindings() {
   if (!midiAccess) return;
-  const available = [...midiAccess.inputs.values()].filter(p => p.state === 'connected');
+  restoreSelectedInput();
+  const available = [...midiAccess.inputs.values()].filter(p => p.state === 'connected'&&!controlOnlyPort(p));
   $('midi-input').hidden = false;
   $('midi-input').replaceChildren(option('all', tr('Record all connected inputs')), option('none', tr('Turn MIDI recording off')), ...available.map(p => option(p.id, p.name || tr('MIDI input'))));
   if (![...$('midi-input').options].some(o => o.value === midiSelection)) $('midi-input').append(option(midiSelection, tr('Selected device · disconnected')));
@@ -699,6 +792,12 @@ function midiBindings() {
   for (const port of midiAccess.inputs.values()) {
     if (selectedPorts().includes(port)) registerPort(port);
     port.onmidimessage = message => {
+      if(port.state!=='connected')return;
+      const routed=ui.midiControls.process(port,message.data,[...midiAccess.inputs.values()]);
+      if(routed.learned){ui.midiPrefs.bindings=structuredClone(ui.midiControls.bindings);saveMidiPreferences();$('midi-learn-dialog').close();renderControllerBindings();}
+      if(routed.conflict){$('midi-learn-status').textContent=tr`This pad is already assigned to ${controlActionLabel(routed.conflict)}.`;}
+      if(routed.action)runTransportControl(routed.action).catch(fail);
+      if(routed.consume||controlOnlyPort(port))return;
       if (midiSelection !== 'all' && midiSelection !== port.id) return;
       $('midi-light').classList.add('received');
       clearTimeout(port.indicatorTimer);
@@ -774,7 +873,7 @@ async function stopCapture() {
       score.pause(score.position);
       ui.latestAttempt=saved.attempt||null;ui.currentAttempt=null;ui.plannedStart=null;
       await refresh(true);
-      if(saved.attempt&&openedTask()?.id===saved.attempt.task_id){showAttemptFeedback(saved.attempt);renderAttempts(openedTask());if(ui.view==='practice')focusPanel($('attempt-review'));}
+      if(saved.attempt&&openedTask()?.id===saved.attempt.task_id){showAttemptFeedback(saved.attempt);renderAttempts(openedTask());}
       midiBindings();return saved;
     } finally {ui.finishing=null;updateTransport();}
   })();
@@ -807,7 +906,7 @@ $('manual-mode').addEventListener('change',()=>{ui.manualTouched=true;updateTran
 $('drum-toggle').addEventListener('change',event=>queuePlaybackSettings({drums_enabled:event.target.checked}));
 $('drum-volume').addEventListener('input',event=>queuePlaybackSettings({drum_volume:Number(event.target.value)},150));
 $('backing-feel').addEventListener('change',event=>queuePlaybackSettings({drum_feel:event.target.value}));
-$('reference-play').addEventListener('click',async()=>{
+async function playWrittenScore() {
   if(ui.capture||!target()?.notation)return;
   const request=++ui.replayRequest,taskId=openedTask()?.id,bpm=transport.requestedBpm,source=target().notation;
   try{
@@ -823,7 +922,8 @@ $('reference-play').addEventListener('click',async()=>{
     renderBarResults([]);
     startReplay(0);
   }catch(error){fail(error);}
-});
+}
+$('reference-play').addEventListener('click',playWrittenScore);
 $('replay-pause').addEventListener('click',()=>{
   if(!transport.replay)return;
   if(transport.replay.paused)startReplay(transport.replay.from);else transport.pauseReplay();
@@ -847,6 +947,7 @@ $('latency-ms').addEventListener('change',()=>{try{localStorage.setItem('jazz-mi
 try{$('latency-ms').value=localStorage.getItem('jazz-midi-latency-ms')||'0';}catch{}
 
 function stopRoomAudio() {
+  ui.midiControls?.cancel();if($('midi-learn-dialog').open)$('midi-learn-dialog').close();
   ui.roomAudioActive=false;transport.pause();
 }
 async function goToList() {
@@ -863,6 +964,7 @@ async function goToList() {
 }
 function openPractice(task) {
   if (!task || ui.busy || ui.capture) return;
+  ui.midiControls?.cancel();
   if(ui.view==='list')ui.listScrollY=window.scrollY;
   transport.stopReplay();
   ui.detailRequest++;ui.replayRequest++;analysisSerial++;
@@ -1116,6 +1218,24 @@ document.addEventListener('click',event=>{
   if($('midi-options').open&&!$('midi-options').contains(event.target))$('midi-options').open=false;
 });
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){$('playback-settings').open=false;$('midi-options').open=false;}});
+document.addEventListener('keydown',event=>{
+  if(!ui.midiPrefs?.keyboard||ui.view!=='practice'||document.querySelector('dialog[open]'))return;
+  const action=keyboardAction(event);if(!action)return;
+  event.preventDefault();runTransportControl(action).catch(fail);
+});
+$('keyboard-shortcuts').addEventListener('change',event=>{ui.midiPrefs.keyboard=event.target.checked;saveMidiPreferences();renderControllerBindings();});
+$('midi-reconnect').addEventListener('change',event=>{ui.midiPrefs.remember=event.target.checked;saveMidiPreferences();});
+document.querySelectorAll('[data-learn-action]').forEach(button=>button.addEventListener('click',()=>{
+  if(!ui.midiControls||ui.capture||ui.busy||transport.replay)return;
+  const action=button.dataset.learnAction;ui.midiControls.learn(action);
+  $('midi-learn-action').textContent=controlActionLabel(action);$('midi-learn-status').textContent='';$('midi-learn-dialog').showModal();
+}));
+document.querySelectorAll('[data-clear-action]').forEach(button=>button.addEventListener('click',()=>{
+  if(ui.capture||ui.busy||transport.replay)return;
+  ui.midiControls.clear(button.dataset.clearAction);ui.midiPrefs.bindings=structuredClone(ui.midiControls.bindings);saveMidiPreferences();renderControllerBindings();
+}));
+$('midi-learn-cancel').addEventListener('click',()=>$('midi-learn-dialog').close());
+$('midi-learn-dialog').addEventListener('close',()=>ui.midiControls?.cancel());
 $('finish-btn').addEventListener('click', () => finish());
 $('recover-btn').addEventListener('click', recover);
 document.querySelectorAll('[data-rating]').forEach(button => button.addEventListener('click', () => saveReflection(button.dataset.rating)));
@@ -1158,27 +1278,16 @@ $('repeat-btn').addEventListener('click', async () => {
   } catch (error) { fail(error); }
   finally { ui.busy = false; renderChoices(); $('repeat-btn').disabled = Boolean(ui.capture); }
 });
-$('midi-connect').addEventListener('click', async () => {
-  clearError();
-  if (window.isSecureContext === false) { ui.midiNotice = 'MIDI input requires HTTPS or localhost. You can still practice with the metronome.'; $('midi-status').textContent = tr(ui.midiNotice); return; }
-  if (!navigator.requestMIDIAccess) { ui.midiNotice = 'This browser does not support Web MIDI. Practice without MIDI or connect using a supported browser.'; $('midi-status').textContent = tr(ui.midiNotice); return; }
-  try {
-    const first = !midiAccess;
-    midiAccess ||= await navigator.requestMIDIAccess({sysex: false});
-    if (first && ui.capture) ui.capture.event('disconnect', {reason: 'MIDI connected during practice; earlier input was not captured'});
-    midiAccess.onstatechange = event => {
-      if (event.port.type === 'input' && event.port.state === 'disconnected') score.disconnect(event.port.id, transport.position());
-      if (event.port.type === 'input' && event.port.state === 'disconnected' && (midiSelection === 'all' || midiSelection === event.port.id)) ui.capture?.event('disconnect', {id: event.port.id});
-      midiBindings();
-    };
-    midiBindings();
-  } catch { ui.midiNotice = 'MIDI access was denied. Check browser permissions. Other practice features are still available.'; $('midi-status').textContent = tr(ui.midiNotice); }
-});
+$('midi-connect').addEventListener('click',()=>connectMidi(false));
 $('midi-input').addEventListener('change', event => {
   heldKeys.clear();heldPedals.clear();
   if (midiSelection !== event.target.value) score.disconnect(undefined, transport.position());
   if (ui.capture && midiSelection !== event.target.value) ui.capture.event('disconnect', {reason: 'Recording input changed'});
-  midiSelection = event.target.value; midiBindings();
+  midiSelection=event.target.value;
+  const port=midiAccess?.inputs.get(midiSelection);
+  if(port)ui.midiPrefs.selection={mode:'device',...portReference(port)};
+  else if(['all','none'].includes(midiSelection))ui.midiPrefs.selection={mode:midiSelection};
+  saveMidiPreferences();midiBindings();
 });
 $('discard-btn').addEventListener('click', () => {
   ui.discardTaskId = openedTask()?.id || null;
@@ -1230,6 +1339,7 @@ document.querySelectorAll('[data-view]').forEach(button => button.addEventListen
 }));
 document.querySelector('.brand').addEventListener('click', event => { event.preventDefault(); goToList(); });
 document.addEventListener('visibilitychange', () => {
+  if(document.hidden&&$('midi-learn-dialog').open){ui.midiControls?.cancel();$('midi-learn-dialog').close();}
   ui.capture?.event('visibility', {hidden: document.hidden});
   if(document.hidden&&transport.playing){stopRoomAudio();if(ui.capture)stopCapture().catch(fail);updateTransport();}
   if (document.hidden && ui.capture && !ui.capture.ended) ui.capture.checkpoint().then(() => ui.capture.upload()).catch(() => {});

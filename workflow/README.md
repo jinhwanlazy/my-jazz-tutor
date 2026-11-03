@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.8.0`; create a new tag for later releases instead of moving an old tag:
+selects `v0.9.0`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.8.0
+uv run python publish.py --ref v0.9.0
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -768,3 +768,44 @@ room, audio interruption or unavailable accompaniment stops sound without resett
 preferences. A failed read retains current settings and never overwrites the saved
 file with defaults. BPM remains a task/take condition, separate from these preferences.
 These preferences are not performance evidence or recommendation input.
+
+
+### Transport shortcuts and remembered MIDI (0.9.0)
+
+Saving or stopping a take updates its feedback without moving page scroll or focus.
+Explicitly selecting feedback still brings it into view. In an open practice room,
+**R** starts another attempt, **S** stops/saves the current take or stops playback,
+and **Space** plays/pauses the selected recording (or written score if none is selected).
+Text/number editing, modifiers, key repeats, IME composition and modal dialogs retain
+their normal behavior. Space on native buttons/checkboxes is not hijacked. Shortcuts
+can be disabled in **Sound and input → Keyboard and MIDI controls**. Completion and
+reopening remain explicit actions; shortcuts do not award success or bypass MIDI.
+
+Assign each transport pad once in that panel. Learning does not start a take, checks
+conflicts and ignores MiniLab Shift/HUI selectors. MiniLab 3 uses **Shift+Pad 7** for
+Record, **Shift+Pad 5** for Stop and **Shift+Pad 6** for Play; see the
+[Arturia cheat sheet](https://www.arturia.com/images/products/minilab-3/cheatsheet-minilab3.pdf).
+If nothing arrives, select **Mackie** as Transport Mode in MIDI Control Center;
+[Arturia describes the dedicated MCU/HUI port](https://support.arturia.com/hc/en-us/articles/6189475866396-MiniLab-3-General-Questions).
+The app learns incoming Note/CC commands. It sends no controller configuration,
+requests no SysEx, and excludes dedicated MCU/HUI ports from instrument recording.
+Mapped presses, releases and pressure are consumed before music capture. Controls
+can arrive on a different port from the selected keyboard. Repeated held presses
+cannot trigger extra attempts. Play does not interrupt an active take.
+
+On reload, previously granted MIDI permission is reused automatically. The last
+input choice, automatic reconnect option and mappings are remembered per browser
+and workspace. A unique name/manufacturer match can restore a changed port ID; a
+missing or ambiguous device never falls back to another keyboard. Revoked permission,
+unsupported/insecure contexts and disconnected devices remain visibly unavailable.
+Explicitly choosing no recording input is retained. Disable **Reconnect after reload**
+to opt out. Browser permission remains authoritative; see the
+[Web MIDI specification](https://www.w3.org/TR/webmidi/). Connection never starts a task
+or a recording. These preferences are local browser state, separate from shared audio
+settings and private performance evidence.
+
+`tests/midi-controls.test.mjs` checks routing, held/release/pressure, conflicts,
+keyboard scope and port identity. `tests/controls-browser.mjs` checks scroll after
+a complete take, keyboard/pad transport, raw MIDI separation and reconnection with
+synthetic ports and permissions. The physical MiniLab has not been exercised by
+these automated checks; initial pad learning is done on the user's controller.
