@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.7.1`; create a new tag for later releases instead of moving an old tag:
+selects `v0.7.2`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.7.1
+uv run python publish.py --ref v0.7.2
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -143,8 +143,8 @@ TLS. To use MIDI remotely without HTTPS, forward the port through SSH and visit
 localhost on the client. Changing the address creates a separate browser storage
 origin, so recover any unsent input at its original address first.
 
-- **Practice room:** the purpose, conditions, characteristics and saved personal
-  prediction appear before the score. Expand **Practice plan** for the rhythm and
+- **Practice room:** the purpose, playing instructions and assigned conditions appear before the score.
+  Characteristics and the saved personal prediction are available in the details below. Expand **Practice plan** for the rhythm and
   ordered steps, or **Notes and chord progression** for the written parts (opened
   automatically when no score is available). These choices stay open when the
   language changes. **Go to score** moves keyboard focus to the player, clear of
@@ -540,8 +540,8 @@ demands have no numerical level. The app validates axis/anchor/level consistency
 source IDs, and independently derives facts from assigned notation. It does not
 certify the musical judgment or infer a fingering from pitch distance.
 
-The list, room and past records put concrete task characteristics and the personal
-burden prediction first. Characteristics come from the saved conditions and notation,
+The list, room and past records make concrete task characteristics and the personal
+burden prediction available in expandable details after the main task content. Characteristics come from the saved conditions and notation,
 such as offbeat entries, rests and differing hand entries. Internal stages, demand
 bands and anchor comparisons are hidden. Expand the conditions and prediction
 evidence for the written hand/rhythm instructions, reasoning and uncertainty.
@@ -697,3 +697,23 @@ The launcher refuses to activate a runtime that cannot read the saved database
 version. `attempts --task-id TASK`, `complete TASK --expected-event-id EVENT` and
 `reopen TASK --expected-event-id EVENT` share the web operations and storage.
 Independent accompaniment continues after a take and stops when leaving the room.
+
+### Practice workspace (0.7.2)
+
+Task instructions and assigned conditions lead into the score. A sticky toolbar keeps
+start/stop, completion, skip, tempo and current state visible while following the
+score. Volumes, backing feel and manual input mode live in an expandable settings
+panel; metronome operation remains independent. MIDI status stays visible, with
+input selection in the sidebar's disclosure.
+
+Selecting an attempt highlights its row and brings its numbered result and playback
+into view. Recent five/all history views retain every saved take. Task transitions
+clear display traces and ignore stale responses; language refreshes preserve the
+current visit. Unassessed/interrupted summaries avoid implying zero measured errors.
+Completed details keep actions visible and distinguish resuming the same task from
+creating a new task. Recording, analysis, completion rules and saved data are unchanged.
+
+`tests/ux-browser.mjs` uses `tests/serve_ux_browser.py` and synthetic records to check
+five viewport sizes, task-scoped paint, late response handling, visible stop/status,
+selected-take playback, quick filters and dialog actions. Use the same Playwright
+environment as the other browser checks.

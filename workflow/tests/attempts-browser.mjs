@@ -44,10 +44,11 @@ try {
   await page.locator(`.practice-item[data-task-id="${first}"] .history-item`).click();
   await page.locator('.abc-score').waitFor();await page.locator('#midi-connect').click();
   assert.equal(await page.locator('#finish-btn').isDisabled(),true);
+  await page.locator('#playback-settings').evaluate(e=>e.open=true);
   assert.equal(await page.locator('#pad-toggle').isEnabled(),true);assert.match(await page.locator('#backing-status').innerText(),/chord symbols/);
   assert.equal(await page.locator('#score-help').count(),0);
   // Independent click/pad/drum controls do not create recordings.
-  await page.locator('#click-toggle').check({force:true});await page.locator('#pad-toggle').check({force:true});await page.locator('#drum-toggle').check({force:true});
+  await page.locator('#click-toggle').check({force:true});await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#pad-toggle').check({force:true});await page.locator('#drum-toggle').check({force:true});
   await page.waitForFunction(()=>window.audioStarts>3&&window.drumStarts>0);
   assert.equal((await state()).sessions.length,0);
   await page.locator('#pad-toggle').uncheck({force:true});await page.locator('#drum-toggle').uncheck({force:true});
@@ -80,7 +81,7 @@ try {
   await page.waitForFunction(()=>document.querySelectorAll('.attempt-row').length===2&&document.querySelector('#finish-btn').disabled===false);
   assert.match(await page.locator('#attempt-feedback').innerText(),/Successful take/);
   assert.equal((await state()).sessions.length,2);assert.equal(await page.locator('.score-bar-mark.correct').count(),2);
-  assert.equal(await page.locator('#score-position').innerText(),'');
+  assert.match(await page.locator('#score-position').innerText(),/Viewing attempt 2/);
   assert.equal(await page.locator('#click-toggle').isChecked(),true);
   await page.screenshot({path:join(output,'successful-attempt-desktop.png'),fullPage:true});
   // Both recorded and reference playback must remain read-only.
@@ -104,7 +105,7 @@ try {
   await page.waitForFunction(()=>document.querySelectorAll('.attempt-row').length===3&&document.querySelector('#practice-btn').disabled===false);
   assert.equal((await state()).history.find(t=>t.id===first).attempts.at(-1).state,'aborted');
   // Save retry after a sealed take is idempotent and does not add a second attempt.
-  await page.locator('#manual-mode').check({force:true});await page.locator('#click-toggle').uncheck({force:true});
+  await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#manual-mode').check({force:true});await page.locator('#click-toggle').uncheck({force:true});
   let failOnce=true;await page.route('**/api/sessions/finish*',async route=>{
     if(failOnce){failOnce=false;await route.fulfill({status:503,contentType:'application/json',body:'{"error":"Synthetic temporary failure"}'});}else await route.continue();
   });

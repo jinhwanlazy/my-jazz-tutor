@@ -114,8 +114,10 @@ export class ScoreView {
     this.svg.setAttribute('width', this.width * scale);
     this.svg.setAttribute('height', this.height * scale);
   }
-  setScore(score) {
-    const identity = JSON.stringify(score);
+  setScore(score, context = '') {
+    // Identical music can belong to different tasks. Preserve traces only while
+    // viewing the same task/visit, including language and layout refreshes.
+    const identity = JSON.stringify([context, score]);
     if (identity === this.identity && this.displayLocale === locale()) return;
     this.displayLocale = locale();
     if (identity !== this.identity) {
@@ -168,7 +170,8 @@ export class ScoreView {
       this.followedSystem = following;
       const rect = this.svg.getBoundingClientRect(), scale = rect.width / this.width;
       const header = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-header-height')) || 0;
-      const visibleTop = header + 20;
+      const toolbar = this.finite ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--practice-toolbar-height')) || 0 : 0;
+      const visibleTop = header + toolbar + 16;
       if (rect.top + top * scale < visibleTop || rect.top + bottom * scale > window.innerHeight - 20) {
         window.scrollBy({top: rect.top + top * scale - visibleTop, behavior: 'instant'});
       }

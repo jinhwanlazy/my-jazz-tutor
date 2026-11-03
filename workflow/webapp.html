@@ -17,7 +17,11 @@
       <button class="nav-button active" data-view="list"><span aria-hidden="true">≡</span> <span data-i18n="Practice">Practice</span></button>
       <button class="nav-button" data-view="settings"><span aria-hidden="true">⚙</span> <span data-i18n="Settings">Settings</span></button>
     </nav>
-    <section class="midi-area" aria-label="MIDI connection" data-i18n-aria-label="MIDI connection"><div class="section-top"><div><span id="midi-light" class="midi-light"></span><strong data-i18n="MIDI input">MIDI input</strong></div><button id="midi-connect" class="midi-button" data-i18n="Connect">Connect</button></div><select id="midi-input" aria-label="MIDI input to record" hidden data-i18n-aria-label="MIDI input to record"></select><p id="midi-status" data-i18n="MIDI not connected.">MIDI not connected.</p></section>
+    <section class="midi-area" aria-label="MIDI connection" data-i18n-aria-label="MIDI connection">
+      <div class="section-top"><div><span id="midi-light" class="midi-light"></span><strong data-i18n="MIDI input">MIDI input</strong></div><button id="midi-connect" class="midi-button" data-i18n="Connect">Connect</button></div>
+      <p id="midi-status" data-i18n="MIDI not connected.">MIDI not connected.</p>
+      <details id="midi-options"><summary data-i18n="Input selection">Input selection</summary><select id="midi-input" aria-label="MIDI input to record" hidden data-i18n-aria-label="MIDI input to record"></select></details>
+    </section>
     <div class="sidebar-bottom"><div class="piano-mini" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p><span data-i18n="Small steps.">Small steps.</span><br><span data-i18n="Music of your own.">Music of your own.</span></p><span id="version"><span data-i18n="Connecting">Connecting</span></span></div>
   </aside>
   <main>
@@ -31,8 +35,14 @@
         <div class="list-toolbar"><button id="new-practice" class="button primary" data-i18n="New practice">New practice</button><p id="pending-hint" class="subtle"></p></div>
         <div id="generation-panel" class="card generation-panel" role="status" aria-live="polite" hidden><strong id="generation-title"></strong><p id="generation-message"></p><button id="retry-recommendation" class="button secondary" data-i18n="Try again" hidden>Try again</button></div>
       </div>
+      <div class="status-filters" role="group" aria-label="Filter by status" data-i18n-aria-label="Filter by status">
+        <button type="button" data-status-filter="" aria-pressed="true" data-i18n="All practices">All practices</button>
+        <button type="button" data-status-filter="active" aria-pressed="false" data-i18n="Active practices">Active practices</button>
+        <button type="button" data-status-filter="completed" aria-pressed="false" data-i18n="Completed practices">Completed practices</button>
+        <button type="button" data-status-filter="closed" aria-pressed="false" data-i18n="Skipped or retired">Skipped or retired</button>
+      </div><input id="filter-status" type="hidden" value="">
       <details class="list-filters"><summary data-i18n="Filter practices">Filter practices</summary>
-      <div class="card filters"><label><span data-i18n="Exercise">Exercise</span><select id="filter-exercise"><option value="" data-i18n="All exercises">All exercises</option></select></label><label><span data-i18n="Key">Key</span><select id="filter-key"><option value="" data-i18n="All keys">All keys</option></select></label><label><span data-i18n="Status">Status</span><select id="filter-status"><option value="" data-i18n="All statuses">All statuses</option><option value="active" data-i18n="Active practices">Active practices</option><option value="completed" data-i18n="Completed practices">Completed practices</option><option value="closed" data-i18n="Skipped or retired">Skipped or retired</option></select></label><label><span data-i18n="From">From</span><input id="filter-from" type="date"></label><label><span data-i18n="To">To</span><input id="filter-to" type="date"></label></div>
+      <div class="card filters"><label><span data-i18n="Exercise">Exercise</span><select id="filter-exercise"><option value="" data-i18n="All exercises">All exercises</option></select></label><label><span data-i18n="Key">Key</span><select id="filter-key"><option value="" data-i18n="All keys">All keys</option></select></label><label><span data-i18n="From">From</span><input id="filter-from" type="date"></label><label><span data-i18n="To">To</span><input id="filter-to" type="date"></label></div>
       </details>
       <div id="history-list" class="history-list"></div>
       <section id="record-panel" class="card record-card" hidden>
@@ -59,55 +69,69 @@
       </section>
     </section>
     <section id="view-practice" class="view" hidden>
-      <div class="room-heading"><button id="back-list" class="text-button" data-i18n="Back to practice list">Back to practice list</button><div class="room-actions"><a href="#practice-player" class="text-button" data-i18n="Go to score">Go to score</a></div></div>
+      <div class="room-heading"><button id="back-list" class="text-button" data-i18n="Back to practice list">Back to practice list</button><a id="go-score" href="#score-viewport" class="text-button" data-i18n="Go to score">Go to score</a></div>
       <section class="card lesson-card" aria-labelledby="lesson-title">
-        <div class="section-top"><span class="eyebrow" id="lesson-kind"><span data-i18n="Next task">Next task</span></span><span class="tag" id="lesson-phase"><span data-i18n="Starting point">Starting point</span></span></div>
-        <h2 id="lesson-title"><span data-i18n="Loading your exercise">Loading your exercise</span></h2>
-        <div id="lesson-id"></div>
-        <div id="lesson-translation"></div>
-        <p id="lesson-purpose" class="lesson-purpose"></p>
-        <div id="target-meta" class="meta-row"></div>
-        <div id="lesson-overview"></div>
-        <p id="lesson-section" class="subtle"></p><p id="lesson-instructions" class="instructions"></p>
-        <div id="lesson-references"></div>
-        <div class="lesson-resources">
-        <details id="lesson-guide" class="lesson-guide"><summary data-i18n="Practice plan">Practice plan</summary>
-          <div class="practice-plan"><p id="criterion-text"></p><ol id="lesson-steps" class="practice-steps"></ol><div id="lesson-development"></div></div>
-        </details>
-        <details id="lesson-material" class="lesson-material"><summary data-i18n="Notes and chord progression">Notes and chord progression</summary>
-        <div class="chord-label"><span><span data-i18n="CHORD PROGRESSION">CHORD PROGRESSION</span></span><span id="bar-position"><span data-i18n="Chord changes by bar">Chord changes by bar</span></span></div>
-        <div id="chords" class="chords"></div>
-        <p id="lesson-notes" class="instructions"></p><div id="hand-notes" class="hand-notes"></div>
-        </details>
-        </div>
-        <div id="lesson-analysis"></div>
+        <div class="section-top"><span class="eyebrow" id="lesson-kind"></span><span class="tag" id="lesson-phase"></span></div>
+        <h2 id="lesson-title"></h2><p id="lesson-purpose" class="lesson-purpose"></p>
+        <div id="target-meta" class="meta-row"></div><p id="lesson-instructions" class="instructions"></p>
+        <div id="lesson-translation"></div><div id="written-material"></div>
+        <div class="lesson-footer"><div id="lesson-id"></div><a href="#lesson-details" class="text-button" data-i18n="Practice details and references">Practice details and references</a></div>
       </section>
-      <section id="practice-player" class="card score-card" tabindex="-1" aria-labelledby="score-title">
+      <section id="practice-player" class="card score-card" aria-labelledby="score-title">
         <div class="section-top score-heading"><h2 id="score-title" data-i18n="Score and playback">Score and playback</h2><div class="score-legend"><span class="target-swatch" data-i18n="Assigned notes">Assigned notes</span><span class="input-swatch" data-i18n="Your MIDI input">Your MIDI input</span></div></div>
-        <div class="practice-controls" role="group" aria-label="Practice playback" data-i18n-aria-label="Practice playback">
-          <div class="playback-bar">
-            <div class="transport-main"><div class="transport-buttons"><button id="practice-btn" class="button primary" disabled><span data-i18n="Start attempt">Start attempt</span></button><button id="finish-btn" class="button secondary" disabled><span data-i18n="Complete practice">Complete practice</span></button><button id="discard-btn" class="button danger" data-i18n="Discard task">Discard task</button><button id="resume-practice" class="button primary" hidden data-i18n="Resume this practice">Resume this practice</button><button id="abort-attempt" class="text-button" hidden data-i18n="Stop attempt">Stop attempt</button></div><small id="save-status" class="save-status" role="status"><span data-i18n="One count-in bar, then one recorded pass.">One count-in bar, then one recorded pass.</span></small></div>
-            <div class="tempo-block"><div class="playback-tempo"><div class="tempo-control"><button id="tempo-down" class="round-button" aria-label="Decrease BPM by 5" data-i18n-aria-label="Decrease BPM by 5">−</button><div><input id="tempo" type="number" min="40" max="120" value="60" aria-label="Metronome BPM" data-i18n-aria-label="Metronome BPM" aria-describedby="tempo-hint"><span>BPM</span></div><button id="tempo-up" class="round-button" aria-label="Increase BPM by 5" data-i18n-aria-label="Increase BPM by 5">+</button></div><input id="tempo-range" class="tempo-range" type="range" min="40" max="120" value="60" aria-label="Metronome tempo slider" data-i18n-aria-label="Metronome tempo slider" aria-describedby="tempo-hint"></div><p id="tempo-hint" class="tempo-hint" data-i18n="Choose BPM before starting. It stays fixed until this recording ends.">Choose BPM before starting. It stays fixed until this recording ends.</p></div>
+        <div id="practice-toolbar" class="workspace-toolbar practice-controls" role="group" aria-label="Practice playback" data-i18n-aria-label="Practice playback">
+          <div class="workspace-action-row">
+            <div class="transport-buttons" id="practice-actions">
+              <button id="practice-btn" class="button primary" disabled data-i18n="Start attempt">Start attempt</button>
+              <button id="abort-attempt" class="button danger" hidden data-i18n="Stop attempt">Stop attempt</button>
+              <button id="resume-practice" class="button primary" hidden data-i18n="Resume this practice">Resume this practice</button>
+              <button id="finish-btn" class="button secondary" disabled aria-describedby="completion-hint" data-i18n="Complete practice">Complete practice</button>
+              <button id="discard-btn" class="button quiet-danger" data-i18n="Discard task">Discard task</button>
+            </div>
+            <div id="replay-actions" class="transport-buttons replay-actions" hidden>
+              <button id="replay-pause" class="button primary" disabled data-i18n="Pause playback">Pause playback</button>
+              <button id="replay-stop" class="button secondary" disabled data-i18n="Stop playback">Stop playback</button>
+            </div>
+            <div class="workspace-state"><span id="transport-state" class="transport-status" role="status"></span><span id="elapsed">00:00</span><span id="score-position"></span></div>
           </div>
+          <div class="workspace-tools">
+            <div class="tempo-control"><button id="tempo-down" class="round-button" aria-label="Decrease BPM by 5" data-i18n-aria-label="Decrease BPM by 5">−</button><div><input id="tempo" type="number" min="20" max="240" value="60" aria-label="Metronome BPM" data-i18n-aria-label="Metronome BPM" aria-describedby="tempo-hint"><span>BPM</span></div><button id="tempo-up" class="round-button" aria-label="Increase BPM by 5" data-i18n-aria-label="Increase BPM by 5">+</button></div>
+            <button id="reference-play" class="button compact secondary" data-i18n="Play written score">Play written score</button>
+            <label class="switch-label metronome-quick"><input id="click-toggle" type="checkbox"><span class="switch"></span><span data-i18n="Metronome">Metronome</span></label>
+            <details id="playback-settings" class="workspace-settings"><summary data-i18n="Sound and input">Sound and input</summary>
+              <div class="workspace-settings-panel">
+                <h3 data-i18n="Accompaniment">Accompaniment</h3>
+                <div class="sound-row"><label for="click-volume" data-i18n="Metronome volume">Metronome volume</label><input id="click-volume" type="range" min="0" max="1" step="0.01" value="0.35"></div>
+                <div class="sound-row"><label class="switch-label"><input id="pad-toggle" type="checkbox"><span class="switch"></span><span data-i18n="Chord pad">Chord pad</span></label><input id="pad-volume" type="range" min="0" max="0.6" step="0.01" value="0.18" aria-label="Chord pad volume" data-i18n-aria-label="Chord pad volume"></div><p id="backing-status" class="field-note"></p>
+                <div class="sound-row"><label class="switch-label"><input id="drum-toggle" type="checkbox"><span class="switch"></span><span data-i18n="Drum backing">Drum backing</span></label><input id="drum-volume" type="range" min="0" max="0.6" step="0.01" value="0.18" aria-label="Drum volume" data-i18n-aria-label="Drum volume"></div>
+                <label class="feel-control"><span data-i18n="Backing feel">Backing feel</span><select id="backing-feel"><option value="straight" data-i18n="Straight">Straight</option><option value="swing" data-i18n="Swing">Swing</option></select></label>
+                <label for="tempo-range" data-i18n="Metronome tempo slider">Metronome tempo slider</label><input id="tempo-range" type="range" min="20" max="240" value="60"><p id="tempo-hint" class="field-note"></p>
+                <div class="attempt-preferences"><label class="check-line"><input id="manual-mode" type="checkbox"><span data-i18n="Practice without MIDI · confirm the goal yourself">Practice without MIDI · confirm the goal yourself</span></label><p id="attempt-mode-note" class="field-note"></p></div>
+              </div>
+            </details>
+            <label class="check-line follow-control"><input id="score-follow" type="checkbox" checked><span data-i18n="Follow playback">Follow playback</span></label>
+          </div>
+          <div class="workspace-status-row"><div id="beats" class="beats" aria-label="Current beat" data-i18n-aria-label="Current beat"></div><p id="completion-hint" class="gate-note"></p><small id="save-status" class="save-status" role="status"></small></div>
         </div>
-        <section id="playback-settings" class="playback-settings" aria-label="Accompaniment" data-i18n-aria-label="Accompaniment"><h3 data-i18n="Accompaniment">Accompaniment</h3><div class="playback-settings-grid">
-          <div class="sound-controls">
-            <div class="sound-row"><label class="switch-label"><input id="click-toggle" type="checkbox"><span class="switch"></span><span><span data-i18n="Metronome click">Metronome click</span></span></label><input id="click-volume" type="range" min="0" max="1" step="0.01" value="0.35" aria-label="Metronome volume" data-i18n-aria-label="Metronome volume"></div>
-            <div class="sound-row"><label class="switch-label"><input id="pad-toggle" type="checkbox"><span class="switch"></span><span><span data-i18n="Chord pad">Chord pad</span></span></label><input id="pad-volume" type="range" min="0" max="0.6" step="0.01" value="0.18" aria-label="Chord pad volume" data-i18n-aria-label="Chord pad volume"></div>
-            <p id="backing-status" class="field-note"></p>
-            <div class="sound-row"><label class="switch-label"><input id="drum-toggle" type="checkbox"><span class="switch"></span><span data-i18n="Drum backing">Drum backing</span></label><input id="drum-volume" type="range" min="0" max="0.6" step="0.01" value="0.18" aria-label="Drum volume" data-i18n-aria-label="Drum volume"></div>
-            <label class="feel-control"><span data-i18n="Backing feel">Backing feel</span><select id="backing-feel"><option value="straight" data-i18n="Straight">Straight</option><option value="swing" data-i18n="Swing">Swing</option></select></label>
-          </div>
-          </div></section>
-        <div class="attempt-preferences"><label class="check-line"><input id="manual-mode" type="checkbox"><span data-i18n="Practice without MIDI · confirm the goal yourself">Practice without MIDI · confirm the goal yourself</span></label><p id="attempt-mode-note" class="field-note"></p></div>
-        <div class="score-toolbar"><div class="playback-progress"><div id="beats" class="beats" aria-label="Current beat" data-i18n-aria-label="Current beat"><span>1</span><span>2</span><span>3</span><span>4</span></div><span id="elapsed">00:00</span><span id="transport-state" class="transport-status"><span data-i18n="Ready">Ready</span></span><span id="score-position"></span></div><label class="check-line"><input id="score-follow" type="checkbox" checked><span data-i18n="Follow playback">Follow playback</span></label></div>
-        <div id="score-viewport" class="score-viewport" tabindex="0" role="region" aria-label="Scrollable practice score" data-i18n-aria-label="Scrollable practice score" ></div>
-        <div id="score-material-help"></div>
+        <div id="score-viewport" class="score-viewport" tabindex="0" role="region" aria-label="Scrollable practice score" data-i18n-aria-label="Scrollable practice score"></div><div id="score-material-help"></div>
         <div id="bar-results" class="bar-results" aria-label="Bar feedback" data-i18n-aria-label="Bar feedback" aria-live="polite"></div>
-        <section id="attempt-feedback" class="attempt-feedback" aria-live="polite" hidden></section>
-        <section class="replay-panel" aria-label="MIDI playback" data-i18n-aria-label="MIDI playback"><div class="section-top"><h3 data-i18n="Listen and compare">Listen and compare</h3><button id="reference-play" class="text-button" data-i18n="Play written score">Play written score</button></div><p id="replay-title" class="field-note" data-i18n="Choose a recording below to hear your performance.">Choose a recording below to hear your performance.</p><div class="replay-controls"><button id="replay-pause" class="text-button" disabled data-i18n="Pause playback">Pause playback</button><button id="replay-stop" class="text-button" disabled data-i18n="Stop playback">Stop playback</button><label><span data-i18n="Playback speed">Playback speed</span><select id="replay-rate"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option></select></label><label><span data-i18n="Go to bar">Go to bar</span><select id="replay-bar"></select></label></div></section>
-        <section class="attempt-history"><h3 data-i18n="Attempt history">Attempt history</h3><div id="attempt-list"></div></section>
-
+        <section id="attempt-review" class="attempt-review" tabindex="-1" aria-label="Selected attempt" data-i18n-aria-label="Selected attempt">
+          <section id="attempt-feedback" class="attempt-feedback" hidden></section>
+          <section class="replay-panel" aria-label="MIDI playback" data-i18n-aria-label="MIDI playback">
+            <div class="section-top"><h3 data-i18n="Listen and compare">Listen and compare</h3><button id="selected-play" class="button compact secondary" hidden data-i18n="Play my take">Play my take</button></div>
+            <p id="replay-title" class="field-note" data-i18n="Choose a recording below to hear your performance.">Choose a recording below to hear your performance.</p>
+            <div class="replay-controls"><label><span data-i18n="Playback speed">Playback speed</span><select id="replay-rate"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option></select></label><label><span data-i18n="Go to bar">Go to bar</span><select id="replay-bar"></select></label></div>
+          </section>
+        </section>
+        <details id="attempt-history" class="attempt-history" open><summary><span data-i18n="Attempt history">Attempt history</span><span id="attempt-history-count"></span></summary><div id="attempt-list"></div><button id="all-attempts" class="text-button" hidden></button></details>
+      </section>
+      <section id="lesson-details" class="card lesson-details" aria-label="Practice details and references" data-i18n-aria-label="Practice details and references">
+        <details id="task-context" class="task-context"><summary data-i18n="Task characteristics and personal burden">Task characteristics and personal burden</summary><div id="lesson-overview"></div></details>
+        <p id="lesson-section" class="subtle"></p>
+        <div id="lesson-resources" class="lesson-resources">
+          <details id="lesson-guide" class="lesson-guide"><summary data-i18n="Practice plan">Practice plan</summary><div class="practice-plan"><p id="criterion-text"></p><ol id="lesson-steps" class="practice-steps"></ol><div id="lesson-development"></div></div></details>
+          <details id="lesson-material" class="lesson-material"><summary data-i18n="Notes and chord progression">Notes and chord progression</summary><div class="chord-label"><span data-i18n="CHORD PROGRESSION">CHORD PROGRESSION</span><span id="bar-position"></span></div><div id="chords" class="chords"></div><p id="lesson-notes" class="instructions"></p><div id="hand-notes" class="hand-notes"></div></details>
+        </div><div id="lesson-references"></div><div id="lesson-analysis"></div>
       </section>
     </section>
     <section id="view-settings" class="view" hidden>
@@ -117,7 +141,7 @@
     </section>
     <footer class="site-footer"><span>MY JAZZ TUTOR / PRACTICE ROOM</span><span><span data-i18n="Keep playing. Enjoy the process.">Keep playing. Enjoy the process.</span></span></footer>
   </main>
-  <dialog id="history-dialog"><div class="dialog-top"><span class="eyebrow"><span data-i18n="SESSION NOTES">SESSION NOTES</span></span><button id="dialog-close" class="round-button" aria-label="Close session details" data-i18n-aria-label="Close session details">×</button></div><div id="history-detail"></div><div class="dialog-actions"><button id="correct-btn" class="button secondary"><span data-i18n="Correct this report">Correct this report</span></button><button id="reopen-btn" class="button primary" data-i18n="Resume this practice">Resume this practice</button><button id="view-score-btn" class="text-button" data-i18n="View score and attempts">View score and attempts</button><button id="repeat-btn" class="button secondary" data-i18n="Practice again">Practice again</button></div></dialog>
+  <dialog id="history-dialog"><div class="dialog-top"><span class="eyebrow"><span data-i18n="SESSION NOTES">SESSION NOTES</span></span><button id="dialog-close" class="round-button" aria-label="Close session details" data-i18n-aria-label="Close session details">×</button></div><div id="history-detail"></div><div class="dialog-actions"><button id="reopen-btn" class="button primary" data-i18n="Resume this practice">Resume this practice</button><button id="view-score-btn" class="button secondary" data-i18n="View score and attempts">View score and attempts</button><button id="correct-btn" class="button secondary" data-i18n="Edit difficulty and note">Edit difficulty and note</button><button id="repeat-btn" class="button secondary" data-i18n="New practice with these conditions">New practice with these conditions</button></div></dialog>
   <dialog id="complete-dialog" aria-labelledby="complete-title"><h2 id="complete-title" data-i18n="Complete this practice?">Complete this practice?</h2><p id="complete-summary"></p><label id="manual-confirm-label" class="check-line" hidden><input id="manual-confirm" type="checkbox"><span data-i18n="I confirm that I achieved the practice goal. This is a self-report.">I confirm that I achieved the practice goal. This is a self-report.</span></label><p id="complete-error" role="alert" hidden></p><div class="form-actions"><button id="complete-confirm" class="button primary" data-i18n="Complete practice">Complete practice</button><button id="complete-cancel" class="text-button" data-i18n="Keep practicing">Keep practicing</button></div></dialog>
   <dialog id="discard-dialog" aria-labelledby="discard-title">
     <h2 id="discard-title" data-i18n="Move on from this task?">Move on from this task?</h2>
@@ -130,7 +154,7 @@
       <label for="discard-reason" data-i18n="Reason · required">Reason · required</label>
       <textarea id="discard-reason" rows="2" required placeholder="Anything to add" data-i18n-placeholder="Anything to add"></textarea>
       <p id="discard-error" role="alert" hidden></p>
-      <div class="form-actions"><button id="discard-submit" type="submit" class="button primary" data-i18n="Discard task">Discard task</button><button type="button" id="discard-close" class="text-button" data-i18n="Keep task">Keep task</button></div>
+      <div class="form-actions"><button id="discard-submit" type="submit" class="button danger" data-i18n="Discard task">Discard task</button><button type="button" id="discard-close" class="text-button" data-i18n="Keep task">Keep task</button></div>
     </form>
   </dialog>
 </body>

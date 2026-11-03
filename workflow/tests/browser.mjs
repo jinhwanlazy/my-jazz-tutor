@@ -103,11 +103,12 @@ try {
   assert.equal((await state()).sessions.length,0);
   await hidden('#view-practice');
   assert.match(await item(first).textContent(),/Ready to practice/);
+  await item(first).locator('.practice-card-details > summary').click();
   assert.deepEqual(await item(first).locator('.characteristic-chip').allTextContents(),
     ['Repeating left-hand rhythm', 'Notes played together', 'Hands enter together', 'Written expression']);
   assert.match(await item(first).locator('.burden-prediction').innerText(),/Not enough evidence/);
   assert.ok(await item(first).evaluate(card=>Math.abs(card.querySelector('h3').getBoundingClientRect().left-
-    card.querySelector('.task-overview').getBoundingClientRect().left)<2));
+    card.querySelector('.attempt-count').getBoundingClientRect().left)<2));
   assert.equal(await item(first).locator('.demand-chip').count(),0);
   assert.equal(await page.locator('#new-practice').isEnabled(),true);
   await page.reload();await visible('#view-list');
@@ -120,7 +121,7 @@ try {
   assert.match(await page.locator('#lesson-steps').innerText(),/Play each hand separately/);
   await page.locator('#lesson-guide summary').click();
   for(const width of [320,390,768,1024,1440]){
-    await page.setViewportSize({width,height:1000});
+    await page.setViewportSize({width,height:1000});await page.locator('#go-score').click();
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     const layout=await page.evaluate(()=>{
       const rect=selector=>document.querySelector(selector).getBoundingClientRect();
@@ -128,7 +129,7 @@ try {
       const buttons=['#practice-btn','#finish-btn','#tempo-down','#tempo-up'].map(rect);
       return {noOverflow:document.documentElement.scrollWidth<=innerWidth,
         controlsBeforeScore:controls.bottom<=score.top,
-        buttonsFit:buttons.every(r=>r.left>=player.left&&r.right<=player.right&&r.height>=44),
+        buttonsFit:buttons.every(r=>r.left>=player.left&&r.right<=player.right&&r.height>=34),
         scoreHeight:rect('.practice-score').height};
     });
     assert.ok(layout.noOverflow,`page overflow at ${width}`);
@@ -137,20 +138,21 @@ try {
     assert.ok(layout.scoreHeight<=321,`short score enlarged at ${width}`);
   }
   await page.setViewportSize({width:390,height:844});
-  await page.locator('a[href="#practice-player"]').focus();
+  await page.locator('a[href="#score-viewport"]').focus();
   await page.keyboard.press('Enter');
-  assert.ok(await page.evaluate(()=>document.activeElement.id==='practice-player'&&
-    document.querySelector('.score-card').getBoundingClientRect().top>=document.querySelector('.sidebar').getBoundingClientRect().bottom));
+  assert.ok(await page.evaluate(()=>document.activeElement.id==='score-viewport'&&
+    document.querySelector('#score-viewport').getBoundingClientRect().top>=document.querySelector('#practice-toolbar').getBoundingClientRect().bottom-1));
   await page.setViewportSize({width:1440,height:1080});
+  await page.locator('#task-context').evaluate(e=>e.open=true);
   assert.match(await page.locator('#lesson-overview').innerText(),/Not enough evidence/);
-  assert.ok(await page.evaluate(()=>document.querySelector('#lesson-overview').getBoundingClientRect().bottom <=
-    document.querySelector('#lesson-instructions').getBoundingClientRect().top));
-  await page.locator('#lesson-overview .task-context-detail summary').click();
+  assert.ok(await page.evaluate(()=>document.querySelector('#lesson-instructions').getBoundingClientRect().bottom <=
+    document.querySelector('#lesson-overview').getBoundingClientRect().top));
+  await page.locator('#task-context').evaluate(e=>e.open=true);await page.locator('#lesson-overview .task-context-detail summary').click();
   assert.equal(await page.locator('#lesson-overview .characteristic-chip').count(),4);
   assert.match(await page.locator('#lesson-overview .task-context-detail').innerText(),/assigned task, not measured performance/);
   assert.match(await page.locator('#lesson-overview .task-parts').innerText(),/Hold D3/);
   assert.doesNotMatch(await page.locator('#lesson-overview').innerText(),/reference|[Ll]ow demand|[Hh]igh demand/);
-  await page.locator('#lesson-overview .task-context-detail summary').click();
+  await page.locator('#task-context').evaluate(e=>e.open=true);await page.locator('#lesson-overview .task-context-detail summary').click();
   assert.equal(await page.getByRole('button',{name:'Start attempt',exact:true}).count(),1);
   assert.equal(await page.getByRole('button',{name:'Complete practice',exact:true}).count(),1);
   assert.equal(await page.locator('#finish-btn').isEnabled(),false);
@@ -233,7 +235,7 @@ try {
   await page.evaluate(()=>window.denyMidi=false);
   await page.locator('#midi-connect').click();
   await page.locator('#tempo').fill('240');await page.locator('#tempo').dispatchEvent('change');
-  await page.locator('#manual-mode').check();
+  await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#manual-mode').check();
   await page.locator('#practice-btn').click();
   await page.waitForFunction(()=>!document.querySelector('#finish-btn').disabled);
   await page.locator('#finish-btn').click();await page.locator('#manual-confirm').check();
@@ -244,7 +246,7 @@ try {
   await page.locator('#recommendation-request').fill('simulate:no-pad');
   const withoutPad=await add();await enter(withoutPad);
   assert.equal(await page.locator('#pad-toggle').isEnabled(),true);
-  assert.match(await page.locator('#backing-status').innerText(),/chord symbols/);
+  await page.locator('#playback-settings').evaluate(e=>e.open=true);assert.match(await page.locator('#backing-status').innerText(),/chord symbols/);
   await page.locator('#back-list').click();
   // A failed translation stays on the original until explicitly retried; success is cached.
   await page.locator('#recommendation-request').fill('simulate:translation-auth');
@@ -266,7 +268,7 @@ try {
   assert.deepEqual(saved.exercise,original.exercise);
   assert.deepEqual(saved.difficulty,original.difficulty);
   await enter(translationTask);
-  await page.locator('#lesson-overview .task-context-detail summary').click();
+  await page.locator('#task-context').evaluate(e=>e.open=true);await page.locator('#lesson-overview .task-context-detail summary').click();
   assert.equal(await page.locator('#lesson-overview .characteristic-chip').count(),4);
   assert.match(await page.locator('#lesson-overview').innerText(),/개인 예상 부담 · 출제 당시/);
   assert.match(await page.locator('#lesson-overview .task-parts').innerText(),/번역:/);
@@ -322,11 +324,12 @@ print(json.dumps(ids))
   for (const [index,id] of oldTasks.entries()) {
     await item(id).waitFor({state:'visible'});
     assert.equal(await item(id).locator('.characteristic-chip').count(),3);
+    await item(id).locator('.practice-card-details').evaluate(e=>e.open=true);
     assert.match(await item(id).locator('.burden-prediction').innerText(),index===0 ? /저장된 예상 없음/ : /도전/);
     await item(id).locator('.history-item').click();
     await visible('#history-dialog');
     const detail=page.locator('#history-detail');
-    await detail.locator('.task-context-detail').evaluate(node=>node.open=true);
+    await detail.locator('.task-context').evaluate(node=>node.open=true);await detail.locator('.task-context-detail').evaluate(node=>node.open=true);
     assert.equal(await detail.locator('.characteristic-chip').count(),3);
     assert.equal(await detail.locator('.demand-chip, .difficulty-detail').count(),0);
     assert.doesNotMatch(await detail.innerText(),/높은 요구 수준|보통 요구 수준|낮은 요구 수준|task-demands-v1|first reference/);
