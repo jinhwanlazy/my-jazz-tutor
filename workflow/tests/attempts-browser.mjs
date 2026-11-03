@@ -47,9 +47,9 @@ try {
   await page.locator('#playback-settings').evaluate(e=>e.open=true);
   assert.equal(await page.locator('#pad-toggle').isEnabled(),true);assert.match(await page.locator('#backing-status').innerText(),/chord symbols/);
   assert.equal(await page.locator('#score-help').count(),0);
-  // Independent click/pad/drum controls do not create recordings.
+  // The idle metronome is independent; armed pad/drums stay silent.
   await page.locator('#click-toggle').check({force:true});await page.locator('#playback-settings').evaluate(e=>e.open=true);await page.locator('#pad-toggle').check({force:true});await page.locator('#drum-toggle').check({force:true});
-  await page.waitForFunction(()=>window.audioStarts>3&&window.drumStarts>0);
+  await page.waitForFunction(()=>window.audioStarts>3);assert.equal(await page.evaluate(()=>window.drumStarts),0);
   assert.equal((await state()).sessions.length,0);
   await page.locator('#pad-toggle').uncheck({force:true});await page.locator('#drum-toggle').uncheck({force:true});
   await page.evaluate(async()=>{
@@ -86,7 +86,7 @@ try {
   await page.screenshot({path:join(output,'successful-attempt-desktop.png'),fullPage:true});
   // Both recorded and reference playback must remain read-only.
   await page.locator('.attempt-row').first().getByText('Play my take',{exact:true}).click();
-  await page.locator('#replay-rate').selectOption('0.5');await page.locator('#replay-bar').selectOption('1');
+  await page.locator('#replay-rate').selectOption('0.5');await page.locator('#replay-bar').selectOption({value:'1'});
   await page.locator('#replay-pause').click();assert.match(await page.locator('#replay-pause').innerText(),/Resume/);
   await page.locator('#replay-pause').click();await page.locator('#replay-stop').click();
   await page.locator('#reference-play').click();await page.locator('#replay-stop').click();

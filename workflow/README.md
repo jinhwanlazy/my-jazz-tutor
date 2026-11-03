@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.7.2`; create a new tag for later releases instead of moving an old tag:
+selects `v0.7.3`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.7.2
+uv run python publish.py --ref v0.7.3
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -696,7 +696,7 @@ unscored; deterministic backing supports a conservative subset of chord symbols.
 The launcher refuses to activate a runtime that cannot read the saved database
 version. `attempts --task-id TASK`, `complete TASK --expected-event-id EVENT` and
 `reopen TASK --expected-event-id EVENT` share the web operations and storage.
-Independent accompaniment continues after a take and stops when leaving the room.
+The metronome can run independently. Pad and drums are armed preferences and sound only during the playing portion of a take or active playback.
 
 ### Practice workspace (0.7.2)
 
@@ -717,3 +717,22 @@ creating a new task. Recording, analysis, completion rules and saved data are un
 five viewport sizes, task-scoped paint, late response handling, visible stop/status,
 selected-take playback, quick filters and dialog actions. Use the same Playwright
 environment as the other browser checks.
+
+
+### Playback synchronization (0.7.3)
+
+Written/recorded notes, click, pad, drums and cursor share a playback origin, source
+BPM, speed and seek position. Starting playback cancels the idle click schedule.
+Speed changes and seeking rebuild all channels together; pause cancels their queued
+sources and remains paused when speed/bar is changed. Resume restores held notes and
+chords for their remaining duration. The displayed playback BPM is source BPM × speed,
+not analyzed performance tempo; use Playback speed while the BPM input is locked.
+
+Pad/drum toggles only arm accompaniment. They are silent while idle, during count-in
+and after a take, and stop with playback/abort. The metronome remains independently
+available while idle; playback pause freezes all channels and stop/end restores the
+idle metronome if enabled. Saved MIDI, conditions and assessments are unchanged.
+`tests/playback-sync.test.mjs` checks 3/4 and 4/4, multiple speeds, seeking, output
+latency, finite backing and held-note restoration. `tests/playback-sync-browser.mjs`
+checks real Web Audio source scheduling and rendered cursor timing in a disposable
+synthetic practice workspace, including pause/seek/speed and idle silence.

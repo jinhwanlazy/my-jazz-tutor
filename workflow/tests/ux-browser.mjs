@@ -71,7 +71,7 @@ try {
   await page.locator('#selected-play').click();await page.locator('#replay-actions').waitFor({state:'visible'});
   assert.match(await page.locator('#transport-state').innerText(),/Playing attempt 1/);
   await page.locator('#replay-pause').click();assert.match(await page.locator('#replay-pause').innerText(),/Resume/);
-  await page.locator('#replay-rate').selectOption('0.75');await page.locator('#replay-bar').selectOption('1');
+  await page.locator('#replay-rate').selectOption('0.75');await page.locator('#replay-bar').selectOption({value:'1'});
   await page.locator('#replay-stop').click();await page.locator('#reference-play').click();
   await page.waitForFunction(()=>document.querySelector('#transport-state').textContent==='Written score playback');
   assert.equal(await page.locator('.score-live-note').count(),0,'reference playback was painted as user input');

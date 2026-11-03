@@ -278,8 +278,9 @@ function replayCaption() {
   return track.kind==='score'?tr('Written score · assigned note timing'):attempt?tr`${attemptCaption(attempt)} · My recorded performance`:
     tr`My recorded performance · ${track.bpm} BPM · ${(track.recordedAt||'').slice(0,16).replace('T',' ')}`;
 }
-function startReplay(from=0) {
+function startReplay(from=0,{paused=false}={}) {
   const track=ui.replayTrack;if(!track||ui.capture)return;
+  ui.replayRequest++;
   score.begin();const total=track.bars*track.beats;
   for(const note of score.input&&track.kind==='recording'?track.notes:[]){
     const at=ms=>{const absolute=Math.max(0,ms*track.bpm/60000);return {absolute,pass:0,bar:Math.min(track.bars-1,Math.floor(absolute/track.beats)),beat:absolute%track.beats};};
@@ -288,6 +289,8 @@ function startReplay(from=0) {
     score.input.midi([0x80,note.pitch,0],String(note.port||0),at(note.key_end??track.duration));
   }
   score.drawNotes();transport.playRecording(track.notes,{...track,from,rate:Number($('replay-rate').value)});
+  score.frame(transport.position());
+  if(paused)transport.pauseReplay();
   if(track.kind==='recording'&&ui.selectedAttempt)score.setFeedback(displayBars(ui.selectedAttempt));
   $('replay-title').textContent=replayCaption();updateTransport();
 }
@@ -558,6 +561,7 @@ function renderLesson(resetTempo = false) {
   if (resetTempo && !ui.capture) setTempo(t.bpm);
 }
 function setTempo(value) {
+  if(transport.replay){updateTransport();return;}
   if (ui.lockedBpm != null) {
     $('tempo').value = $('tempo-range').value = ui.lockedBpm;
     return;
@@ -570,10 +574,12 @@ function updateTransport() {
   if(!ui.data)return;
   const recording=ui.capture,recovery=openSessions().length>0,task=openedTask(),eligible=Boolean(task?.pending),replaying=Boolean(transport.replay);
   const locked=Boolean(recording)||ui.busy||recovery;
-  for(const id of ['tempo','tempo-range','tempo-down','tempo-up','manual-mode','latency-ms'])$(id).disabled=locked;
-  if(ui.lockedBpm!=null)$('tempo').value=$('tempo-range').value=ui.lockedBpm;
+  for(const id of ['tempo','tempo-range','tempo-down','tempo-up'])$(id).disabled=locked||replaying;
+  for(const id of ['manual-mode','latency-ms'])$(id).disabled=locked;
+  const playbackBpm=replaying?Number((transport.replay.bpm*transport.replay.rate).toFixed(2)):null;
+  $('tempo').value=$('tempo-range').value=playbackBpm??ui.lockedBpm??transport.requestedBpm;
   toolbar.dataset.phase=ui.phase;toolbar.dataset.replay=String(replaying);
-  $('tempo-hint').textContent=tr(recording?'BPM is fixed for this attempt.':'Choose BPM before an attempt.');
+  $('tempo-hint').textContent=replaying?tr('Change playback tempo with Playback speed.'):tr(recording?'BPM is fixed for this attempt.':'Choose BPM before an attempt.');
   $('practice-actions').hidden=replaying;$('replay-actions').hidden=!replaying;
   $('practice-btn').hidden=!eligible||Boolean(recording);
   $('practice-btn').disabled=locked||!eligible||replaying;
@@ -595,7 +601,7 @@ function updateTransport() {
   $('replay-pause').textContent=tr(transport.replay?.paused?'Resume playback':'Pause playback');
   $('manual-confirm-label').hidden=Boolean(task?.assessment?.eligible);
   const phases={starting:'Starting attempt…',idle:'Ready for an attempt',countin:'Count-in',playing:'Recording one pass',tail:'Release the final keys',saving:'Saving and analyzing',aborted:'Stopped'};
-  if(replaying){$('transport-state').textContent=ui.replayTrack?.kind==='score'?tr('Written score playback'):
+  if(replaying){$('transport-state').textContent=transport.replay.paused?tr('Playback paused'):ui.replayTrack?.kind==='score'?tr('Written score playback'):
     ui.selectedAttempt?tr`Playing attempt ${attemptNumber(ui.selectedAttempt)}`:tr('Recorded take playback');$('replay-title').textContent=replayCaption();}
   else if(task?.completed)$('transport-state').textContent=tr('Completed practice');
   else if(ui.phase!=='countin')$('transport-state').textContent=tr(phases[ui.phase]||'Ready');
@@ -603,7 +609,7 @@ function updateTransport() {
   if(!recording&&!replaying)$('score-position').textContent=ui.selectedAttempt?tr`Viewing attempt ${attemptNumber(ui.selectedAttempt)}`:'';
   let hint='';
   if(recovery)hint=tr('Recover the unfinished recording before starting.');
-  else if(replaying)hint=tr('Playback is not recorded as an attempt.');
+  else if(replaying)hint=tr`Playback ${playbackBpm} BPM · speed ${transport.replay.rate}×`;
   else if(recording)hint=tr(recording.ended&&!ui.finishing?'The take is saved in this browser. Retry the upload.':ui.attemptContract?.mode==='manual'?'Unscored take · confirm the goal after one full pass.':'BPM is fixed for this attempt.');
   else if(task?.completed)hint=tr('Resume this practice to record another attempt.');
   else if(eligible){
@@ -748,9 +754,11 @@ $('drum-volume').addEventListener('input',event=>transport.drumVolume=Number(eve
 $('backing-feel').addEventListener('change',event=>transport.feel=event.target.value);
 $('reference-play').addEventListener('click',async()=>{
   if(ui.capture||!target()?.notation)return;
+  const request=++ui.replayRequest,taskId=openedTask()?.id,bpm=transport.requestedBpm,source=target().notation;
   try{
-    await transport.unlock();const bpm=Number($('tempo').value),source=target().notation;
-    ui.detailRequest++;ui.replayRequest++;ui.selectedAttempt=null;ui.selectedAttemptId=null;
+    await transport.unlock();
+    if(request!==ui.replayRequest||taskId!==openedTask()?.id||ui.capture)return;
+    ui.detailRequest++;ui.selectedAttempt=null;ui.selectedAttemptId=null;
     $('attempt-feedback').hidden=true;$('selected-play').hidden=true;renderAttempts(openedTask());
     ui.replayTrack={notes:expectedNotes(source).map(n=>({pitch:n.pitch,velocity:n.reference_velocity,
       at_ms:n.at*60000/bpm,key_end:(n.at+n.duration*(n.staccato?.45:1))*60000/bpm,
@@ -764,12 +772,12 @@ $('reference-play').addEventListener('click',async()=>{
 $('replay-pause').addEventListener('click',()=>{
   if(!transport.replay)return;
   if(transport.replay.paused)startReplay(transport.replay.from);else transport.pauseReplay();
-  $('replay-pause').textContent=tr(transport.replay?.paused?'Resume playback':'Pause playback');
+  updateTransport();
 });
 $('replay-stop').addEventListener('click',()=>transport.stopReplay());
-$('replay-rate').addEventListener('change',()=>{if(transport.replay)startReplay(transport.replayPosition());});
+$('replay-rate').addEventListener('change',()=>{if(transport.replay)startReplay(transport.replayPosition(),{paused:transport.replay.paused});});
 $('replay-bar').addEventListener('change',()=>{
-  if(ui.replayTrack)startReplay(Number($('replay-bar').value)*ui.replayTrack.beats*60000/ui.replayTrack.bpm);
+  if(ui.replayTrack)startReplay(Number($('replay-bar').value)*ui.replayTrack.beats*60000/ui.replayTrack.bpm,{paused:Boolean(transport.replay?.paused)});
 });
 async function reopenPractice(task) {
   if(ui.busy||ui.capture||!task?.completed)return;

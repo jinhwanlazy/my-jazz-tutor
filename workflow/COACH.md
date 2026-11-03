@@ -1,4 +1,4 @@
-# 코칭 운영 규칙 — 0.7.2
+# 코칭 운영 규칙 — 0.7.3
 
 Respond in the language the user uses, unless they explicitly request another
 language. A profile default or document language does not override conversation.
@@ -206,3 +206,8 @@ notation:null을 반환한다. 앱이 검토된 원문 ABC를 삽입하므로 �
 결과는 선택한 시도 번호·BPM·시각을 명시한다. 재개 이전의 성공은 이번 진행의 완료
 자격으로 해석하지 않는다. 중단·수동·매칭 불가인 지표는 평가하지 않았음을 표시하며
 원래 분석 값이나 관측 사실을 수정하지 않는다.
+
+
+패드·드럼 스위치를 켜도 대기 중에는 소리가 나지 않는다. 시도의 연주 구간과 악보/녹음
+재생에서만 반주한다. 메트로놈은 시도와 독립적으로 사용하며 재생에서는 음표·커서·반주와
+같은 시간축에 맞춘다. 재생 중 BPM은 원래 설정 BPM과 배속의 곱이며 실측 연주 BPM이 아니다.

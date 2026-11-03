@@ -798,6 +798,10 @@
     "Unscored take · confirm the goal after one full pass.": "직접 확인 모드 · 한 번 끝까지 연주한 뒤 목표 달성을 확인해 주세요.",
     "Finish one full take at {0} BPM or above, then confirm the goal.": "{0} BPM 이상으로 한 번 끝까지 연주한 뒤 목표 달성을 확인해 주세요.",
     "Showing the first 100 matched notes.": "매칭된 음 중 처음 100개를 표시해요.",
-    "View saved analysis": "저장된 분석 보기"
+    "View saved analysis": "저장된 분석 보기",
+    "Pad and drums play only during attempts and playback.": "코드 패드와 드럼은 시도·재생 중에만 소리가 나요.",
+    "Change playback tempo with Playback speed.": "재생 템포는 재생 속도로 조절해 주세요.",
+    "Playback paused": "재생 일시정지",
+    "Playback {0} BPM · speed {1}×": "재생 {0} BPM · {1}배속"
   }
 }
