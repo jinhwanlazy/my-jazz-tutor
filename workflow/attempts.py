@@ -16,7 +16,8 @@ from notation import score_for
 from sessions import SessionStore, midi_messages, reflection_measurements
 
 HERE = Path(__file__).resolve().parent
-ANALYSIS_VERSION = 'midi-analysis-1'
+ANALYSIS_VERSION = 'midi-analysis-2'
+SUPPORTED_ANALYSIS_VERSIONS = ('midi-analysis-1', 'midi-analysis-2')
 
 
 def js(value):
@@ -91,6 +92,7 @@ class AttemptStore:
         contract = json.loads(row['contract'])
         value = {k: row[k] for k in ('id', 'task_id', 'session_id', 'cycle_id', 'created_at', 'state', 'finished_at')}
         value.update(bpm=contract['bpm'], mode=contract['mode'], result=(result or {}).get('result'),
+                     analysis_version=(result or {}).get('version'),
                      qualified_pass=(result or {}).get('qualified_pass', False),
                      counts=(result or {}).get('counts', {}), timing=(result or {}).get('timing', {}),
                      expression=(result or {}).get('expression', {}), manual_reason=contract.get('manual_reason'))
@@ -153,7 +155,7 @@ class AttemptStore:
             row = db.execute('SELECT * FROM attempts WHERE session_id=?', (session_id,)).fetchone()
             if row is None:
                 return None
-            saved = db.execute('SELECT result FROM attempt_analyses WHERE attempt_id=? AND version=?', (row['id'], ANALYSIS_VERSION)).fetchone()
+            saved = db.execute('SELECT result FROM attempt_analyses WHERE attempt_id=? ORDER BY created_at DESC LIMIT 1', (row['id'],)).fetchone()
             if saved:
                 return self.public(row, json.loads(saved[0]), True)
             session = db.execute('SELECT * FROM sessions WHERE id=?', (session_id,)).fetchone()
@@ -224,7 +226,7 @@ class AttemptStore:
             profile = json.loads(profile_path.read_text()) if profile_path.exists() else {}
             measured = reflection_measurements(sessions, profile)
             measured['attempt_completion'] = {'policy': 'attempt-policy-1', 'attempt_id': chosen['id'],
-                'analysis_version': ANALYSIS_VERSION, 'basis': 'midi-analysis' if chosen['qualified_pass'] else 'user-confirmation',
+                'analysis_version': chosen['analysis_version'], 'basis': 'midi-analysis' if chosen['qualified_pass'] else 'user-confirmation',
                 'cycle_id': cycle(task), 'expected_event_id': expected_event_id}
             event = r.new_event('completed', task_id, data, task['assignment']['exercise_id'])
             event.update(release=task['assignment']['release'], practice_date=measured['practice_date'],

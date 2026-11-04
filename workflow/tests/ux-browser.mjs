@@ -109,7 +109,7 @@ try {
   await page.route('**/api/attempts/'+oldest+'*',async route=>{await new Promise(r=>setTimeout(r,500));await route.continue();});
   await page.locator(`.attempt-row[data-attempt-id="${oldest}"]`).getByText('View feedback',{exact:true}).click();
   await list();await enter('blank');await page.waitForTimeout(650);
-  assert.equal(await page.locator('#bar-results .bar-result').count(),0);assert.equal(await page.locator('.score-bar-mark').count(),0);
+  assert.equal(await page.locator('#note-results .note-result').count(),0);assert.equal(await page.locator('.score-written-note[data-note-state]').count(),0);
   assert.equal(await page.locator('#attempt-feedback').isVisible(),false);await page.unroute('**/api/attempts/'+oldest+'*');
   // Real count-in/one-pass capture, with a synthetic wrong note, preserves the
   // finite transport and keeps stop/status in view as the score scrolls.
@@ -130,12 +130,12 @@ try {
   await page.locator('.nav-button[data-view="settings"]').click();await page.locator('#language-select').selectOption('en');await page.locator('#settings-back').click();
   await page.evaluate(()=>sendMidi([0x80,62,0]));
   await page.locator('#abort-attempt').click();await page.waitForFunction(()=>!document.querySelector('#practice-btn').disabled);
-  assert.equal(await page.locator('.bar-result.incorrect').count(),0,'an interrupted take received failure paint');
+  assert.equal(await page.locator('.score-written-note[data-note-state="incorrect"]').count(),0,'an interrupted take received failure paint');
   assert.match(await page.locator('#attempt-feedback').innerText(),/interrupted/);
   // Both exercises have byte-identical music, but different task IDs.
   await list();await enter('blank');
-  assert.equal(await page.locator('#bar-results .bar-result').count(),0);assert.equal(await page.locator('.score-live-note').count(),0);
-  assert.equal(await page.locator('.score-bar-mark').count(),0);assert.equal(await page.locator('#elapsed').innerText(),'00:00');
+  assert.equal(await page.locator('#note-results .note-result').count(),0);assert.equal(await page.locator('.score-live-note').count(),0);
+  assert.equal(await page.locator('.score-written-note[data-note-state]').count(),0);assert.equal(await page.locator('#elapsed').innerText(),'00:00');
   assert.equal((await state()).history.find(t=>t.id===fixture.tasks.blank).attempts.length,0);
   await list();await enter('reopened');assert.equal(await page.locator('#finish-btn').isDisabled(),true);
   assert.match(await page.locator('#completion-hint').innerText(),/after resuming/);

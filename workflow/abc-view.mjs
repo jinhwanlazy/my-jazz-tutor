@@ -48,6 +48,12 @@ function engrave(root, score, options) {
   if (!api?.test?.EngraverController) throw new Error('The score library could not be loaded. Reload the page.');
   const tune = api.parseOnly(score.abc, options)[0];
   if (tune.warnings?.length) throw new Error('The score could not be rendered without warnings.');
+  // Engraving sorts chord pitches. Remember the parser's original order so a
+  // grade follows the individual pitch even in seconds or an unsorted chord.
+  const pitchIndices = new Map();
+  for (const line of tune.lines) for (const staff of line.staff || []) for (const voice of staff.voices)
+    for (const event of voice) if(event.pitches)pitchIndices.set(event.startChar,event.pitches.map((pitch,index)=>
+      ({position:pitch.verticalPos??pitch.pitch,name:pitch.name,index})));
   tune.metaText = {};
   root.replaceChildren();
   // Keep the pinned engraving hook inside this adapter. Adjust spacing before
@@ -59,7 +65,7 @@ function engrave(root, score, options) {
     construct(value); pointsPerBeat = prepareTimeGrid(value, controller.width);
   };
   controller.engraveABC(tune);
-  return {groups: controller.staffgroups, pointsPerBeat};
+  return {groups: controller.staffgroups, pointsPerBeat, pitchIndices};
 }
 
 export function interpolate(anchors, beat) {
@@ -75,7 +81,7 @@ export class ABCLayout {
   constructor(root, score, barsPerLine = 4) {
     const breaks = Array.from({length: Math.floor((score.bars.length - 1) / barsPerLine)},
       (_, i) => (i + 1) * barsPerLine - 1);
-    const {groups, pointsPerBeat} = engrave(root, score, {
+    const {groups, pointsPerBeat, pitchIndices} = engrave(root, score, {
       add_classes: true, lineBreaks: [breaks],
       staffwidth: Math.max(250, (root.clientWidth || 900) / 1.2 - 40),
       timeBasedLayout: {minPadding: GRID_PADDING, align: 'left'},
@@ -93,6 +99,7 @@ export class ABCLayout {
     this.svg.setAttribute('viewBox', `0 0 ${this.width} ${this.height}`);
     this.svg.setAttribute('class', 'practice-score abc-score');
     this.svg.setAttribute('role', 'img');
+    this.noteHeads = new Map();
     const byChar = new Map(score.events.map(e => [e.start_char, e]));
     this.systems = groups.map((group, index) => {
       const start = index * barsPerLine * score.beats_per_bar;
@@ -105,6 +112,16 @@ export class ABCLayout {
         const beat = event.bar * score.beats_per_bar + event.beat;
         if (Math.abs(item.x + NOTE_CENTER - interpolate(anchors, beat)) > 1e-6) {
           throw new Error('The score could not be aligned to the playback clock.');
+        }
+        for (const head of item.heads || []) {
+          const pitchIndex = pitchIndices.get(item.abcelem.startChar)?.find(pitch=>pitch.position===head.pitch&&pitch.name===head.name)?.index,node=head.graphelem;
+          if (!node || pitchIndex===undefined) continue;
+          const matrix=node.getCTM(),origin=this.svg.getCTM(),written=event.pitches[pitchIndex];
+          const staff=group.staffs[event.hand==='right'?0:1],step=(staff.bottomLine-staff.topLine)/8;
+          let point={x:head.x+head.w/2,y:staff.bottomLine-(written.octave*7+'CDEFGAB'.indexOf(written.letter)-(event.hand==='right'?30:18))*step};
+          if(matrix&&origin){const box=node.getBBox();point=new DOMPoint(box.x+box.width/2,box.y+box.height/2).matrixTransform(matrix).matrixTransform(origin.inverse());}
+          this.noteHeads.set(JSON.stringify([event.id,pitchIndex]),{node,x:point.x,y:point.y});
+          node.classList.add('score-written-note');node.dataset.midi=event.pitches[pitchIndex].midi;
         }
       }
       return {index, start, end, anchors, staffs: {right: group.staffs[0], left: group.staffs[1]}};

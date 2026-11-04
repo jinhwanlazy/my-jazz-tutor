@@ -89,6 +89,39 @@ class AttemptTests(unittest.TestCase):
         self.assertEqual(self.app.state()['status']['reported_attempts'],2)
         self.assertEqual(self.app.state()['status']['today']['reported_attempts'],2)
 
+    def test_new_analysis_saves_individual_notes_with_the_original_completion_rules(self):
+        attempt=self.seal(self.start())['attempt']
+        self.assertEqual(attempt['analysis_version'],'midi-analysis-2')
+        self.assertEqual(len(attempt['analysis']['notes']),attempt['counts']['expected'])
+        self.assertTrue(all(note['state']=='correct' for note in attempt['analysis']['notes']))
+        self.assertEqual(attempt['analysis']['extra_notes'],[])
+        self.assertTrue(self.current()['assessment']['eligible'])
+        self.assertNotIn('analysis',self.current()['attempts'][0])
+        self.complete()
+        saved=r.reflection_observations(r.read_events(self.root)[-1])['attempt_completion']
+        self.assertEqual(saved['analysis_version'],'midi-analysis-2')
+
+    def test_older_analysis_is_never_rematched_on_save_retry_or_completion(self):
+        attempt=self.seal(self.start())['attempt'];legacy=dict(attempt['analysis'])
+        legacy['version']='midi-analysis-1'
+        for field in ('notes','extra_notes','final'):legacy.pop(field,None)
+        with self.app.attempts.database() as db:
+            db.execute('UPDATE attempt_analyses SET version=?,result=? WHERE attempt_id=?',
+                       ('midi-analysis-1',r.jdump(legacy),attempt['id']))
+            before=tuple(db.execute('SELECT * FROM attempt_analyses WHERE attempt_id=?',(attempt['id'],)).fetchone())
+        original=self.app.store.export(attempt['session_id'])
+        with patch('attempts.js',side_effect=AssertionError('A saved analysis was recomputed')):
+            retry=self.app.post('/api/sessions/finish',{'session_id':attempt['session_id'],'expected_chunks':1})
+            self.assertEqual(retry['attempt']['analysis'],legacy)
+            self.assertEqual(retry['attempt']['analysis_version'],'midi-analysis-1')
+            self.complete()
+        with self.app.attempts.database() as db:
+            rows=db.execute('SELECT * FROM attempt_analyses WHERE attempt_id=?',(attempt['id'],)).fetchall()
+            self.assertEqual([tuple(row) for row in rows],[before])
+        self.assertEqual(self.app.store.export(attempt['session_id']),original)
+        saved=r.reflection_observations(r.read_events(self.root)[-1])['attempt_completion']
+        self.assertEqual(saved['analysis_version'],'midi-analysis-1')
+
     def test_manual_requires_full_uninterrupted_target_bpm_pass_and_explicit_confirmation(self):
         self.seal(self.start(manual=True,bpm=40),no_midi=True)
         self.assertFalse(self.current()['assessment']['manual_available'])
@@ -197,6 +230,20 @@ class AttemptTests(unittest.TestCase):
         saved=run('complete',self.task,'--expected-event-id',self.current()['lifecycle_event_id'])
         run('reopen',self.task,'--expected-event-id',saved['event_id'])
         self.assertTrue(self.current()['pending']);self.assertFalse(self.current()['assessment']['eligible'])
+
+    def test_release_rejects_a_reader_that_cannot_preserve_saved_note_analyses(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source,revision=git_fixture.copy_source(Path(temp))
+            (self.root/'AGENTS.md').write_text('Synthetic workspace')
+            publish.publish(source,self.root,ref=revision)
+            self.seal(self.start())
+            code=source/'attempts.py';original=code.read_text()
+            code.write_text(original.replace("SUPPORTED_ANALYSIS_VERSIONS = ('midi-analysis-1', 'midi-analysis-2')", "SUPPORTED_ANALYSIS_VERSIONS = ('midi-analysis-1',)"))
+            self.assertNotEqual(code.read_text(),original)
+            old_reader=git_fixture.commit(source)
+            before={name:(self.root/name).read_bytes() for name in ('practice.csv','runtime.json','active-version','sessions.sqlite3')}
+            with self.assertRaises(ValueError):publish.publish(source,self.root,ref=old_reader)
+            self.assertEqual({name:(self.root/name).read_bytes() for name in before},before)
 
     def test_legacy_feedback_correction_during_reopen_does_not_count_another_completion(self):
         self.seal(self.start());self.complete()

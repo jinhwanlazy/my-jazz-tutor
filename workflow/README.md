@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.10.0`; create a new tag for later releases instead of moving an old tag:
+selects `v0.11.0`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.10.0
+uv run python publish.py --ref v0.11.0
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -173,7 +173,9 @@ origin, so recover any unsent input at its original address first.
   range, not detected hands. This view does not assess correctness or fill reports.
   Charleston eighth notes illustrate short attacks on 1 and 2&; the illustration
   does not add an exact hold-duration requirement to the assignment.
-- **Attempt feedback:** each bar receives pitch/onset feedback. Final feedback separates
+- **Attempt feedback:** each written pitch receives individual feedback as you play,
+  including separate tones in a chord. Missing notes wait for their own timing window;
+  future notes remain waiting and held notes can remain under length review. Final feedback separates
   key holds, pedal sounding duration, timing and relative attack velocity. Matching is
   deterministic and versioned, shared by the browser and server. Velocity is not an
   acoustic loudness measurement or a musical-expression grade.
@@ -840,3 +842,31 @@ saved attempt. The server's assessment and completion rules are unchanged.
 including landscape, all noteheads inside the full visible score, stationary playback,
 immutable conditions and Korean settings/tooltips. Existing MIDI, timing, recovery,
 completion, shared audio settings and LAN browser checks use disposable synthetic data.
+
+### Individual note feedback (0.11.0)
+
+Grades attach to written noteheads instead of coloring an entire bar. Correct notes
+are green, timing/length mistakes red, missing notes have dashed red outlines, and
+extra input has its own marker. Outlines stay visible above the blue MIDI trace.
+Hover a note for its position and result. Chord tones are independent; tied notes and
+simultaneous unison share one physical onset. Future notes are not marked missing.
+Length-sensitive held notes remain under review until their release is observed.
+
+The final detail table includes matched, missing and extra notes with the specific
+timing/length result, key hold and pedal sounding duration. Browse 100 notes at a time.
+New `midi-analysis-2` saves all individual results within the existing bounded input
+and matching limits. The old 1,000-match detail limit does not truncate these results.
+Matching thresholds, target-tempo eligibility and complete-take requirements retain
+`attempt-policy-1`; accent strength remains descriptive MIDI evidence.
+
+Older saved analyses display only their stored observations. Omitted details remain
+unassessed, and opening or retrying a saved take does not rematch its MIDI. Manual,
+interrupted and incomplete takes retain unknown grades. Completion records the
+selected take's actual analysis version. Publication refuses a runtime that cannot
+preserve saved analysis versions before changing the active pin or evidence.
+
+`tests/note-feedback.test.mjs`, `tests/test_attempts.py` and
+`tests/note-feedback-browser.mjs` cover live note deadlines, isolated chord tones,
+timing/duration errors, latency, ties/unison, bounded full-score results, pagination,
+legacy preservation and release compatibility. The ABC timing checks also verify
+notehead identity and individual colors across clefs, accidentals and independent voices.

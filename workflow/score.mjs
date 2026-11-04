@@ -1,5 +1,6 @@
 import {tr, locale} from './i18n.mjs';
 import {ABCLayout} from './abc-view.mjs';
+import {expectedNotes} from './midi-analysis.mjs';
 
 const NS = 'http://www.w3.org/2000/svg';
 const BARS_PER_LINE = 4;
@@ -95,6 +96,16 @@ function accidental(parent, pitch, x, y, key, live = false, state = null) {
   state?.set(token, pitch.alter);
 }
 
+export function noteResultLabel(note) {
+  if(note.state==='incorrect')return (note.issues||[]).map(issue=>tr({early:'Too early',late:'Too late',too_short:'Too short',too_long:'Too long'}[issue])).join(' · ')||tr('Incorrect');
+  return tr({correct:'Correct',missing:'Missing note',extra:'Extra note',waiting:'Waiting',holding:'Checking note length',unknown:'Not assessed'}[note.state]||'Not assessed');
+}
+export function noteCaption(note) {
+  const beat=Number((note.beat+1).toFixed(3));
+  const timing=note.timing_ms==null?'':tr` · onset ${Math.round(note.timing_ms)} ms`;
+  return tr`${note.name} · bar ${note.bar+1}, beat ${beat} · ${noteResultLabel(note)}`+timing;
+}
+
 export class ScoreView {
   constructor({root, status, help, finite=false}) {
     Object.assign(this, {root, status, help, finite});
@@ -128,14 +139,15 @@ export class ScoreView {
       this.identity = identity; this.score = score; this.pass = 0;
       this.input = score ? new LiveInput(score) : null; this.position = null;
       this.root.scrollLeft = 0;
-      this.feedback = [];
+      this.feedback = null;
+      this.expected = score ? expectedNotes(score) : [];
     }
     this.render(); // Language refresh keeps the live buffer and play position.
   }
   begin() {
     this.input = this.score ? new LiveInput(this.score) : null;
     this.position = null; this.pass = 0; this.playing = true;
-    this.feedback = [];
+    this.feedback = null;
     this.render(); this.root.scrollLeft = 0;
   }
   pause(position) {
@@ -197,7 +209,8 @@ export class ScoreView {
     this.overlays();
     this.resize(); this.drawNotes(); this.root.scrollLeft = scroll;
     if (this.position) this.frame(this.position);
-    this.setFeedback(this.feedback || []);
+    this.noteHeads=this.abcLayout.noteHeads;
+    this.setFeedback(this.feedback);
   }
   render() {
     const scroll = this.root.scrollLeft;
@@ -205,6 +218,7 @@ export class ScoreView {
     this.lineBars = BARS_PER_LINE;
     this.root.replaceChildren(); this.help?.replaceChildren(); this.caption();
     this.svg = this.cursor = this.liveLayer = this.abcLayout = null;
+    this.noteHeads = new Map();
     if (!this.score) {
       const note = document.createElement('p'); note.className = 'field-note';
       note.textContent = tr('A score is not available for these conditions. Follow the written instructions.');
@@ -253,7 +267,7 @@ export class ScoreView {
         }
         for (const staff of ['right', 'left']) {
           const accidentals = new Map();
-          for (const event of bar[staff]) this.drawEvent(canvas, event, staff, system.start / 4 + at, accidentals, at);
+          for (const [index,event] of bar[staff].entries()) this.drawEvent(canvas, event, staff, system.start / 4 + at, accidentals, at,`${staff}:${system.start / 4 + at}:${index}`);
         }
         const end = x + BAR - (at === bars.length - 1 ? 0 : 20);
         line(canvas, end, TOP.right, end, TOP.left + 40, 'score-bar-line');
@@ -275,22 +289,37 @@ export class ScoreView {
     this.drawNotes();
     this.root.scrollLeft = scroll;
     if (this.position) this.frame(this.position);
-    this.setFeedback(this.feedback || []);
+    this.setFeedback(this.feedback);
   }
-  setFeedback(bars) {
-    this.feedback = bars;
+  setFeedback(feedback) {
+    this.feedback = feedback;
     this.svg?.querySelector('.score-feedback')?.remove();
     if (!this.svg || !this.systems) return;
-    const layer = svg('g', {class:'score-feedback','aria-hidden':'true'}),beats=this.score.beats_per_bar||4;
-    for (const item of bars) {
-      if (!['correct','incorrect'].includes(item.state)) continue;
-      const start=item.bar*beats,system=this.system(start),x=this.x(start,system),right=this.x(start+beats,system);
-      const top=this.bounds('right',system).top-30,bottom=this.bounds('left',system).bottom+35;
-      layer.append(svg('rect',{x,y:top,width:Math.max(0,right-x),height:bottom-top,rx:4,class:`score-bar-mark ${item.state}`}));
+    for(const {node} of this.noteHeads.values()) {
+      node.removeAttribute('data-note-state');node.removeAttribute('data-expected-index');
+      node.querySelector('title[data-feedback]')?.remove();
     }
-    this.svg.insertBefore(layer,this.svg.firstChild);
+    if(!feedback)return;
+    const layer=svg('g',{class:'score-feedback'});
+    for(const note of feedback.notes||[])for(const location of this.expected[note.expected_index]?.locations||[]) {
+      const head=this.noteHeads.get(JSON.stringify([location.event_id,location.pitch_index]));if(!head)continue;
+      head.node.dataset.noteState=note.state;head.node.dataset.expectedIndex=note.expected_index;
+      head.node.append(svg('title',{'data-feedback':''},noteCaption(note)));
+      if(['correct','incorrect','holding','missing'].includes(note.state))layer.append(svg('ellipse',{
+        cx:head.x,cy:head.y,rx:10,ry:7,class:`score-note-mark ${note.state}${note.state==='missing'?' score-missing-note':''}`,'aria-hidden':'true'}));
+    }
+    for(const note of feedback.extra||[]) {
+      if(note.state!=='extra')continue;
+      const bar=Math.max(0,Math.min(this.score.bars.length-1,note.bar)),hand=staffFor(this.score,note.pitch,bar);
+      const system=this.system(note.at),pitch=spell(note.pitch,this.score.key),x=this.x(note.at,system);
+      const bounds=this.bounds(hand,system),rawY=this.abcLayout?this.abcLayout.y(pitch,hand,system):noteY(pitch,hand)+system.offset;
+      const y=Math.max(bounds.top-25,Math.min(bounds.bottom+25,rawY));
+      const mark=svg('g',{class:'score-extra-note','data-midi':note.pitch});
+      mark.append(svg('title',{},noteCaption(note)),svg('path',{d:`M${x-5} ${y-5}l10 10m-10 0l10 -10`}));layer.append(mark);
+    }
+    this.svg.insertBefore(layer,this.cursor);
   }
-  drawEvent(canvas, event, staff, bar, accidentals, localBar = bar) {
+  drawEvent(canvas, event, staff, bar, accidentals, localBar = bar,eventId='') {
     const x = noteX(localBar, event.beat), top = TOP[staff];
     const group = svg('g', {class: 'score-target', 'data-hand': staff, 'data-bar': bar, 'data-beat': event.beat,
       'data-kind': event.kind, 'data-duration': event.duration ?? ''});
@@ -305,7 +334,7 @@ export class ScoreView {
       return;
     }
     const ys = [];
-    for (const pitch of event.pitches) {
+    for (const [pitchIndex,pitch] of event.pitches.entries()) {
       const y = noteY(pitch, staff); ys.push(y);
       const note = svg('g', {'data-midi': pitch.midi, class: 'score-target-note'});
       note.append(svg('title', {}, pitch.name));
@@ -313,6 +342,8 @@ export class ScoreView {
       if (event.kind === 'onset') note.append(svg('path', {d: `M${x} ${y - 5} l7 5 -7 5 -7 -5 Z`, class: 'score-onset'}));
       else note.append(svg('ellipse', {cx: x, cy: y, rx: event.duration === 4 ? 8 : 6, ry: 4.3,
         transform: `rotate(-18 ${x} ${y})`, class: event.duration >= 2 ? 'score-whole' : 'score-notehead'}));
+      const head=note.querySelector('ellipse,path');head.classList.add('score-written-note');head.dataset.midi=pitch.midi;
+      this.noteHeads.set(JSON.stringify([eventId,pitchIndex]),{node:head,x,y});
       group.append(note);
     }
     if (event.kind !== 'onset' && event.duration < 4) {

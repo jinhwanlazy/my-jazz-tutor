@@ -77,10 +77,10 @@ try {
   assert.equal(await page.locator('#click-toggle').isEnabled(),true);
   await page.waitForFunction(()=>document.querySelectorAll('.attempt-row').length===1&&document.querySelector('#practice-btn').disabled===false);
   assert.equal(await page.locator('#finish-btn').isDisabled(),true);assert.match(await page.locator('#attempt-feedback').innerText(),/Needs another try/);
-  await take();await page.waitForFunction(()=>document.querySelector('.bar-result.correct'));
+  await take();await page.waitForFunction(()=>document.querySelector('.score-written-note[data-note-state="correct"]'));
   await page.waitForFunction(()=>document.querySelectorAll('.attempt-row').length===2&&document.querySelector('#finish-btn').disabled===false);
   assert.match(await page.locator('#attempt-feedback').innerText(),/Successful take/);
-  assert.equal((await state()).sessions.length,2);assert.equal(await page.locator('.score-bar-mark.correct').count(),2);
+  assert.equal((await state()).sessions.length,2);assert.equal(await page.locator('.score-written-note[data-note-state="correct"]').count(),6);
   assert.match(await page.locator('#score-position').innerText(),/Viewing attempt 2/);
   assert.equal(await page.locator('#click-toggle').isChecked(),true);
   await page.screenshot({path:join(output,'successful-attempt-desktop.png'),fullPage:true});

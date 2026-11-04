@@ -1,5 +1,5 @@
 // Shared browser/server MIDI analysis. Original bytes and timestamps stay intact.
-export const ANALYSIS_VERSION = 'midi-analysis-1';
+export const ANALYSIS_VERSION = 'midi-analysis-2';
 export const POLICY_VERSION = 'attempt-policy-1';
 const median = values => { const a=[...values].sort((a,b)=>a-b); return a.length ? a[Math.floor(a.length/2)] : null; };
 
@@ -12,13 +12,14 @@ export function expectedNotes(score) {
   const levels={ppp:35,pp:45,p:55,mp:65,mf:80,f:95,ff:110,fff:120};
   for (const event of [...events].sort((a,b)=>a.bar-b.bar||a.beat-b.beat)) {
     for(const mark of event.decorations||[])if(Object.hasOwn(levels,mark))dynamics.set(event.voice,levels[mark]);
-    for (const pitch of event.pitches) {
+    for (const [pitchIndex,pitch] of event.pitches.entries()) {
     const at=event.bar*beats+event.beat, prior=pitch.tie_from&&ties.get(`${pitch.tie_from}:${pitch.midi}`);
+    const location={event_id:event.id,pitch_index:pitchIndex};
     let note=prior;
-    if (note) {note.duration=Math.max(note.duration,at+event.duration-note.at);
+    if (note) {note.locations.push(location);note.duration=Math.max(note.duration,at+event.duration-note.at);
       if(!score.short_attacks&&event.kind!=='onset'&&note.duration>=2)note.duration_required=true;}
     else {
-      note={pitch:pitch.midi,name:pitch.name,at,duration:event.duration,bar:event.bar,voices:[event.voice],
+      note={pitch:pitch.midi,name:pitch.name,at,duration:event.duration,bar:event.bar,voices:[event.voice],locations:[location],
         accent:(event.decorations||[]).includes('accent'),
         reference_velocity:Math.min(127,(dynamics.get(event.voice)||75)+((event.decorations||[]).includes('accent')?20:0)),
         staccato:(event.decorations||[]).some(d=>d==='staccato'||d==='.'),
@@ -35,7 +36,7 @@ export function expectedNotes(score) {
     const key=`${note.pitch}:${note.at}`,old=unique.get(key);
     if (old) {old.duration=Math.max(old.duration,note.duration);old.accent ||= note.accent;
       old.reference_velocity=Math.max(old.reference_velocity,note.reference_velocity);
-      old.duration_required ||= note.duration_required;old.voices.push(...note.voices);}
+      old.duration_required ||= note.duration_required;old.voices.push(...note.voices);old.locations.push(...note.locations);}
     else unique.set(key,{...note});
   }
   return [...unique.values()].sort((a,b)=>a.at-b.at||a.pitch-b.pitch);
@@ -107,6 +108,48 @@ function match(expected, actual, tolerance) {
   return pairs;
 }
 
+const pitchName = pitch => ['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'][pitch%12]+(Math.floor(pitch/12)-1);
+function observedNotes(contract,matches,missing,extra,{final=true,now=Infinity,unassessed=false}={}) {
+  const beatMs=60000/contract.bpm,hits=new Map(matches.map(hit=>[hit.expected_index,hit]));
+  const notes=(contract.expected||[]).map((expected,index)=>{
+    const hit=hits.get(index),issues=[];
+    if(hit&&!hit.timing_ok)issues.push(hit.timing_ms<0?'early':'late');
+    if(hit?.duration_result==='incorrect')issues.push(expected.staccato?'too_long':'too_short');
+    let state;
+    if(unassessed)state='unknown';
+    else if(hit)state=issues.length?'incorrect':hit.duration_result==='unknown'?(final?'unknown':'holding'):'correct';
+    else if(!final&&now<=expected.at*beatMs+contract.tolerance_ms)state='waiting';
+    else state=missing.has(index)?'missing':'unknown';
+    return {expected_index:index,pitch:expected.pitch,name:expected.name||pitchName(expected.pitch),
+      bar:expected.bar,beat:expected.at%contract.beats_per_bar,at:expected.at,state,issues,
+      timing_ms:hit?.timing_ms??null,duration_result:hit?.duration_result??'unknown',
+      key_ms:hit?.key_ms??null,sounding_ms:hit?.sounding_ms??null,expected_ms:expected.duration*beatMs,
+      velocity:hit?.velocity??null,accent_expected:Boolean(expected.accent)};
+  });
+  return {notes,extra:extra.map((note,index)=>{
+    const at=note.time/beatMs,bar=Math.min(contract.bars-1,Math.max(0,Math.floor(at/contract.beats_per_bar)));
+    return {actual_index:note.index??index,pitch:note.pitch,name:pitchName(note.pitch),at,
+      bar,beat:at-bar*contract.beats_per_bar,at_ms:note.time,port:note.port??null,channel:note.channel??null,
+      state:unassessed?'unknown':'extra',issues:[]};
+  })};
+}
+
+// Display only saved observations for older analyses. No MIDI is rematched and
+// omitted match details never become invented correct/incorrect note results.
+export function noteFeedback(contract,analysis,{unassessed=false}={}) {
+  if(!contract||!analysis)return {notes:[],extra:[]};
+  const unknown=unassessed||contract.mode==='manual'||analysis.final!==false&&analysis.result==='unknown';
+  let feedback;
+  if(Array.isArray(analysis.notes))feedback={notes:analysis.notes,extra:analysis.extra_notes||[]};
+  else {
+    const key=(bar,pitch,beat)=>`${bar}:${pitch}:${Math.round(beat*1e6)}`;
+    const missingKeys=new Set((analysis.bars||[]).flatMap(bar=>(bar.missing||[]).map(note=>key(bar.bar,note.pitch,note.beat))));
+    const missing=new Set((contract.expected||[]).flatMap((note,index)=>missingKeys.has(key(note.bar,note.pitch,note.at%contract.beats_per_bar))?[index]:[]));
+    feedback=observedNotes(contract,analysis.matches||[],missing,(analysis.bars||[]).flatMap(bar=>(bar.extra||[]).map(note=>({...note,time:note.at_ms}))),{unassessed:unknown});
+  }
+  return unknown?Object.fromEntries(Object.entries(feedback).map(([key,notes])=>[key,notes.map(note=>({...note,state:'unknown'}))])):feedback;
+}
+
 export function analyze(contract, messages, {origin_ms=0,end_ms=Infinity,final=false,interrupted=false,initial_state={}}={}) {
   const beatMs=60000/contract.bpm, limit=Number.isFinite(end_ms)?end_ms:contract.duration_ms+origin_ms+beatMs;
   const decoded=decodeNotes(messages,{end_ms:limit,initial_state});
@@ -116,7 +159,7 @@ export function analyze(contract, messages, {origin_ms=0,end_ms=Infinity,final=f
   const pitches=new Set(expected.map(n=>n.pitch));
   const unavailable=actual.length>10000||expected.length>5000||[...pitches].some(pitch=>
     (expected.filter(n=>n.pitch===pitch).length+1)*(actual.filter(n=>n.pitch===pitch).length+1)>2000000);
-  if(unavailable)return {version:ANALYSIS_VERSION,result:'unknown',qualified_pass:false,reason:'Analysis input limit exceeded; recording preserved.',bars:[],counts:{},matches:[]};
+  if(unavailable)return {version:ANALYSIS_VERSION,result:'unknown',qualified_pass:false,reason:'Analysis input limit exceeded; recording preserved.',bars:[],counts:{},matches:[],notes:[],extra_notes:[],final};
   const pairs=[];
   for(const pitch of pitches)pairs.push(...match(expected.filter(n=>n.pitch===pitch),actual.filter(n=>n.pitch===pitch),contract.tolerance_ms));
   const matchedE=new Set(pairs.map(([e])=>e.index)),matchedA=new Set(pairs.map(([,a])=>a.index));
@@ -152,6 +195,8 @@ export function analyze(contract, messages, {origin_ms=0,end_ms=Infinity,final=f
   const incomplete=interrupted||Boolean(initial_state.held?.length)||actual.some(n=>n.sound_end===null);
   const success=!missing.length&&!extra.length&&!timing.length&&!lengths.length;
   const result=contract.mode==='manual'||!final||incomplete||unknownLengths.length?'unknown':success?'passed':'needs_work';
+  const feedback=observedNotes(contract,matches,new Set(missing.map(note=>note.index)),extra,
+    {final,now:limit-origin_ms-contract.latency_ms,unassessed:contract.mode==='manual'||final&&incomplete});
   return {version:ANALYSIS_VERSION,policy:contract.version,result,qualified_pass:result==='passed'&&contract.bpm>=contract.target_bpm,
     bpm:contract.bpm,target_bpm:contract.target_bpm,tolerance_ms:contract.tolerance_ms,interrupted:incomplete,
     manual_reason:contract.manual_reason,
@@ -160,5 +205,6 @@ export function analyze(contract, messages, {origin_ms=0,end_ms=Infinity,final=f
     expression:{status:velocities.length<2||Math.max(...velocities)-Math.min(...velocities)<5?'unknown':'observed',
       accented_median:median(accent),other_median:median(plain),velocity_range:velocities.length?[Math.min(...velocities),Math.max(...velocities)]:null,groups,
       interpretation:'Relative MIDI attack velocity; not measured acoustic loudness or a verified musical-expression grade.'},
-    bars,matches:matches.slice(0,1000),omitted_matches:Math.max(0,matches.length-1000)};
+    bars,notes:feedback.notes,extra_notes:feedback.extra,final,
+    matches:matches.slice(0,1000),omitted_matches:Math.max(0,matches.length-1000)};
 }

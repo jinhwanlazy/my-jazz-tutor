@@ -1,9 +1,9 @@
 import {tr, locale, setLocale, loadTranslations, translatePage} from './i18n.mjs';
 import {AttemptTransport} from './attempt-audio.mjs';
 import {backingFor} from './backing.mjs';
-import {decodeNotes,expectedNotes,makeContract} from './midi-analysis.mjs';
+import {decodeNotes,expectedNotes,makeContract,noteFeedback} from './midi-analysis.mjs';
 import {Capture, Outbox, uploadPending, randomHex, decodeMidiFrames} from './capture.mjs';
-import {ScoreView} from './score.mjs';
+import {ScoreView,noteResultLabel} from './score.mjs';
 import {MidiControls,CONTROL_ACTIONS,controlOnlyPort,portReference,resolvePort,midiPreferences,keyboardAction} from './midi-controls.mjs';
 
 const $ = id => document.getElementById(id);
@@ -180,24 +180,30 @@ function scorePositionAt(at) {
   return {absolute,pass:0,bar:Math.min(ui.attemptContract.bars-1,Math.floor(absolute/beats)),beat:absolute>=total?beats:absolute%beats};
 }
 function requestAnalysis() {
-  if(!ui.capture||!ui.attemptContract||!ui.plannedStart||ui.analysisLimited)return;
+  if(!ui.capture||!ui.attemptContract||!ui.plannedStart||ui.analysisLimited||ui.analysisRequest!=null)return;
   try {
     analysisWorker ||= new Worker('/midi-analysis-worker.mjs',{type:'module'});
     analysisWorker.onmessage=event=>{
+      if(event.data.id===ui.analysisRequest)ui.analysisRequest=null;
       if(!ui.capture||event.data.id!==analysisSerial||!event.data.analysis)return;
-      renderBarResults(event.data.analysis.bars);
+      renderNoteResults(noteFeedback(ui.attemptContract,event.data.analysis));
     };
-    analysisWorker.postMessage({id:++analysisSerial,contract:ui.attemptContract,messages:ui.midiFrames,
+    analysisWorker.onerror=()=>{ui.analysisRequest=null;};
+    ui.analysisRequest=++analysisSerial;
+    analysisWorker.postMessage({id:ui.analysisRequest,contract:ui.attemptContract,messages:ui.midiFrames,
       options:{origin_ms:ui.plannedStart-ui.capture.origin,end_ms:performance.now()-ui.capture.origin,
         initial_state:ui.initialMidi||{},final:false}});
-  } catch { /* Saved input will still receive the server's final analysis. */ }
+  } catch { ui.analysisRequest=null; /* Saved input will still receive the server's final analysis. */ }
 }
-function renderBarResults(bars=[]) {
-  $('bar-results').replaceChildren(...bars.map(bar=>{
-    const icon={correct:'✓',incorrect:'!',waiting:'·',unknown:'?'}[bar.state];
-    return el('span',tr`${bar.bar+1}: ${icon}`,`bar-result ${bar.state}`);
-  }));
-  score.setFeedback(bars);
+function renderNoteResults(feedback=null) {
+  const counts={};for(const note of [...feedback?.notes||[],...feedback?.extra||[]])counts[note.state]=(counts[note.state]||0)+1;
+  const key=JSON.stringify([locale(),counts]);
+  if(ui.noteResultsKey!==key){
+    ui.noteResultsKey=key;const labels={correct:'Correct',incorrect:'Incorrect',missing:'Missing note',extra:'Extra note',holding:'Checking note length',waiting:'Waiting',unknown:'Not assessed'};
+    $('note-results').replaceChildren(...Object.entries(counts).map(([state,count])=>el('span',`${tr(labels[state])} ${count}`,`note-result ${state}`)));
+    $('note-results').hidden=!Object.keys(counts).length;
+  }
+  score.setFeedback(feedback);
 }
 
 function attemptLabel(attempt) {
@@ -249,16 +255,15 @@ async function loadAttempt(id,{focus=false,forPlayback=false}={}) {
   if(focus)focusPanel($('attempt-review'));
   return value;
 }
-function displayBars(attempt) {
-  const bars=attempt.analysis?.bars||[];
-  return ['aborted','interrupted'].includes(attempt.state)||attempt.result==='unknown'?
-    bars.map(bar=>({...bar,state:'unknown'})):bars;
+function attemptNoteFeedback(attempt) {
+  return noteFeedback(attempt.contract,attempt.analysis,{unassessed:['aborted','interrupted'].includes(attempt.state)});
 }
 function showAttemptFeedback(attempt) {
   const task=openedTask();if(!task||attempt.task_id!==task.id)return;
   ui.selectedAttemptId=attempt.id;ui.selectedAttempt=attempt;
   const box=$('attempt-feedback'),analysis=attempt.analysis;
   const expanded=box.dataset.attemptId===attempt.id&&box.querySelector('details')?.open;
+  let notePage=box.dataset.attemptId===attempt.id?Number(box.dataset.notePage||0):0;
   box.replaceChildren();box.dataset.attemptId=attempt.id;box.hidden=false;
   const heading=el('div',undefined,'result-heading');
   heading.append(el('h3',attemptLabel(attempt)),el('p',`${attemptCaption(attempt)} · ${attempt.created_at.slice(0,16).replace('T',' ')}`,'field-note'));
@@ -273,14 +278,14 @@ function showAttemptFeedback(attempt) {
   else if(!c.matched)box.append(el('p',tr('No notes were matched. Timing, note length and accents could not be assessed.')));
   const metrics=el('div',undefined,'result-metrics');
   for(const [label,value] of [
-    ['Notes matched',countsAvailable?`${c.matched||0} / ${c.expected||0}`:tr('Not assessed')],
+    ['Pitch matches',countsAvailable?`${c.matched||0} / ${c.expected||0}`:tr('Not assessed')],
     ['Missing / extra',countsAvailable?`${c.missing||0} / ${c.extra||0}`:tr('Not assessed')],
     ['Timing errors',!c.matched||unassessed?tr('Not assessed'):String(c.timing_errors||0)],
     ['Note-length issues',!c.matched||unassessed?tr('Not assessed'):String(c.duration_errors||0)],
   ]){const metric=el('div');metric.append(el('span',tr(label)),el('strong',value));metrics.append(metric);}
   box.append(metrics);
   const details=el('details',undefined,'analysis-detail');details.open=Boolean(expanded);
-  details.append(el('summary',tr('Bar details, note lengths and accents')));
+  details.append(el('summary',tr('Note results, lengths and accents')));
   if(analysis.timing?.median_ms!=null)details.append(el('p',tr`Median onset offset: ${Math.round(analysis.timing.median_ms)} ms`));
   details.append(el('p',tr`${c.unknown_durations||0} unknown note lengths`));
   const expression=analysis.expression;
@@ -289,26 +294,35 @@ function showAttemptFeedback(attempt) {
     tr`Attack velocity: ${expression.velocity_range[0]}–${expression.velocity_range[1]} · accented median ${expression.accented_median??'—'} · other median ${expression.other_median??'—'}`));
   const accents={not_marked:'No written accents',unknown:'Not enough comparable notes',distinguished:'Written accents had stronger attacks',not_distinguished:'Written accents were not clearly stronger'};
   for(const group of expression?.groups||[])details.append(el('p',`${group.voice} · ${tr(accents[group.status])}${group.delta===null?'':tr` · velocity difference ${group.delta}`}`));
-  for(const bar of analysis.bars||[])if(bar.missing.length||bar.extra.length||bar.timing_errors.length){
-    const pitch=n=>`${['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'][n%12]}${Math.floor(n/12)-1}`;
-    details.append(el('p',tr`Bar ${bar.bar+1}: missing ${bar.missing.map(n=>n.name).join(', ')||'—'} · extra ${bar.extra.map(n=>pitch(n.pitch)).join(', ')||'—'} · timing ${bar.timing_errors.map(n=>`${pitch(n.pitch)} ${Math.round(n.timing_ms)} ms`).join(', ')||'—'}`));
-  }
-  if(analysis.matches?.length){
+  const feedback=attemptNoteFeedback(attempt),notes=[...feedback.notes,...feedback.extra].sort((a,b)=>a.at-b.at||a.pitch-b.pitch);
+  if(notes.length){
     const table=el('table',undefined,'note-analysis'),head=el('tr');
-    for(const label of ['Bar','Note','Onset offset','Key hold','Sounding','Written'])head.append(el('th',tr(label)));
+    for(const label of ['Position','Note','Result','Onset offset','Key hold','Sounding','Written'])head.append(el('th',tr(label)));
     const thead=el('thead');thead.append(head);table.append(thead);const body=el('tbody');
-    for(const note of analysis.matches.slice(0,100)){
-      const row=el('tr');for(const value of [note.bar+1,note.name,...[note.timing_ms,note.key_ms,note.sounding_ms,note.expected_ms].map(ms=>ms==null?'—':`${Math.round(ms)} ms`)])row.append(el('td',String(value)));
-      body.append(row);
-    }
     table.append(body);const wrap=el('div',undefined,'table-scroll');wrap.append(table);details.append(wrap);
-    if(analysis.matches.length>100)details.append(el('p',tr('Showing the first 100 matched notes.'),'field-note'));
+    const pages=Math.ceil(notes.length/100),pagination=el('div',undefined,'note-pagination'),previous=el('button',tr('Previous notes'),'text-button'),next=el('button',tr('Next notes'),'text-button'),caption=el('span',undefined,'field-note');
+    previous.type=next.type='button';
+    const draw=()=>{
+      notePage=Math.max(0,Math.min(pages-1,notePage));box.dataset.notePage=notePage;
+      wrap.scrollTop=0;
+      body.replaceChildren(...notes.slice(notePage*100,(notePage+1)*100).map(note=>{
+        const row=el('tr');row.dataset.noteState=note.state;row.dataset.expectedIndex=note.expected_index??'extra';
+        const position=tr`Bar ${note.bar+1}, beat ${Number((note.beat+1).toFixed(3))}`;
+        for(const value of [position,note.name,noteResultLabel(note),...[note.timing_ms,note.key_ms,note.sounding_ms,note.expected_ms].map(ms=>ms==null?'—':`${Math.round(ms)} ms`)])row.append(el('td',String(value)));
+        return row;
+      }));
+      previous.disabled=notePage===0;next.disabled=notePage===pages-1;
+      caption.textContent=tr`Notes ${notePage*100+1}–${Math.min(notes.length,(notePage+1)*100)} of ${notes.length}`;
+    };
+    previous.addEventListener('click',()=>{notePage--;draw();});next.addEventListener('click',()=>{notePage++;draw();});
+    pagination.append(previous,caption,next);pagination.hidden=pages<=1;details.append(pagination);draw();
+    if(!analysis.notes&&analysis.omitted_matches)details.append(el('p',tr('Some individual note details were not saved in this older analysis. Those notes remain unassessed.'),'field-note'));
   }
   const source=el('a',tr('View saved analysis'));source.href='/api/attempts/'+attempt.id;source.target='_blank';source.rel='noopener';details.append(source);
   box.append(details);
   if(!transport.replay)$('replay-title').textContent=attemptCaption(attempt);
   $('selected-play').hidden=false;$('selected-play').disabled=Boolean(ui.capture)||attempt.state==='recording';
-  renderBarResults(displayBars(attempt));
+  renderNoteResults(feedback);
 }
 async function playSession(sessionId,task=openedTask(),attemptId=null,{focus=true}={}) {
   if(ui.capture)throw Error(tr('Finish the current attempt before replaying.'));
@@ -328,7 +342,7 @@ async function playSession(sessionId,task=openedTask(),attemptId=null,{focus=tru
     sound_end:n.sound_end==null?duration:n.sound_end-origin}));
   ui.replayTrack={notes,bpm:attempt?.bpm||play?.bpm||task.target.bpm,beats:task.target.notation?.beats_per_bar||4,bars:task.target.bars,duration,
     kind:'recording',attemptId:attempt?.id,recordedAt:metadata.created_at};
-  startReplay(0);if(attempt?.analysis)score.setFeedback(displayBars(attempt));
+  startReplay(0);if(attempt?.analysis)score.setFeedback(attemptNoteFeedback(attempt));
   if(focus)focusPanel($('attempt-review'));
 }
 function replayCaption() {
@@ -350,7 +364,7 @@ function startReplay(from=0,{paused=false}={}) {
   score.drawNotes();transport.playRecording(track.notes,{...track,from,rate:Number($('replay-rate').value)});
   score.frame(transport.position());
   if(paused)transport.pauseReplay();
-  if(track.kind==='recording'&&ui.selectedAttempt)score.setFeedback(displayBars(ui.selectedAttempt));
+  if(track.kind==='recording'&&ui.selectedAttempt)score.setFeedback(attemptNoteFeedback(ui.selectedAttempt));
   $('replay-title').textContent=replayCaption();updateTransport();
 }
 
@@ -819,6 +833,7 @@ function midiBindings() {
         if([0x80,0x90].includes(type)||type===0xb0&&[64,120,121,123].includes(data[1])){
           if(ui.midiFrames.length<30000)ui.midiFrames.push({at_ms:Math.max(0,Math.min(message.timeStamp,performance.now())-ui.capture.origin),port:index,data:[...data]});
           else ui.analysisLimited=true;
+          if(!ui.analysisTimer)ui.analysisTimer=setTimeout(()=>{ui.analysisTimer=null;requestAnalysis();},50);
         }
         if(ui.phase!=='countin')score.midi(data,port.id,scorePositionAt(message.timeStamp));
         $('midi-status').textContent=tr`Recording input · ${ui.capture.noteCount} note-ons`;
@@ -860,7 +875,7 @@ async function startOrPause() {
     await ui.capture.begin();selectedPorts().forEach(registerPort);ui.lockedBpm=bpm;
     ui.capture.event('countin');ui.capture.event('pad',{enabled:$('pad-toggle').checked});
     ui.capture.event('click',{enabled:$('click-toggle').checked});ui.capture.event('drum',{enabled:$('drum-toggle').checked});
-    $('attempt-feedback').hidden=true;renderBarResults([]);
+    $('attempt-feedback').hidden=true;renderNoteResults();
     score.begin();score.frame({absolute:0,pass:0,bar:0,beat:0});
     updateTransport();focusPanel($('score-viewport'));
     transport.click=$('click-toggle').checked;transport.padEnabled=$('pad-toggle').checked;transport.drums=$('drum-toggle').checked;
@@ -871,6 +886,7 @@ async function startOrPause() {
   finally{ui.busy=false;if(!ui.capture){ui.lockedBpm=null;ui.phase='idle';}updateTransport();}
 }
 async function stopCapture() {
+  clearTimeout(ui.analysisTimer);ui.analysisTimer=null;
   if(ui.finishing)return ui.finishing;
   if(!ui.capture)return;
   if(transport.attempt)transport.abortAttempt();
@@ -931,7 +947,7 @@ async function playWrittenScore() {
       sound_end:(n.at+n.duration*(n.staccato?.45:1))*60000/bpm})),
       bpm,beats:source.beats_per_bar||4,bars:source.bars.length,duration:source.bars.length*(source.beats_per_bar||4)*60000/bpm,
       kind:'score'};
-    renderBarResults([]);
+    renderNoteResults();
     startReplay(0);
     focusPanel($('score-viewport'));
   }catch(error){fail(error);}
@@ -984,7 +1000,7 @@ function openPractice(task) {
   Object.assign(ui,{replayTrack:null,selectedAttemptId:null,selectedAttempt:null,latestAttempt:null,
     openedTaskId:task.id,scoreContext:task.id+':'+(++ui.visit),showAllAttempts:false,
     phase:'idle',midiFrames:[],attemptContract:null,plannedStart:null,initialMidi:{},saveStatus:null,countInBeat:null,nextAttemptId:null});
-  $('elapsed').textContent='00:00';$('score-position').textContent='';$('bar-results').replaceChildren();
+  $('elapsed').textContent='00:00';$('score-position').textContent='';renderNoteResults();
   $('attempt-feedback').hidden=true;$('attempt-feedback').replaceChildren();
   $('selected-play').hidden=true;$('replay-title').textContent=tr('Choose a recording below to hear your performance.');
   $('playback-settings').open=false;$('attempt-history').open=true;

@@ -53,9 +53,12 @@ def publish(source, practice, activate=True, ref="HEAD"):
             # A selected snapshot must understand the entire resulting history,
             # including retirement events, before any evidence or pin is changed.
             database_version = -1
+            analysis_versions = []
             if (practice / 'sessions.sqlite3').exists():
                 with sqlite3.connect((practice / 'sessions.sqlite3').as_uri() + '?mode=ro', uri=True) as db:
                     database_version = db.execute('PRAGMA user_version').fetchone()[0]
+                    if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='attempt_analyses'").fetchone():
+                        analysis_versions = [row[0] for row in db.execute('SELECT DISTINCT version FROM attempt_analyses')]
             validation = subprocess.run(
                 [sys.executable, "-c", """import json, sys, review
 review.records(json.load(sys.stdin))
@@ -63,7 +66,12 @@ version = int(sys.argv[1])
 if version >= 0:
     import sessions
     review.require(version in getattr(sessions, 'SUPPORTED_DATABASE_VERSIONS', (0, 1)), 'Unsupported recording database version.')
-""", str(database_version)],
+analyses = json.loads(sys.argv[2])
+if analyses:
+    import attempts
+    supported = getattr(attempts, 'SUPPORTED_ANALYSIS_VERSIONS', ('midi-analysis-1',))
+    review.require(set(analyses) <= set(supported), 'Unsupported saved analysis version.')
+""", str(database_version), json.dumps(analysis_versions)],
                 cwd=destination, input=json.dumps(events + retirements), text=True,
                 capture_output=True, timeout=30)
             require(validation.returncode == 0, "선택한 런타임이 연습 기록 또는 녹음 형식을 읽을 수 없어 활성화하지 않았습니다.")

@@ -68,8 +68,15 @@ try {
         view.cursor.transform.baseVal.consolidate().matrix.e)<.001;
       const bounds=view.systems.map(system=>({start:system.start,end:system.end,
         distance:view.x(system.end,system)-view.x(system.start,system)}));
+      const headCoverage=score.events.every(event=>event.pitches.every((pitch,index)=>
+        Number(view.noteHeads.get(JSON.stringify([event.id,index]))?.node.dataset.midi)===pitch.midi));
+      const feedback={notes:view.expected.map((note,index)=>({...note,expected_index:index,beat:note.at%score.beats_per_bar,
+        state:index%2?'missing':'correct'})),extra:[]};
+      view.setFeedback(feedback);
+      const individualPaint=feedback.notes.every(note=>view.expected[note.expected_index].locations.every(location=>
+        view.noteHeads.get(JSON.stringify([location.event_id,location.pitch_index]))?.node.dataset.noteState===note.state));
       values.push({name,width,rates:[Math.min(...rates),Math.max(...rates)],bounds,noteCount,voiceCounts,
-        maxAlignmentError,midiAligned,overflow:root.scrollWidth-root.clientWidth,
+        maxAlignmentError,midiAligned,headCoverage,individualPaint,overflow:root.scrollWidth-root.clientWidth,
         fitsHeight:view.svg.getBoundingClientRect().height<=innerHeight-32,stationaryPage:scrollY===scroll,
         unchanged:JSON.stringify(score)===original});
     }
@@ -83,6 +90,7 @@ try {
     assert.ok(result.noteCount>0&&result.maxAlignmentError<4,JSON.stringify(result));
     assert.ok(result.midiAligned&&result.overflow<=1&&result.unchanged,JSON.stringify(result));
     assert.ok(result.fitsHeight&&result.stationaryPage,JSON.stringify(result));
+    assert.ok(result.headCoverage&&result.individualPaint,JSON.stringify(result));
     for(const line of result.bounds)assert.ok(Math.abs(line.distance/(line.end-line.start)-result.rates[0])<.01,JSON.stringify(result));
   }
   assert.deepEqual(errors,[]);
