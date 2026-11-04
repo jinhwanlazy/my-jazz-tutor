@@ -30,7 +30,7 @@ INPUT_BUDGET = 64_000  # App-supplied prompt + output-schema UTF-8 bytes, not me
 GENERATION_SECONDS = 600  # Whole goal/retrieval/generation/repair request, not per-call.
 MODEL = 'gpt-6.1-sol'
 REASONING_EFFORT = 'high'
-POLICY_VERSION = 'musical-stretch-attempts-4'
+POLICY_VERSION = 'musical-stretch-all-levels-5'
 ERRORS = {
     'not_installed': 'Codex CLI was not found. Install Codex and restart the practice server.',
     'auth': 'Codex login has expired or is missing. Run codex login in a terminal, then retry.',
@@ -212,7 +212,7 @@ def context_for(root, data, language=None, request=''):
     if attempt_summary and attempt_summary['recorded_attempts']:
         sources.append({'id': 'attempts-summary', 'kind': 'bounded_versioned_midi_analysis', 'data': attempt_summary})
     coach = (HERE / 'COACH.md').read_text()
-    reference = {'role': 'Optional examples only. Not a candidate list, progression, prerequisite, or key/tempo restriction.',
+    reference = {'role': 'Optional examples only. They do not describe this player\'s level or set a difficulty ceiling, candidate list, progression, prerequisite, or key/tempo restriction.',
                  'examples': [{k: e[k] for k in ('title', 'domains', 'rhythm')} for e in data['exercises'][:8]]}
     fingerprint = digest({'events': events, 'profile': profile, 'sessions': sessions, 'coach': coach,
                           'reference': reference, 'version': data['version'], 'schema': SCHEMA,

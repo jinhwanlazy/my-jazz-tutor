@@ -31,10 +31,10 @@ against their original conditions. Generated exercises have immutable self-conta
 contracts; legacy self-reports keep their original scoring semantics.
 
 Commit validated source and create a version tag before publishing. This example
-selects `v0.11.0`; create a new tag for later releases instead of moving an old tag:
+selects `v0.11.1`; create a new tag for later releases instead of moving an old tag:
 
 ```sh
-uv run python publish.py --ref v0.11.0
+uv run python publish.py --ref v0.11.1
 ```
 
 Version history lives in Git commits and tags. Files from the chosen commit's
@@ -500,6 +500,11 @@ not resume a chat or assume any shared conversation memory.
 Each explicit request supplies the shared `coaching-policy.txt` and
 `notation-policy.txt` contracts, profile provenance, optional request text,
 the difficulty rubric, up to eight recent tasks and four related/corrected older tasks.
+The coach serves players at every level and assumes no default ability. Profile
+experience descriptions are self-reported background, not permanent skill grades
+or difficulty ceilings. Current task readiness uses relevant recent observations,
+feedback and requests, with uncertainty when evidence is sparse or conflicting.
+The shared policy applies to both goal planning and final exercise generation.
 Conditions are compact descriptions and score features; full scores stay in original
 snapshots. Latest feedback, exact note/skip excerpts and up to three recent session
 summaries per task retain source IDs. An all-history factual rollup counts current
